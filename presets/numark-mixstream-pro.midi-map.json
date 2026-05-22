@@ -1,0 +1,33 @@
+{
+  "_comment": [
+    "Numark Mixstream Pro Go Plus — preset MIDI bindings for mixr-rs.",
+    "Derived from Mixxx's official Numark-Mixstream-Pro.midi.xml mapping.",
+    "Status byte top nibble: 0xB = ControlChange, 0x9 = NoteOn (channel = bottom nibble).",
+    "Channel 0 (status 0xB0/0x90) = Deck 1 controls; channel 1 (0xB1/0x91) = Deck 2.",
+    "Cue/Play buttons live on channels 2/3 (status 0x92/0x93). Master controls on channel 15 (0xBF/0x9F).",
+    "Performance pads (hot cues, samplers, loops, rolls) use a script-driven mode toggle in Mixxx; not yet ported here — first 4 hot-cue pads are mapped statically below as a starting point and may need adjustment after observing the controller live.",
+    "Place this file at ~/.mixr/midi-map.json (or use the in-app MIDI learn UI to load it as the active map)."
+  ],
+  "bindings": [
+    { "event": { "ControlChange": { "channel": 15, "controller": 14 } }, "action": { "kind": "crossfader" } },
+
+    { "event": { "ControlChange": { "channel": 0,  "controller": 14 } }, "action": { "kind": "channel_fader", "is_a": true } },
+    { "event": { "ControlChange": { "channel": 1,  "controller": 14 } }, "action": { "kind": "channel_fader", "is_a": false } },
+
+    { "event": { "ControlChange": { "channel": 0,  "controller": 8  } }, "action": { "kind": "eq_low",  "is_a": true } },
+    { "event": { "ControlChange": { "channel": 0,  "controller": 6  } }, "action": { "kind": "eq_mid",  "is_a": true } },
+    { "event": { "ControlChange": { "channel": 0,  "controller": 4  } }, "action": { "kind": "eq_high", "is_a": true } },
+    { "event": { "ControlChange": { "channel": 1,  "controller": 8  } }, "action": { "kind": "eq_low",  "is_a": false } },
+    { "event": { "ControlChange": { "channel": 1,  "controller": 6  } }, "action": { "kind": "eq_mid",  "is_a": false } },
+    { "event": { "ControlChange": { "channel": 1,  "controller": 4  } }, "action": { "kind": "eq_high", "is_a": false } },
+
+    { "event": { "ControlChange": { "channel": 0,  "controller": 11 } }, "action": { "kind": "filter", "is_a": true } },
+    { "event": { "ControlChange": { "channel": 1,  "controller": 11 } }, "action": { "kind": "filter", "is_a": false } },
+
+    { "event": { "NoteOn": { "channel": 2, "note": 10 } }, "action": { "kind": "play_pause" } },
+    { "event": { "NoteOn": { "channel": 3, "note": 10 } }, "action": { "kind": "play_pause" } },
+
+    { "event": { "NoteOn": { "channel": 2, "note": 9 } }, "action": { "kind": "cue_set", "is_a": true,  "slot": 0 } },
+    { "event": { "NoteOn": { "channel": 3, "note": 9 } }, "action": { "kind": "cue_set", "is_a": false, "slot": 0 } }
+  ]
+}

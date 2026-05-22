@@ -1,0 +1,47 @@
+{
+  "_comment": [
+    "Generic 2-channel DJ controller — conventional MIDI layout.",
+    "Most consumer controllers (Hercules, Reloop, Numark, basic Pioneer) follow a similar pattern:",
+    "  - Channel 0 = Deck A, Channel 1 = Deck B",
+    "  - CC events for continuous controls (faders, knobs, jog wheels)",
+    "  - Note-on for buttons (play, cue, hot cues)",
+    "  - Crossfader on a master channel",
+    "Exact controller numbers vary by vendor — use this as a starting point and adjust",
+    "via MIDI learn (`K` on dashboard) or by editing this file.",
+    "Place at ~/.mixr/midi-map.json to load on next launch."
+  ],
+  "bindings": [
+    { "event": { "ControlChange": { "channel": 15, "controller": 8  } }, "action": { "kind": "crossfader" } },
+
+    { "event": { "ControlChange": { "channel": 0,  "controller": 19 } }, "action": { "kind": "channel_fader", "is_a": true } },
+    { "event": { "ControlChange": { "channel": 1,  "controller": 19 } }, "action": { "kind": "channel_fader", "is_a": false } },
+
+    { "event": { "ControlChange": { "channel": 0,  "controller": 11 } }, "action": { "kind": "eq_high", "is_a": true } },
+    { "event": { "ControlChange": { "channel": 0,  "controller": 12 } }, "action": { "kind": "eq_mid",  "is_a": true } },
+    { "event": { "ControlChange": { "channel": 0,  "controller": 13 } }, "action": { "kind": "eq_low",  "is_a": true } },
+    { "event": { "ControlChange": { "channel": 1,  "controller": 11 } }, "action": { "kind": "eq_high", "is_a": false } },
+    { "event": { "ControlChange": { "channel": 1,  "controller": 12 } }, "action": { "kind": "eq_mid",  "is_a": false } },
+    { "event": { "ControlChange": { "channel": 1,  "controller": 13 } }, "action": { "kind": "eq_low",  "is_a": false } },
+
+    { "event": { "ControlChange": { "channel": 0,  "controller": 26 } }, "action": { "kind": "filter", "is_a": true } },
+    { "event": { "ControlChange": { "channel": 1,  "controller": 26 } }, "action": { "kind": "filter", "is_a": false } },
+
+    { "event": { "ControlChange": { "channel": 0,  "controller": 0  } }, "action": { "kind": "tempo", "is_a": true } },
+    { "event": { "ControlChange": { "channel": 1,  "controller": 0  } }, "action": { "kind": "tempo", "is_a": false } },
+
+    { "event": { "NoteOn": { "channel": 0, "note": 11 } }, "action": { "kind": "play_pause" } },
+    { "event": { "NoteOn": { "channel": 1, "note": 11 } }, "action": { "kind": "play_pause" } },
+
+    { "event": { "NoteOn": { "channel": 0, "note": 12 } }, "action": { "kind": "cue_set", "is_a": true,  "slot": 0 } },
+    { "event": { "NoteOn": { "channel": 1, "note": 12 } }, "action": { "kind": "cue_set", "is_a": false, "slot": 0 } },
+
+    { "event": { "NoteOn": { "channel": 0, "note": 1 } }, "action": { "kind": "cue", "is_a": true,  "slot": 0 } },
+    { "event": { "NoteOn": { "channel": 0, "note": 2 } }, "action": { "kind": "cue", "is_a": true,  "slot": 1 } },
+    { "event": { "NoteOn": { "channel": 0, "note": 3 } }, "action": { "kind": "cue", "is_a": true,  "slot": 2 } },
+    { "event": { "NoteOn": { "channel": 0, "note": 4 } }, "action": { "kind": "cue", "is_a": true,  "slot": 3 } },
+    { "event": { "NoteOn": { "channel": 1, "note": 1 } }, "action": { "kind": "cue", "is_a": false, "slot": 0 } },
+    { "event": { "NoteOn": { "channel": 1, "note": 2 } }, "action": { "kind": "cue", "is_a": false, "slot": 1 } },
+    { "event": { "NoteOn": { "channel": 1, "note": 3 } }, "action": { "kind": "cue", "is_a": false, "slot": 2 } },
+    { "event": { "NoteOn": { "channel": 1, "note": 4 } }, "action": { "kind": "cue", "is_a": false, "slot": 3 } }
+  ]
+}
