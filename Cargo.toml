@@ -1,0 +1,85 @@
+[package]
+name = "mixr-rs"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "Lean terminal DJ app for electronic music — Beatport streaming, AI-assisted mixing, hardware controllers."
+authors = ["Chris McLennan"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/chris-mclennan/mixr-rs"
+homepage = "https://github.com/chris-mclennan/mixr-rs"
+readme = "README.md"
+keywords = ["dj", "audio", "music", "beatport", "tui"]
+categories = ["multimedia::audio", "command-line-utilities"]
+exclude = [".local/", ".claude/", ".github/", "assets/", "scripts/", "run.sh", "run.ps1"]
+
+[[bin]]
+name = "mixr"
+path = "src/main.rs"
+
+[features]
+default = []
+# Enables the RubberBand pitch-stretch engine via librubberband FFI.
+# Requires `librubberband-dev` (Linux) or `brew install rubberband` (macOS).
+rubberband = ["dep:libc"]
+# Pure-Rust pitch-preserving stretcher (WSOLA + phase vocoder hybrid).
+# MIT-licensed, no FFI, ships in the binary. A/B against Rubberband
+# from Settings → Pitch Stretch Engine.
+timestretch = ["dep:timestretch"]
+# Wires stratum-dsp as an alternate BPM/key analyzer for A/B testing
+# against the built-in onset detector. Pure Rust, MIT/Apache. Toggle
+# live via Settings → Analyzer Engine, or `G` on the dashboard.
+stratum = ["dep:stratum-dsp"]
+
+[dependencies]
+# Audio
+cpal = "0.15"
+symphonia = { version = "0.5", features = ["all"] }
+libc = { version = "0.2", optional = true }  # Used by the `rubberband` feature for FFI types
+timestretch = { version = "0.4", optional = true }  # Pure-Rust pitch stretcher — `timestretch` feature
+stratum-dsp = { version = "1.0", optional = true }  # Optional alt analyzer — `stratum` feature
+
+# TUI
+ratatui = "0.29"
+crossterm = { version = "0.28", features = ["event-stream"] }
+# Wire protocol for mixr's native/integrated mode under tmnl (`--blit`).
+# Same crate that mnml uses; sourced from the sibling repo.
+tmnl-protocol = { path = "../tmnl-protocol" }
+
+# Async
+tokio = { version = "1", features = ["full"] }
+futures = "0.3"
+
+# HTTP
+reqwest = { version = "0.12", features = ["json", "cookies"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Crypto (HLS decryption + OAuth PKCE)
+aes = "0.8"
+cbc = "0.1"
+sha2 = "0.10"     # SHA-256 for PKCE code challenge
+base64 = "0.22"   # URL-safe base64 for PKCE
+
+# Utilities
+anyhow = "1"
+thiserror = "2"
+chrono = { version = "0.4", features = ["serde"] }
+tracing = "0.1"
+tracing-appender = "0.2"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+url = "2"
+dirs = "6"
+wry = "0.45"        # Embedded WebView for the in-app Beatport login window
+tao = "0.30"        # Windowing for wry (cross-platform event loop)
+muda = "0.16"       # Native menus (system Cmd+X/C/V/A in the WebView text fields)
+midir = "0.10"      # MIDI input for hardware DJ controller integration
+hidapi = "2.6"      # HID input — richer per-controller features (jog wheel resolution, LEDs)
+quick-xml = "0.36"  # rekordbox.xml library import
+rusqlite = { version = "0.32", features = ["bundled"] }  # Engine DJ + Serato library DBs
+
+[profile.release]
+opt-level = 3
+lto = true
