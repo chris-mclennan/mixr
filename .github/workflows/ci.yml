@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  check:
+    name: build · test · clippy
+    # macOS is the primary target; the default build needs no extra system
+    # libraries here (no GPL features, platform-native audio/MIDI/WebView).
+    runs-on: macos-latest
+    steps:
+      # mixr depends on tmnl-protocol by path — check it out alongside.
+      - name: Checkout mixr
+        uses: actions/checkout@v4
+        with:
+          path: mixr-rs
+      - name: Checkout tmnl-protocol
+        uses: actions/checkout@v4
+        with:
+          repository: chris-mclennan/tmnl-protocol
+          path: tmnl-protocol
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: mixr-rs
+
+      - name: build
+        working-directory: mixr-rs
+        run: cargo build --all-targets
+
+      - name: test
+        working-directory: mixr-rs
+        run: cargo test
+
+      # clippy runs for visibility but is not yet a hard gate — see
+      # .local/PLAN.md ("get mixr fmt/clippy-clean, then tighten CI").
+      - name: clippy
+        working-directory: mixr-rs
+        run: cargo clippy --all-targets

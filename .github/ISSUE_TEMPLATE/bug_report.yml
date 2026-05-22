@@ -1,0 +1,43 @@
+name: Bug report
+description: Something in mixr isn't working as expected.
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: mixr version
+      description: The commit SHA, or the release if installed from one.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: OS & audio output device
+      description: e.g. "macOS 15.4, MacBook Pro Speakers" or "Arch Linux, Focusrite Scarlett"
+    validations:
+      required: true
+  - type: dropdown
+    id: pitch-engine
+    attributes:
+      label: Pitch-stretch engine
+      description: Settings → Pitch Stretch (or which `--features` flag was used).
+      options:
+        - "Off (varispeed, default)"
+        - Rubberband
+        - Timestretch
+        - Not relevant
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Relevant lines from ~/.mixr/mixr.log, plus a screenshot if it's a UI bug.
+      render: shell
