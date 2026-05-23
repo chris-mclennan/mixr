@@ -28,14 +28,12 @@ pub fn profiler_enabled() -> bool { PROFILER_ENABLED.load(Ordering::Relaxed) }
 fn suppress_train_wreck_during_user_override(s: &mut AudioState) {
     match s.state {
         EngineState::Crossfading => { s.mix_wreck_fired = true; }
-        EngineState::Playing | EngineState::Idle => {
-            // Set the flag and a one-shot edge marker the tick loop
-            // converts to a single toast. Every CC tweak from a knob
-            // sweep would otherwise spam toasts.
-            if !s.user_paused_auto {
-                s.user_paused_auto = true;
-                s.user_paused_auto_just_triggered = true;
-            }
+        // Set the flag and a one-shot edge marker the tick loop converts to
+        // a single toast. Every CC tweak from a knob sweep would otherwise
+        // spam toasts — the inner guard prevents re-firing.
+        EngineState::Playing | EngineState::Idle if !s.user_paused_auto => {
+            s.user_paused_auto = true;
+            s.user_paused_auto_just_triggered = true;
         }
         _ => {}
     }

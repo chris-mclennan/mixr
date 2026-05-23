@@ -152,6 +152,7 @@ impl App {
             }
             crate::ipc::IpcCommand::Navigate(dir) => {
                 let count = self.current_screen().item_count();
+                #[allow(clippy::collapsible_match)] // one-liner shape reads better unwrapped
                 match dir.as_str() {
                     "up" => { if self.selected > 0 { self.selected -= 1; } }
                     "down" => { if self.selected + 1 < count { self.selected += 1; } }

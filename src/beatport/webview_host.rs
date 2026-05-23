@@ -140,17 +140,16 @@ pub fn run(authorize_url: &str) -> Result<()> {
                 tracing::info!("WebView: OAuth code captured, exiting");
                 std::process::exit(0);
             }
-            Event::UserEvent(HostEvent::Cancelled) => {
-                // Timer fired before code captured — promote window.
-                // (This event variant doubles as the timer signal —
-                // the actual user-cancel path is WindowEvent::CloseRequested.)
+            // Timer fired before code captured — promote window.
+            // (This event variant doubles as the timer signal — the actual
+            // user-cancel path is WindowEvent::CloseRequested.)
+            Event::UserEvent(HostEvent::Cancelled)
                 if !captured_for_loop.load(std::sync::atomic::Ordering::Relaxed)
-                    && !shown_via_timer
-                {
-                    window.set_visible(true);
-                    window.set_focus();
-                    shown_via_timer = true;
-                }
+                    && !shown_via_timer =>
+            {
+                window.set_visible(true);
+                window.set_focus();
+                shown_via_timer = true;
             }
             Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
                 // User closed the window without signing in. Print

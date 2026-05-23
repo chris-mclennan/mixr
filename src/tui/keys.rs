@@ -82,13 +82,11 @@ impl App {
             .find(|t| t.contains(col, row))
             .map(|t| t.action.clone());
         match hit {
-            Some(ClickAction::SetCrossfaderRange { x_min, x_max }) => {
-                if x_max > x_min {
-                    let span = (x_max - x_min) as f32;
-                    let rel = (col.saturating_sub(x_min) as f32 / span).clamp(0.0, 1.0);
-                    let pos = rel * 2.0 - 1.0;
-                    self.engine.set_crossfader(pos);
-                }
+            Some(ClickAction::SetCrossfaderRange { x_min, x_max }) if x_max > x_min => {
+                let span = (x_max - x_min) as f32;
+                let rel = (col.saturating_sub(x_min) as f32 / span).clamp(0.0, 1.0);
+                let pos = rel * 2.0 - 1.0;
+                self.engine.set_crossfader(pos);
             }
             Some(ClickAction::SetVerticalRange { control, y_min, y_max }) => {
                 self.apply_vertical_drag(control, row, y_min, y_max, false);
@@ -536,17 +534,15 @@ impl App {
                 match key.code {
                     KeyCode::Esc => { self.dj_asking = false; self.dj_ask_buffer.clear(); }
                     KeyCode::Backspace => { self.dj_ask_buffer.pop(); }
-                    KeyCode::Enter => {
-                        if !self.dj_ask_buffer.is_empty() {
-                            let prompt = self.dj_ask_buffer.clone();
-                            self.dj_asking = false;
-                            self.dj_ask_buffer.clear();
-                            // Set DJ direction and trigger
-                            if let Some(ref dj) = self.claude_dj
-                                && let Ok(mut dj) = dj.try_lock() { dj.set_prompt(prompt.clone()); }
-                            self.trigger_dj(&format!("User says: {prompt}"));
-                            self.toast.show(&format!("Asked DJ: {prompt}"), 2.0);
-                        }
+                    KeyCode::Enter if !self.dj_ask_buffer.is_empty() => {
+                        let prompt = self.dj_ask_buffer.clone();
+                        self.dj_asking = false;
+                        self.dj_ask_buffer.clear();
+                        // Set DJ direction and trigger
+                        if let Some(ref dj) = self.claude_dj
+                            && let Ok(mut dj) = dj.try_lock() { dj.set_prompt(prompt.clone()); }
+                        self.trigger_dj(&format!("User says: {prompt}"));
+                        self.toast.show(&format!("Asked DJ: {prompt}"), 2.0);
                     }
                     KeyCode::Char(c) => { self.dj_ask_buffer.push(c); }
                     _ => {}
@@ -785,7 +781,7 @@ impl App {
                     self.filter_text.push(c);
                     self.selected = 0;
                 }
-                KeyCode::Up => { if self.selected > 0 { self.selected -= 1; } }
+                KeyCode::Up if self.selected > 0 => { self.selected -= 1; }
                 KeyCode::Down => {
                     let count = self.filtered_item_count();
                     if self.selected + 1 < count { self.selected += 1; }
@@ -854,14 +850,12 @@ impl App {
                     self.selected = 0;
                 }
                 KeyCode::Backspace => { self.search_query.pop(); }
-                KeyCode::Enter => {
-                    if !self.search_query.is_empty() {
-                        self.trigger_search();
-                    }
+                KeyCode::Enter if !self.search_query.is_empty() => {
+                    self.trigger_search();
                 }
-                KeyCode::Up => { if self.selected > 0 { self.selected -= 1; } }
-                KeyCode::Down => {
-                    if self.selected + 1 < self.search_results.len() { self.selected += 1; }
+                KeyCode::Up if self.selected > 0 => { self.selected -= 1; }
+                KeyCode::Down if self.selected + 1 < self.search_results.len() => {
+                    self.selected += 1;
                 }
                 KeyCode::Char(c) => { self.search_query.push(c); }
                 _ => {}
@@ -875,12 +869,10 @@ impl App {
                 match key.code {
                     KeyCode::Char(c) => { picker.new_name.push(c); }
                     KeyCode::Backspace => { picker.new_name.pop(); }
-                    KeyCode::Enter => {
-                        if !picker.new_name.is_empty() {
-                            let name = picker.new_name.clone();
-                            let track_id = picker.track_id;
-                            self.create_and_add_to_playlist(name, track_id);
-                        }
+                    KeyCode::Enter if !picker.new_name.is_empty() => {
+                        let name = picker.new_name.clone();
+                        let track_id = picker.track_id;
+                        self.create_and_add_to_playlist(name, track_id);
                     }
                     KeyCode::Esc => {
                         self.view_mode = ViewMode::PlaylistPicker;
@@ -896,8 +888,8 @@ impl App {
             if let Some(ref mut picker) = self.playlist_picker {
                 let count = picker.playlists.len() + 1; // +1 for "Create New"
                 match key.code {
-                    KeyCode::Up => { if picker.selected > 0 { picker.selected -= 1; } }
-                    KeyCode::Down => { if picker.selected + 1 < count { picker.selected += 1; } }
+                    KeyCode::Up if picker.selected > 0 => { picker.selected -= 1; }
+                    KeyCode::Down if picker.selected + 1 < count => { picker.selected += 1; }
                     KeyCode::Enter => {
                         if picker.selected == 0 {
                             // Create new playlist
@@ -929,8 +921,8 @@ impl App {
             if let Some(ref mut picker) = self.genre_picker {
                 let count = picker.genres.len();
                 match key.code {
-                    KeyCode::Up => { if picker.selected > 0 { picker.selected -= 1; } }
-                    KeyCode::Down => { if picker.selected + 1 < count { picker.selected += 1; } }
+                    KeyCode::Up if picker.selected > 0 => { picker.selected -= 1; }
+                    KeyCode::Down if picker.selected + 1 < count => { picker.selected += 1; }
                     KeyCode::Enter => {
                         if let Some(genre) = picker.genres.get(picker.selected) {
                             if matches!(self.view_mode, ViewMode::GenrePicker) {
@@ -971,8 +963,8 @@ impl App {
         if matches!(self.view_mode, ViewMode::Settings) {
             let count = super::settings::settings_count(&self.config);
             match key.code {
-                KeyCode::Up => { if self.selected > 0 { self.selected -= 1; } }
-                KeyCode::Down => { if self.selected + 1 < count { self.selected += 1; } }
+                KeyCode::Up if self.selected > 0 => { self.selected -= 1; }
+                KeyCode::Down if self.selected + 1 < count => { self.selected += 1; }
                 KeyCode::Enter | KeyCode::Right => {
                     let settings = super::settings::build_settings(&self.config);
                     if let Some(row) = settings.get(self.selected)
@@ -1114,8 +1106,8 @@ impl App {
         };
 
         match key.code {
-            KeyCode::Up => { if self.selected > 0 { self.selected -= 1; } }
-            KeyCode::Down => { if self.selected + 1 < item_count { self.selected += 1; } }
+            KeyCode::Up if self.selected > 0 => { self.selected -= 1; }
+            KeyCode::Down if self.selected + 1 < item_count => { self.selected += 1; }
             KeyCode::Home => { self.selected = 0; }
             KeyCode::End => { self.selected = item_count.saturating_sub(1); }
             KeyCode::PageUp => { self.selected = self.selected.saturating_sub(10); }
@@ -1165,15 +1157,16 @@ impl App {
                 }
             }
 
-            KeyCode::Left => {
+            // Left never navigates back — use Esc for that.
+            KeyCode::Left
                 if matches!(self.view_mode, ViewMode::Browse)
-                    && matches!(self.current_screen(), BrowseScreen::TrackList { .. }) && self.selected_column > -2 {
-                        self.selected_column -= 1;
-                        if self.config.compact_view && self.selected_column == 1 {
-                            self.selected_column = 0;
-                        }
-                    }
-                    // Left never navigates back — use Esc for that
+                    && matches!(self.current_screen(), BrowseScreen::TrackList { .. })
+                    && self.selected_column > -2 =>
+            {
+                self.selected_column -= 1;
+                if self.config.compact_view && self.selected_column == 1 {
+                    self.selected_column = 0;
+                }
             }
 
             // Space: preview track (4 bars from first beat with metronome)
@@ -1518,15 +1511,13 @@ impl App {
                 self.midi_learn_captured = None;
             }
             KeyCode::Char('b') => { self.view_mode = ViewMode::Browse; self.selected = 0; }
-            KeyCode::Char('v') => {
-                // Dashboard's `v` is dashboard-layout cycle (handled
-                // in the dashboard arm above); skip the compact-view
-                // toggle so the two don't double-fire.
-                if !matches!(self.view_mode, ViewMode::Dashboard) {
-                    self.config.compact_view = !self.config.compact_view;
-                    self.config.save();
-                    self.toast.show(if self.config.compact_view { "Compact view" } else { "Full view" }, 1.0);
-                }
+            // Dashboard's `v` is dashboard-layout cycle (handled in the
+            // dashboard arm above); skip the compact-view toggle here so
+            // the two don't double-fire.
+            KeyCode::Char('v') if !matches!(self.view_mode, ViewMode::Dashboard) => {
+                self.config.compact_view = !self.config.compact_view;
+                self.config.save();
+                self.toast.show(if self.config.compact_view { "Compact view" } else { "Full view" }, 1.0);
             }
             KeyCode::Char('L') => {
                 // Load more (pagination) — works on track, chart, release lists
