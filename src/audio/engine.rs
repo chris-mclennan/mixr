@@ -1511,6 +1511,7 @@ impl MixEngine {
     /// Read-only: is the engine's auto-mix currently paused due to
     /// user override on the playing track? Used by status.json /
     /// dashboard to show an "AUTO PAUSED" badge.
+    #[allow(dead_code)] // referenced by future dashboard work
     pub fn auto_paused(&self) -> bool {
         let s = self.audio_state.lock().unwrap_or_else(|e| e.into_inner());
         s.user_paused_auto

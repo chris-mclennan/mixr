@@ -17,6 +17,9 @@ use std::time::Duration;
 #[derive(Hash, Eq, PartialEq, Clone, Debug)]
 struct Key { kind: &'static str, channel: u8, control: u8 }
 
+/// Per-key event count + the last data bytes seen for that key.
+type KeyCounts = Arc<Mutex<HashMap<Key, (u32, Vec<u8>)>>>;
+
 fn main() {
     let input = midir::MidiInput::new("mixr-one").expect("midir init");
     let port = input.ports().into_iter().next().expect("no MIDI input");
@@ -24,7 +27,7 @@ fn main() {
     eprintln!("Listening on: {name}");
     eprintln!("Move ONE control now (30s capture)...\n");
 
-    let counts: Arc<Mutex<HashMap<Key, (u32, Vec<u8>)>>> = Arc::new(Mutex::new(HashMap::new()));
+    let counts: KeyCounts = Arc::new(Mutex::new(HashMap::new()));
     let counts_cb = counts.clone();
     let _conn = input.connect(&port, "mixr-one", move |_, msg, _| {
         if msg.is_empty() { return; }

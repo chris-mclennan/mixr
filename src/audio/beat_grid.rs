@@ -147,7 +147,7 @@ mod tests {
         assert!(p > 0.49 && p < 0.51, "expected ≈0.5, got {p}");
         // Exactly one full beat before → wraps to 0.
         let p = grid.phase(0.5);
-        assert!(p < 1e-6 || p > 0.999999);
+        assert!(!(1e-6..=0.999999).contains(&p));
     }
 
     #[test]
