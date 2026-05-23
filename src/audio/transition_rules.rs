@@ -49,6 +49,14 @@ pub struct Condition {
 }
 
 impl Condition {
+    // The `!(ctx.X > v)` form here is deliberate, not a clippy candidate for
+    // `partial_cmp` rewriting. `f64` is `PartialOrd`, not `Ord` — NaN compares
+    // unordered. With `!(NaN > v)` the expression is `true`, so the rule
+    // short-circuits to `return false` (the candidate transition is dropped).
+    // That's the right default: a rule context with a NaN field must NOT
+    // satisfy the condition. Switching to `partial_cmp().is_some_and(...)`
+    // changes that semantic — NaN inputs would skip the rule entirely.
+    #[allow(clippy::neg_cmp_op_on_partial_ord)]
     pub fn matches(&self, ctx: &RuleContext) -> bool {
         if let Some(v) = self.bpm_gap_pct_gt && !(ctx.bpm_gap_pct > v) { return false; }
         if let Some(v) = self.bpm_gap_pct_lt && !(ctx.bpm_gap_pct < v) { return false; }

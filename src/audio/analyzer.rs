@@ -138,8 +138,8 @@ fn spectral_flux_onsets(samples: &[f32], sample_rate: u32) -> Vec<f32> {
         let mut out = vec![0.0f32; data.len()];
         let mut sum = 0.0f64;
         // Initialize first window
-        for i in 0..width {
-            sum += data[i] as f64;
+        for sample in data.iter().take(width) {
+            sum += *sample as f64;
         }
         let half = width / 2;
         out[half] = (sum / width as f64) as f32;
@@ -516,6 +516,11 @@ fn detect_phrases(samples: &[f32], sample_rate: u32, bpm: f64, _duration: f64) -
     // A checkerboard kernel detects boundaries where texture changes.
     let kernel_size = 4; // 4 bars on each side
     let mut novelty = vec![0.0f64; n];
+    // The `for i / for a / for b` 2D-stencil form below is the canonical
+    // shape for this kind of similarity-matrix kernel — clippy wants
+    // `sim.iter().take(N).skip(M)` rewrites but those obscure the access
+    // pattern. The indexed form is what the algorithm specifies.
+    #[allow(clippy::needless_range_loop)]
     for i in kernel_size..n.saturating_sub(kernel_size) {
         // Compare the block before position i with the block after
         let mut before_self = 0.0f64;

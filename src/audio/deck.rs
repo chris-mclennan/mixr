@@ -582,8 +582,8 @@ impl DeckPlayer {
             if self.volume > 0.001 {
                 let alpha = 0.014_f32; // ~100Hz cutoff at 44100Hz
                 let mut low_energy = 0.0f32;
-                for i in 0..written {
-                    self.kick_lp = self.kick_lp * (1.0 - alpha) + output[i] * alpha;
+                for sample in output.iter().take(written) {
+                    self.kick_lp = self.kick_lp * (1.0 - alpha) + sample * alpha;
                     low_energy += self.kick_lp * self.kick_lp;
                 }
                 low_energy /= written as f32;

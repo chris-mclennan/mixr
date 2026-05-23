@@ -354,6 +354,9 @@ fn render_history_section<'a>(
 /// the current `out.len()` so the rect Y values match the rendered row
 /// positions. Returns immediately when `browse_items` is empty so the
 /// section disappears in Full layout when nothing's loaded.
+// TODO: bundle the 9 args into a BrowseSectionCtx struct — ripples to caller.
+// Separate session.
+#[allow(clippy::too_many_arguments)]
 fn render_browse_section<'a>(
     out: &mut Vec<Line<'a>>,
     area: Rect,
@@ -440,6 +443,10 @@ fn render_log_section<'a>(
     out.push(Line::from(Span::styled(format!("└{}┘", "─".repeat(log_bw)), log_bs)));
 }
 
+// TODO: bundle these 19 args into a `DashboardCtx<'a>` struct — ripples to
+// every caller and changes the lifetime-of-borrow shape for the ratatui
+// Frame mutable borrow. Its own focused session.
+#[allow(clippy::too_many_arguments)]
 pub fn render_dashboard(frame: &mut Frame, area: Rect, info: &NowPlayingInfo, wf_mode: WaveformMode, browse_items: &[String], browse_breadcrumb: &str, browse_selected: usize, browse_is_tracks: bool, show_help: bool, sel_section: Option<CtrlSection>, download_in_flight: bool, dj_log: &[String], dj_ask: Option<&str>, click_targets: &mut Vec<crate::tui::app::ClickTarget>, dash_focus: crate::tui::app::DashFocus, log_scroll_offset: usize, waveform_zoom: Option<bool>, dash_layout: DashLayout, panel_section: PanelSection) {
     use crate::tui::app::DashFocus;
     let border_style = section_border;
@@ -814,9 +821,9 @@ pub fn render_dashboard(frame: &mut Frame, area: Rect, info: &NowPlayingInfo, wf
     // a dot to jump to that cue; Shift-click to set.
     let cue_dots = |cues: [bool; 4]| -> String {
         let mut s = String::new();
-        for i in 0..4 {
+        for (i, has_cue) in cues.iter().enumerate() {
             if i > 0 { s.push_str("  "); } // 2 spaces between slots
-            s.push(if cues[i] { '●' } else { '○' });
+            s.push(if *has_cue { '●' } else { '○' });
             s.push(' '); // gap between glyph and digit
             s.push(char::from_digit(i as u32 + 1, 10).unwrap());
         }
@@ -1464,7 +1471,7 @@ fn render_ascii_waveform(peaks: &[f32], cur: f64, total: f64, w: usize, label: &
         let end = (start + step).min(peaks.len());
         if start >= end { s.push('_'); continue; }
         let mut peak: f32 = 0.0;
-        for i in start..end { peak = peak.max(peaks[i].abs()); }
+        for p in peaks.iter().take(end).skip(start) { peak = peak.max(p.abs()); }
         let ci = (peak * chars.len() as f32).min(chars.len() as f32 - 1.0) as usize;
         s.push(chars[ci]);
     }
@@ -1504,6 +1511,7 @@ fn vu_ch(rfb: usize, thresh: usize, ml: usize) -> Span<'static> {
     } else { dim("░") }
 }
 
+#[allow(clippy::too_many_arguments)] // beat-dot renderer; bundling won't help
 fn bdot(row: usize, center: usize, playing: bool, loaded: bool, both: bool, aph: f64, beat_pos: f64, downbeat_aligned: bool) -> Span<'static> {
     if !loaded { return Span::raw(" "); }
     if !playing {
