@@ -51,8 +51,11 @@ tmnl-protocol = { path = "../tmnl-protocol", version = "0.0.1" }
 tokio = { version = "1", features = ["full"] }
 futures = "0.3"
 
-# HTTP
-reqwest = { version = "0.12", features = ["json", "cookies"] }
+# HTTP. Pure-Rust TLS backend (rustls) — no system OpenSSL dependency,
+# reproducible builds across platforms, lower CVE surface. Same backend
+# the sibling repos (mnml, tmnl, fim-engine) all use; harmonizes the
+# family and means downstream users don't need `libssl-dev` installed.
+reqwest = { version = "0.12", default-features = false, features = ["json", "cookies", "rustls-tls"] }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }

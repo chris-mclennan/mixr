@@ -1568,7 +1568,7 @@ mod tests {
     #[test]
     fn camelot_strictness_changes_prompt() {
         let mut dj = fake_dj();
-        let s = ClaudeDjSettings { camelot_strictness: Strictness::Strict, ..Default::default() };
+        let mut s = ClaudeDjSettings { camelot_strictness: Strictness::Strict, ..Default::default() };
         dj.apply_settings(s.clone());
         assert!(dj.system_prompt().contains("REQUIRED"),
             "strict camelot must say so");
@@ -1582,7 +1582,7 @@ mod tests {
     #[test]
     fn style_changes_digging_guidance() {
         let mut dj = fake_dj();
-        let s = ClaudeDjSettings { style: DjStyle::Mainstream, ..Default::default() };
+        let mut s = ClaudeDjSettings { style: DjStyle::Mainstream, ..Default::default() };
         dj.apply_settings(s.clone());
         assert!(dj.system_prompt().contains("COMMERCIAL"),
             "mainstream style should read differently from default underground");
