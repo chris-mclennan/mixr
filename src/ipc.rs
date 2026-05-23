@@ -740,11 +740,17 @@ pub fn parse_command(json: &serde_json::Value) -> Vec<IpcCommand> {
                 }
                 "test_mix" => { cmds.push(IpcCommand::TestMix); }
                 "install_rubberband" => { cmds.push(IpcCommand::InstallRubberband); }
-                // FIXME: this `"cue"` arm is shadowed by the earlier one at
-                // the top of this match — anyone who sends an `action` field
-                // gets ignored. Resolving means deleting the simpler first
-                // arm + losing the `CueJump`/`CueSet` IpcCommand variants.
-                // Behavior change, deferred.
+                // FIXME: this `"cue"` arm is shadowed by the simpler one
+                // earlier at line 455 — anyone who sends an `action` field
+                // gets ignored. The fix is small: delete lines 455-471 (the
+                // simple `"cue"` and `"cue_set"` arms that emit CueJump /
+                // CueSet variants), then fold their handlers in
+                // tui/ipc_handler.rs:75-84 into the existing
+                // `IpcCommand::Cue { action }` arm at ipc_handler.rs:581
+                // (which already handles all three actions). Defaults stay
+                // the same (no action ⇒ Jump). The CueJump / CueSet
+                // IpcCommand variants get deleted along the way; the
+                // unified Cue variant covers everything.
                 #[allow(unreachable_patterns)]
                 "cue" => {
                     // {"cue": {"deck": "a", "slot": 1, "action": "set|jump|clear"}}

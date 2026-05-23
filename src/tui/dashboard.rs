@@ -154,7 +154,7 @@ fn pc_aligned(ms: f64, downbeat_aligned: bool) -> Color {
         if a < 15.0 { Color::Yellow } else { Color::Red }
     } else { pc(ms) }
 }
-fn ts(s: &str, w: usize) -> String { if w <= 2 { return String::new(); } else if s.chars().count() > w { let t: String = s.chars().take(w-1).collect(); format!("{t}…") } else { s.to_string() } }
+fn ts(s: &str, w: usize) -> String { if w <= 2 { String::new() } else if s.chars().count() > w { let t: String = s.chars().take(w-1).collect(); format!("{t}…") } else { s.to_string() } }
 fn ps(s: &str, w: usize) -> String { let l = s.chars().count(); if l >= w { s.chars().take(w).collect() } else { format!("{s}{}", " ".repeat(w-l)) } }
 fn ft(t: f64) -> String { let s = t.max(0.0) as u64; format!("{}:{:02}", s/60, s%60) }
 /// Dim-gray span. Accepts anything convertible to `Cow<'static, str>` so
