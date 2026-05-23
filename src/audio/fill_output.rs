@@ -407,7 +407,9 @@ pub(crate) fn fill_output(state: &mut AudioState, data: &mut [f32], channels: us
     if let Some(cb_start) = cb_start {
         let total_us = cb_start.elapsed().as_micros().min(u32::MAX as u128) as u32;
         let sr = state.deck_a.output_sample_rate as u64;
-        let budget_us = if sr > 0 { (frames as u64 * 1_000_000 / sr) as u32 } else { 0 };
+        let budget_us = (frames as u64 * 1_000_000)
+            .checked_div(sr)
+            .unwrap_or(0) as u32;
         state.profiler.push(super::profiler::CallbackSample {
             total_us,
             decks_us: t_decks,

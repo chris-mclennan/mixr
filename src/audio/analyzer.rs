@@ -845,7 +845,7 @@ mod tests {
         let mut samples = vec![0.0f32; silent_samples + sr as usize];
         for s in &mut samples[silent_samples..] { *s = 0.5; }
         let t = find_first_audio(&samples, sr);
-        assert!(t >= 0.45 && t <= 0.55, "expected ~0.5s, got {t}s");
+        assert!((0.45..=0.55).contains(&t), "expected ~0.5s, got {t}s");
     }
 
     #[test]

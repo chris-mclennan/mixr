@@ -1164,8 +1164,8 @@ mod tests {
         // read_phase loops, which legitimately need more rounds.
         assert_eq!(MAX_ROUNDS, 10);
         assert_eq!(MAX_ROUNDS_MANUAL, 20);
-        assert!(MAX_ROUNDS_MANUAL > MAX_ROUNDS,
-            "manual cap must exceed auto cap to be useful");
+        const { assert!(MAX_ROUNDS_MANUAL > MAX_ROUNDS,
+            "manual cap must exceed auto cap to be useful") };
     }
 
     #[test]
@@ -1183,8 +1183,8 @@ mod tests {
     fn tool_result_truncation_constant_is_sane() {
         // Documents the per-tool-result body cap. Guards against
         // accidental zero or absurdly large values.
-        assert!(TOOL_RESULT_MAX_CHARS >= 200, "too small to carry useful context");
-        assert!(TOOL_RESULT_MAX_CHARS <= 5000, "too large to keep input tokens bounded");
+        const { assert!(TOOL_RESULT_MAX_CHARS >= 200, "too small to carry useful context") };
+        const { assert!(TOOL_RESULT_MAX_CHARS <= 5000, "too large to keep input tokens bounded") };
     }
 
     #[test]
@@ -1357,8 +1357,7 @@ mod tests {
         assert_eq!(dj.min_interval, Duration::from_secs(MIN_INTERVAL_AUTO_SECS));
         // Simulate a 429 that widened the interval — then flip to manual.
         dj.min_interval = Duration::from_secs(30);
-        let mut s = ClaudeDjSettings::default();
-        s.mode = ClaudeDjMode::Manual;
+        let s = ClaudeDjSettings { mode: ClaudeDjMode::Manual, ..Default::default() };
         dj.apply_settings(s);
         // Transition must snap to the manual floor (faster loop) so
         // beatmatching can iterate — a stale 30s hold-over from a prior
@@ -1414,8 +1413,7 @@ mod tests {
     #[test]
     fn memory_disabled_hides_block_even_when_entries_exist() {
         let mut dj = fake_dj();
-        let mut s = ClaudeDjSettings::default();
-        s.memory_enabled = false;
+        let s = ClaudeDjSettings { memory_enabled: false, ..Default::default() };
         dj.apply_settings(s);
         let mut m = DjMemory::default();
         m.remember_good(MixEntry {
@@ -1466,8 +1464,7 @@ mod tests {
     #[test]
     fn rate_good_no_ops_when_memory_disabled() {
         let mut dj = fake_dj();
-        let mut s = ClaudeDjSettings::default();
-        s.memory_enabled = false;
+        let s = ClaudeDjSettings { memory_enabled: false, ..Default::default() };
         dj.apply_settings(s);
         dj.rate_good(MixEntry {
             pair: "x".into(), bpm: None, key: None,
@@ -1540,8 +1537,7 @@ mod tests {
     #[test]
     fn system_prompt_reflects_manual_mode() {
         let mut dj = fake_dj();
-        let mut s = ClaudeDjSettings::default();
-        s.mode = ClaudeDjMode::Manual;
+        let s = ClaudeDjSettings { mode: ClaudeDjMode::Manual, ..Default::default() };
         dj.apply_settings(s);
         let prompt = dj.system_prompt();
         assert!(prompt.contains("MANUAL"),
@@ -1553,8 +1549,7 @@ mod tests {
     #[test]
     fn system_prompt_reflects_assist_mode() {
         let mut dj = fake_dj();
-        let mut s = ClaudeDjSettings::default();
-        s.mode = ClaudeDjMode::Assist;
+        let s = ClaudeDjSettings { mode: ClaudeDjMode::Assist, ..Default::default() };
         dj.apply_settings(s);
         let prompt = dj.system_prompt();
         assert!(prompt.contains("Assist"),
@@ -1573,8 +1568,7 @@ mod tests {
     #[test]
     fn camelot_strictness_changes_prompt() {
         let mut dj = fake_dj();
-        let mut s = ClaudeDjSettings::default();
-        s.camelot_strictness = Strictness::Strict;
+        let s = ClaudeDjSettings { camelot_strictness: Strictness::Strict, ..Default::default() };
         dj.apply_settings(s.clone());
         assert!(dj.system_prompt().contains("REQUIRED"),
             "strict camelot must say so");
@@ -1588,8 +1582,7 @@ mod tests {
     #[test]
     fn style_changes_digging_guidance() {
         let mut dj = fake_dj();
-        let mut s = ClaudeDjSettings::default();
-        s.style = DjStyle::Mainstream;
+        let s = ClaudeDjSettings { style: DjStyle::Mainstream, ..Default::default() };
         dj.apply_settings(s.clone());
         assert!(dj.system_prompt().contains("COMMERCIAL"),
             "mainstream style should read differently from default underground");
@@ -1605,8 +1598,7 @@ mod tests {
         // clone, subsequent system_prompt calls would still use the
         // default settings.
         let mut dj = fake_dj();
-        let mut s = ClaudeDjSettings::default();
-        s.mode = ClaudeDjMode::Manual;
+        let s = ClaudeDjSettings { mode: ClaudeDjMode::Manual, ..Default::default() };
         dj.apply_settings(s);
         let a = dj.system_prompt();
         let b = dj.system_prompt();

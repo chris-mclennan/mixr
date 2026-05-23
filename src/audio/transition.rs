@@ -442,7 +442,7 @@ mod tests {
         assert_eq!(t.incoming_volume(0.40624), 0.0);
         // Just past the ramp start should still be near zero (monotonic rise).
         let just_past = t.incoming_volume(0.40626);
-        assert!(just_past >= 0.0 && just_past < 0.1,
+        assert!((0.0..0.1).contains(&just_past),
             "expected tiny ramp value near zero, got {just_past}");
         // By the end of the short ramp we've reached 0.9.
         let after_ramp = t.incoming_volume(0.41125);
