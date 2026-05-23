@@ -49,8 +49,11 @@ jobs:
         working-directory: mixr-rs
         run: cargo test
 
-      # clippy runs for visibility but is not yet a hard gate — see
-      # .local/PLAN.md ("get mixr fmt/clippy-clean, then tighten CI").
+      # Hard-gated as of 2026-05 — the by-hand clippy pass landed in
+      # 0ce173d / fe07bdb (76 → 0 warnings). No cargo fmt or clippy --fix
+      # was used per the no-touch style policy; if a future commit
+      # introduces a new warning, this gate forces it to surface in PR
+      # review rather than silently accumulating.
       - name: clippy
         working-directory: mixr-rs
-        run: cargo clippy --all-targets
+        run: cargo clippy --all-targets -- -D warnings
