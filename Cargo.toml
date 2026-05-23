@@ -8,6 +8,7 @@ authors = ["Chris McLennan"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/chris-mclennan/mixr-rs"
 homepage = "https://github.com/chris-mclennan/mixr-rs"
+documentation = "https://docs.rs/mixr-rs"
 readme = "README.md"
 keywords = ["dj", "audio", "music", "beatport", "tui"]
 categories = ["multimedia::audio", "command-line-utilities"]
