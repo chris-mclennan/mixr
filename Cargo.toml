@@ -44,7 +44,7 @@ ratatui = "0.29"
 crossterm = { version = "0.28", features = ["event-stream"] }
 # Wire protocol for mixr's native/integrated mode under tmnl (`--blit`).
 # Same crate that mnml uses; sourced from the sibling repo.
-tmnl-protocol = { path = "../tmnl-protocol" }
+tmnl-protocol = { path = "../tmnl-protocol", version = "0.0.1" }
 
 # Async
 tokio = { version = "1", features = ["full"] }
