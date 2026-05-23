@@ -96,6 +96,7 @@ impl App {
                 if let Some(tracks) = screen.tracks() {
                     let total = tracks.len();
                     let mut added = 0;
+                    #[allow(clippy::unnecessary_to_owned)]
                     for track in tracks.to_vec() {
                         if self.engine.enqueue(crate::audio::engine::QueueEntry::from(track)) {
                             added += 1;

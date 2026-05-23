@@ -1,5 +1,5 @@
 use anyhow::Result;
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use cpal::traits::{DeviceTrait, StreamTrait};
 use cpal::Stream;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -301,7 +301,7 @@ pub(crate) struct AudioState {
     /// Manual-mix mode: when true, crossfades skip `transition.apply()`
     /// so the DJ's crossfader_pos / channel_fader / EQ / filter settings
     /// stick instead of being overwritten by the auto curve. Phase-sync
-    /// + downbeat align still run (safety rails). Auto-swap fires when
+    /// and downbeat align still run (safety rails). Auto-swap fires when
     /// crossfader_pos crosses the terminal side toward the incoming
     /// deck, same as auto mode. Toggled by the Claude DJ settings.
     pub(crate) manual_mix: bool,
@@ -1372,6 +1372,7 @@ impl MixEngine {
     ///     unloaded. Caller must load `track` via `load_incoming`;
     ///     the completion hook picks up `pending_rewind` and calls
     ///     `finalize_rewind`.
+    ///
     /// Returns `None` if there's no snapshot or a rewind is in flight.
     pub fn request_rewind(&self) -> Option<RewindOutcome> {
         let mut s = self.audio_state.lock().unwrap_or_else(|e| e.into_inner());

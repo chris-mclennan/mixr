@@ -1151,12 +1151,9 @@ mod tests {
         // 21 string offsets from 94..136. We'll place strings starting
         // at offset 136. Layout: [title][file_path][release_date]
         let mut offsets = [0u16; 21];
-        let s_title       = vec![0x0Du8, b'T', b'e', b's', b't', b' ', b'T'];   // "Test T"
-        let s_file        = vec![0x07u8, b'/', b'a', b'.', b'f'];               // "/a.f"  (5 bytes total)
-        let s_release     = vec![0x09u8, b'2', b'0', b'2', b'4'];                // "2024"  (5 bytes total)
 
-        // Wait: short-ASCII header = ((len+1)<<1)|1, content is `len` bytes
-        // "Test T" len=6 → header = (7<<1)|1 = 0x0F. Fix.
+        // Short-ASCII header = ((len+1)<<1)|1, content is `len` bytes.
+        // "Test T" len=6 → header = (7<<1)|1 = 0x0F.
         let s_title = vec![0x0Fu8, b'T', b'e', b's', b't', b' ', b'T'];        // 7 bytes
         // "/a.f" len=4 → header = (5<<1)|1 = 0x0B
         let s_file  = vec![0x0Bu8, b'/', b'a', b'.', b'f'];                    // 5 bytes

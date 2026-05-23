@@ -2537,6 +2537,11 @@ impl App {
                         self.engine.clear_queue();
                         // Queue every track on the screen.
                         if let Some(tracks) = self.current_screen().tracks() {
+                            // to_vec() releases the immutable borrow before
+                            // the engine.enqueue() mutable borrow. clippy
+                            // suggests `iter().cloned()` but that holds the
+                            // immutable borrow across the loop body.
+                            #[allow(clippy::unnecessary_to_owned)]
                             for t in tracks.to_vec() {
                                 self.engine.enqueue(crate::audio::engine::QueueEntry::from(t));
                             }

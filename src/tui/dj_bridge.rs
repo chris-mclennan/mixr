@@ -135,6 +135,7 @@ impl App {
                     let titles: Vec<String> = tracks.iter().take(MEMORY_RECENT_CAP).map(|t| {
                         format!("{} - {}", t.artist_name(), t.full_title())
                     }).collect();
+                    #[allow(clippy::unnecessary_to_owned)]
                     for t in tracks.to_vec() {
                         self.engine.enqueue(crate::audio::engine::QueueEntry::from(t));
                     }
