@@ -2,7 +2,7 @@
 name = "mixr-rs"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.87"
 description = "Lean terminal DJ app for electronic music — Beatport streaming, AI-assisted mixing, hardware controllers."
 authors = ["Chris McLennan"]
 license = "MIT OR Apache-2.0"
