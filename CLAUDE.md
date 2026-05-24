@@ -181,7 +181,7 @@ cargo run -- --export                  # export history
 cargo run -- --favorites               # list favorited tracks
 ```
 
-**Recommended wrappers**: `run.sh` (macOS/Linux) and `run.ps1` (Windows) auto-detect librubberband, pass `--features rubberband` when present, and implement the restart loop (exit 75).
+**Recommended wrappers**: `run.sh` (macOS/Linux) and `run.ps1` (Windows) auto-detect librubberband, pass `--features rubberband` when present, and implement the restart loop (exit 75). `run.sh` also ships the family-wide dev subcommands shared with `mnml` / `tmnl` / `internal-app` — `./run.sh build|release|test|check|watch|help` plus mixr-specific `./run.sh blit <socket>` (run as a tmnl/mnml native client) and `./run.sh logout` (clear OAuth + WebView cookies). `./run.sh check` runs the same `cargo clippy --all-targets -- -D warnings` invocation as CI.
 
 **Rubberband auto-installer**: selecting Rubberband in Settings when the feature is not compiled runs the platform package manager (`brew` / `apt` / `dnf` / `pacman`), rebuilds with `--features rubberband`, and restarts. IPC: `{"install_rubberband":1}`. Unsupported OS shows a toast with manual install instructions.
 
@@ -207,3 +207,72 @@ cargo run -- --favorites               # list favorited tracks
 - Rust 2024 edition; `thiserror` errors, `anyhow` propagation; no `unsafe` except audio callback (`Arc<Mutex>`)
 - Prefer owned types over lifetimes at API boundaries; module-per-file, `mod.rs` re-exports
 - `tracing::info!`/`error!` for logging — never `println!` (corrupts TUI)
+
+## Status
+
+**reset-all in Settings now re-syncs the engine + saves (2026-05-24):**
+Both reset-all paths in `src/tui/keys.rs` (Enter on the `RESET_ALL_KEY`
+sentinel row + capital `R`) used to just do `self.config =
+AppConfig::default()` and nothing else — silent on disk, silent in the
+running audio engine. Two failure modes: the reset never persisted
+(next launch reloaded the un-reset config) and the engine kept the
+pre-reset transitions list / pitch-stretch engine / train-wreck mode /
+crossfade bars / quantize / jump bars / master limiter / Claude DJ
+settings until the next launch. Per-row `r` already routed through
+`apply_and_sync_setting` which handles both. Fix — new
+`App::resync_all_engine_settings` helper that pushes every relevant
+`self.config.*` value into the engine + claude_dj + saves to disk;
+called from both reset-all paths. Each path now also shows a
+`"Settings reset to defaults"` toast (previously silent — user
+couldn't tell whether the reset fired). 279 / 279 tests pass, clippy
+clean under `-D warnings`.
+
+**tmnl-protocol bumped to 0.0.2 (2026-05-24):** Picks up the
+`SCM_RIGHTS` fd-passing API that lands in the protocol crate. No mixr
+behavior change yet — mixr's `--blit` integration uses the standard
+frame transport — but keeps the family aligned for when the hard
+variant of pty-transfer-between-tabs (transferring a running pty
+session from mnml's pane into a new tmnl tab) lands.
+
+**run.sh — family-wide subcommands + blit/logout modes (2026-05-23):**
+Adopts the shared family dev-subcommand convention. `./run.sh
+build|release|test|check|watch|help` now matches the same shape as
+`mnml`/`tmnl`/`internal-app`. The original 23-line restart-on-75 loop +
+auto-detected `--features rubberband` is preserved as the default arm.
+New mixr-specific modes — `./run.sh blit <socket>` (run as a
+tmnl/mnml native client) and `./run.sh logout` (clear OAuth tokens +
+the WebView's persistent cookie store). `./run.sh check` runs the
+exact `cargo clippy --all-targets -- -D warnings` invocation CI uses
+— locally-clean → CI-clean.
+
+**Settings overlay retrofitted to the family UI convention
+(2026-05-23):** `src/tui/settings.rs` rebuilt around `SettingItem` =
+`Section(name) | Row(SettingRow)`, with `SettingRow.default_idx`
+tracking the `AppConfig::default()` value so the renderer can paint a
+`*` modified-marker after the choice list. 40+ existing rows
+re-arranged under `── Audio ──` / `── Mixing ──` / `── Playback ──` /
+`── Analysis ──` / `── Transitions ──` / `── Claude DJ ──` /
+`── Browser ──` / `── Account ──` / `── Reset ──` headers (no rows
+added or removed). New `RESET_ALL_KEY` sentinel row at the bottom
+(`Enter` wipes back to defaults). Keys: `←→` adjust value · `↑↓`
+move row (skips section headers) · `r` reset focused row · `R` reset
+all · `Enter` cycles forward (same as `→`; on the Reset sentinel it
+fires) · `Esc` returns to Dashboard. Deviation from the family
+convention is documented in CLAUDE.md: mixr applies changes
+immediately to the audio engine, so there's no save/cancel split —
+`Esc` keeps changes. 279 default tests pass + 4 new settings tests,
+clippy clean under `-D warnings`.
+
+**ratatui 0.29 → 0.30, crossterm 0.28 → 0.29 (2026-05-23):** Aligns
+mixr-rs with mnml + tmnl (both already on those majors). The bump
+itself was effectively no-source-change at the call sites — ratatui's
+breaking changes are mostly in extension traits / cell constructors
+that mixr doesn't touch. Verified clean under default + `--features
+rubberband` + `--features timestretch` + `--features stratum`.
+
+**CI clippy gate tightened to `-D warnings` (2026-05-23):** Hard-gated
+after the by-hand clippy pass landed (0ce173d / fe07bdb — 76 → 0
+warnings, no `cargo fmt` and no `clippy --fix` used per the no-touch
+style policy). Any future commit that introduces a new warning
+surfaces in PR review rather than silently accumulating.
+`./run.sh check` runs the exact same invocation locally.

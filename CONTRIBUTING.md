@@ -34,9 +34,13 @@ Every change must pass, in order:
 ```bash
 cargo fmt
 cargo build
-cargo clippy --all-targets   # warning-free
+cargo clippy --all-targets -- -D warnings   # matches CI's hard gate
 cargo test
 ```
+
+The CI clippy step is hard-gated at `-D warnings`, so any new lint surfaces in
+PR review rather than silently accumulating. `./run.sh check` runs the exact
+same invocation locally — locally-clean → CI-clean.
 
 There is also a keybinding smoke test that drives mixr over IPC:
 

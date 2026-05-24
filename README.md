@@ -87,9 +87,26 @@ cargo run -- --favorites                               # list favorited tracks
 **Recommended**: use the wrapper scripts — they auto-detect librubberband and implement the restart loop (exit 75):
 
 ```bash
-./run.sh          # macOS / Linux (bash)
+./run.sh          # macOS / Linux (bash) — release profile, restart loop
 ./run.ps1         # Windows (PowerShell)
 ```
+
+`run.sh` also ships the family-wide dev subcommands shared with `mnml`, `tmnl`,
+and `internal-app`:
+
+```bash
+./run.sh build [args]    # cargo build
+./run.sh release [args]  # cargo build --release
+./run.sh test  [args]    # cargo test
+./run.sh check           # cargo clippy --all-targets -- -D warnings (= CI)
+./run.sh watch           # cargo-watch loop (needs `cargo install cargo-watch`)
+./run.sh help            # show all modes
+
+./run.sh blit SOCKET     # `mixr --blit <socket>` — run as a tmnl/mnml native client
+./run.sh logout          # clear OAuth tokens + the WebView's cookie store
+```
+
+All of them honor the auto-detected `--features rubberband` flag.
 
 ### Beatport login
 
