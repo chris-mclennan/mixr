@@ -904,11 +904,11 @@ impl App {
         // the gutter, so we don't need a separate reserved row for
         // that.
         //
-        // Horizontal padding is 2 cells each side: 1 rendered
-        // inconsistently across window widths under tmnl's wgpu
-        // pipeline (subpixel snapping made it "barely there" at
-        // some widths). 2 cells lands reliably visible at every
-        // width.
+        // Horizontal padding is asymmetric: 1 cell on the left, 2
+        // cells on the right. tmnl's wgpu pipeline sub-cell-snaps
+        // the right edge so 1 cell there sometimes reads as
+        // "barely there"; 2 cells lands reliably visible. The left
+        // edge doesn't suffer the same snap so 1 cell is enough.
         //
         // Top stays flush; tmnl's `MACOS_TAB_STRIP_PX_SINGLE` (52px)
         // already gives breathing room above for the macOS
@@ -916,9 +916,9 @@ impl App {
         let size = if self.native_mode {
             let a = frame.area();
             ratatui::layout::Rect::new(
-                a.x + 2,
+                a.x + 1,
                 a.y,
-                a.width.saturating_sub(4),
+                a.width.saturating_sub(3),
                 a.height.saturating_sub(1),
             )
         } else {
