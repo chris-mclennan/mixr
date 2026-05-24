@@ -897,20 +897,29 @@ impl App {
         if matches!(self.view_mode, ViewMode::Dashboard) || !self.click_targets.is_empty() {
             self.click_targets.clear();
         }
-        // Native mode (mixr hosted inside tmnl) reserves a 1-cell
-        // padding on left + right so the dashboard border doesn't
-        // kiss the tmnl window edge, and 2 rows at the bottom for
-        // the (future) `:` cmdline + status gutter — matches mnml's
-        // shell-prompt-style chrome. Top stays flush; tmnl's
-        // `MACOS_TAB_STRIP_PX_SINGLE` already gives breathing room
-        // above for the macOS traffic-light buttons.
+        // Native mode (mixr hosted inside tmnl) reserves padding so
+        // the dashboard border doesn't kiss the tmnl window edge,
+        // plus 1 row at the bottom for the (future) `:` cmdline.
+        // tmnl's own sub-cell letterbox at the very bottom acts as
+        // the gutter, so we don't need a separate reserved row for
+        // that.
+        //
+        // Horizontal padding is 2 cells each side: 1 rendered
+        // inconsistently across window widths under tmnl's wgpu
+        // pipeline (subpixel snapping made it "barely there" at
+        // some widths). 2 cells lands reliably visible at every
+        // width.
+        //
+        // Top stays flush; tmnl's `MACOS_TAB_STRIP_PX_SINGLE` (52px)
+        // already gives breathing room above for the macOS
+        // traffic-light buttons.
         let size = if self.native_mode {
             let a = frame.area();
             ratatui::layout::Rect::new(
-                a.x + 1,
+                a.x + 2,
                 a.y,
-                a.width.saturating_sub(2),
-                a.height.saturating_sub(2),
+                a.width.saturating_sub(4),
+                a.height.saturating_sub(1),
             )
         } else {
             frame.area()
