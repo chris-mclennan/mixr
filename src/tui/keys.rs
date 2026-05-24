@@ -967,9 +967,14 @@ impl App {
                 KeyCode::Down if self.selected + 1 < count => { self.selected += 1; }
                 KeyCode::Enter | KeyCode::Right => {
                     if let Some(row) = super::settings::settings_row_at(&self.config, self.selected) {
-                        // Reset-all sentinel — Enter wipes config back to default.
+                        // Reset-all sentinel — Enter wipes config back
+                        // to default, re-syncs the engine + saves. The
+                        // sync is critical: without it the audio engine
+                        // keeps the pre-reset values until next launch.
                         if row.key == super::settings::RESET_ALL_KEY {
                             self.config = crate::config::AppConfig::default();
+                            self.resync_all_engine_settings();
+                            self.toast.show("Settings reset to defaults", 1.0);
                             return;
                         }
                         if !row.options.is_empty() {
@@ -999,9 +1004,13 @@ impl App {
                         }
                 }
                 // `R` (shift+r) — reset every row to default (matches the
-                // explicit Reset sentinel at the bottom).
+                // explicit Reset sentinel at the bottom). Must re-sync
+                // the engine + save, else the audio engine keeps the
+                // old live values until next launch.
                 KeyCode::Char('R') => {
                     self.config = crate::config::AppConfig::default();
+                    self.resync_all_engine_settings();
+                    self.toast.show("Settings reset to defaults", 1.0);
                 }
                 // Esc / `,` / `d` all close Settings and return to
                 // Dashboard. Going to full Browse on close was a bug

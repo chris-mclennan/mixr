@@ -1396,6 +1396,31 @@ impl App {
         }
     }
 
+    /// Push every relevant `self.config` value down into the audio
+    /// engine + Claude DJ + save to disk. Used by the reset-all
+    /// paths (Enter on the sentinel row + capital `R` in Settings)
+    /// where `apply_and_sync_setting` can't be called per-row
+    /// because the whole config was just blown away to defaults.
+    /// Mirror this list with the engine sync calls scattered through
+    /// `apply_and_sync_setting`'s match arms.
+    pub(crate) fn resync_all_engine_settings(&mut self) {
+        self.engine.set_enabled_transitions(self.config.enabled_transitions.clone());
+        self.engine.set_pitch_stretch_engine(self.config.pitch_stretch_engine);
+        self.engine.set_train_wreck_mode(self.config.train_wreck_mode);
+        self.engine.set_crossfade_bars(self.config.crossfade_bars);
+        self.engine.set_crossfade_bars_auto(self.config.crossfade_bars_auto);
+        self.engine.set_quantize(self.config.quantize_on, self.config.quantize_beats);
+        self.engine.set_jump_bars(self.config.jump_bars);
+        self.engine.set_limiter_mode(self.config.master_limiter);
+        let new = self.config.claude_dj.clone();
+        if let Some(dj) = &self.claude_dj
+            && let Ok(mut dj) = dj.try_lock() {
+                dj.apply_settings(new.clone());
+            }
+        self.engine.apply_claude_dj_settings(&new, self.config.claude_dj_enabled);
+        self.config.save();
+    }
+
     pub(crate) fn apply_and_sync_setting(&mut self, key: &str, option_idx: usize) -> bool {
         if let Some(action) = super::settings::apply_setting(&mut self.config, key, option_idx) {
             match action {
