@@ -265,6 +265,21 @@ pub async fn run(
         prev_cells.clear();
         prev_cells.extend_from_slice(&cells);
         prev_dims = (bw, bh);
+        // `terminal.get_cursor_position()` returns the *last* position
+        // any widget set via `frame.set_cursor_position`; when no
+        // widget set one this frame (mixr's dashboard view doesn't
+        // need a cursor), it returns the stale value — typically
+        // (0, 0), which then renders as a stray white block under
+        // the top-left CONTROLLER border. ratatui 0.30 doesn't
+        // expose "was set_cursor_position called this frame" on
+        // `CompletedFrame`. As a pragmatic check: mixr's text-input
+        // widgets (search, command palette, ask DJ) never live at
+        // (0, 0), so a (0, 0) reading is always the "no one set it"
+        // default and we should hide the cursor instead. mnml does
+        // this differently (an explicit `drawn_cursor_pos` field
+        // reset to None at draw start) — see `mnml/src/blit/mod.rs`.
+        let cursor_at_origin = cursor.as_ref().is_some_and(|p| p.x == 0 && p.y == 0);
+        let cursor_visible = cursor.is_some() && !cursor_at_origin;
         let frame = Frame {
             seq: frame_seq,
             cols: bw,
@@ -273,7 +288,7 @@ pub async fn run(
             cursor_row: cursor.as_ref().map(|p| p.y).unwrap_or(0),
             // mixr is always-on-block-cursor (no modal editing); 0 == block.
             cursor_shape: 0,
-            cursor_visible: u8::from(cursor.is_some()),
+            cursor_visible: u8::from(cursor_visible),
             runs,
         };
         frame_seq = frame_seq.wrapping_add(1);
