@@ -234,10 +234,31 @@ pub async fn run(
 
         app.tick().await;
 
+        // Sentinel-trick to detect "did any widget call
+        // `frame.set_cursor_position` this frame". Set the terminal
+        // cursor to a known out-of-band value BEFORE draw; if it's
+        // still there after, no widget moved it and we want the
+        // cursor hidden over the wire. Otherwise the position is
+        // the actively-set one.
+        //
+        // Why: ratatui's `terminal.get_cursor_position` returns the
+        // last-set cursor regardless of whether anyone set it this
+        // frame, so dashboard renders (no input) would otherwise
+        // ship a visible cursor at the stale (0, 0) default and
+        // tmnl paints a white block under the top-left corner.
+        const CURSOR_SENTINEL: ratatui::layout::Position = ratatui::layout::Position {
+            x: u16::MAX,
+            y: u16::MAX,
+        };
+        terminal.set_cursor_position(CURSOR_SENTINEL).ok();
         terminal
             .draw(|frame| app.render(frame))
             .map_err(|e| anyhow::anyhow!("blit: draw: {e}"))?;
-        let cursor = terminal.get_cursor_position().ok();
+        let raw_cursor = terminal.get_cursor_position().ok();
+        let cursor = match raw_cursor {
+            Some(p) if p == CURSOR_SENTINEL => None,
+            other => other,
+        };
 
         let buf = terminal.backend().buffer();
         let bw = buf.area.width;
@@ -265,21 +286,6 @@ pub async fn run(
         prev_cells.clear();
         prev_cells.extend_from_slice(&cells);
         prev_dims = (bw, bh);
-        // `terminal.get_cursor_position()` returns the *last* position
-        // any widget set via `frame.set_cursor_position`; when no
-        // widget set one this frame (mixr's dashboard view doesn't
-        // need a cursor), it returns the stale value — typically
-        // (0, 0), which then renders as a stray white block under
-        // the top-left CONTROLLER border. ratatui 0.30 doesn't
-        // expose "was set_cursor_position called this frame" on
-        // `CompletedFrame`. As a pragmatic check: mixr's text-input
-        // widgets (search, command palette, ask DJ) never live at
-        // (0, 0), so a (0, 0) reading is always the "no one set it"
-        // default and we should hide the cursor instead. mnml does
-        // this differently (an explicit `drawn_cursor_pos` field
-        // reset to None at draw start) — see `mnml/src/blit/mod.rs`.
-        let cursor_at_origin = cursor.as_ref().is_some_and(|p| p.x == 0 && p.y == 0);
-        let cursor_visible = cursor.is_some() && !cursor_at_origin;
         let frame = Frame {
             seq: frame_seq,
             cols: bw,
@@ -288,7 +294,7 @@ pub async fn run(
             cursor_row: cursor.as_ref().map(|p| p.y).unwrap_or(0),
             // mixr is always-on-block-cursor (no modal editing); 0 == block.
             cursor_shape: 0,
-            cursor_visible: u8::from(cursor_visible),
+            cursor_visible: u8::from(cursor.is_some()),
             runs,
         };
         frame_seq = frame_seq.wrapping_add(1);
