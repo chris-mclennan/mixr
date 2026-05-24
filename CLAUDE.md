@@ -94,6 +94,21 @@ Auto-selection: BPM gap > 8% → EchoOut; key dist 0–1 → BassSwap; dist 2 �
 - Dashboard MIXER panel rows show per-deck hot-cue state: `CUE ●1 ○2 ○3 ●4` (filled = set) and the `[loop]` tag when a beat-aligned loop is active.
 - Cue countdown: above the crossfader the dashboard shows `MIX IN N bars` before a crossfade fires, counting down in source-domain bars until the mix-in point.
 - Overlays: queue (with reorder via {/}), history, help, search, settings, playlist picker, genre/favorites pickers, Virtual Mixer (`z`/`Z`), Transition Rules (Settings → Edit Transition Rules)
+- **Family settings UI convention.** mixr's Settings screen follows the shared
+  family idiom (also used by mnml; tmnl to follow). Section headers
+  `── Audio ──` / `── Mixing ──` / `── Playback ──` / `── Analysis ──` /
+  `── Transitions ──` / `── Claude DJ ──` / `── Browser ──` / `── Account ──` /
+  `── Reset ──`. Each row: `▸ <label>:  [active] / other  *` — `▸` =
+  focused, `[bracket]` = current choice, `*` = modified from
+  `AppConfig::default()`. Keys: `←→` adjust value · `↑↓` move row ·
+  `r` reset focused row · `R` reset all · `Enter` cycles forward
+  (same as `→`; on the Reset sentinel it fires) · `Esc` closes (mixr
+  applies changes immediately to the audio engine, so there's no
+  separate save/cancel split — `Esc` just returns to the Dashboard).
+  This last bit is mixr's documented deviation from the family
+  convention (which has Esc = revert): mixr's settings are live audio
+  parameters, so they apply on every keystroke. Schema + dispatch lives
+  in `src/tui/settings.rs`.
 - **Transition Rules editor** (`src/tui/rules_editor.rs`): list/edit views over `~/.mixr/transitions.json`. List: ↑↓ nav, Enter edit, `i` insert, `D` delete, `{`/`}` reorder. Edit: Tab cycles When/Then/Choices panes; ←→ cycles fields, kinds, or weights; ↑↓ adjusts values or selects a choice; `+` adds a transition to cycle/weighted; `D` removes. Weighted actions display auto-normalized percentages. Edit view also renders an ASCII preview of the selected transition's playing/incoming volume curves across the crossfade. Esc from list saves and reloads the engine live.
 - Toast notifications for user actions
 - 60Hz render loop with async event handling

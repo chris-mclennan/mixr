@@ -961,27 +961,47 @@ impl App {
 
         // Settings mode — handle separately
         if matches!(self.view_mode, ViewMode::Settings) {
-            let count = super::settings::settings_count(&self.config);
+            let count = super::settings::settings_row_count(&self.config);
             match key.code {
                 KeyCode::Up if self.selected > 0 => { self.selected -= 1; }
                 KeyCode::Down if self.selected + 1 < count => { self.selected += 1; }
                 KeyCode::Enter | KeyCode::Right => {
-                    let settings = super::settings::build_settings(&self.config);
-                    if let Some(row) = settings.get(self.selected)
-                        && !row.options.is_empty() {
+                    if let Some(row) = super::settings::settings_row_at(&self.config, self.selected) {
+                        // Reset-all sentinel — Enter wipes config back to default.
+                        if row.key == super::settings::RESET_ALL_KEY {
+                            self.config = crate::config::AppConfig::default();
+                            return;
+                        }
+                        if !row.options.is_empty() {
                             let next = (row.current_idx + 1) % row.options.len();
                             let key_str = row.key;
                             if self.apply_and_sync_setting(key_str, next) { return; }
                         }
+                    }
                 }
                 KeyCode::Left => {
-                    let settings = super::settings::build_settings(&self.config);
-                    if let Some(row) = settings.get(self.selected)
+                    if let Some(row) = super::settings::settings_row_at(&self.config, self.selected)
+                        && row.key != super::settings::RESET_ALL_KEY
                         && !row.options.is_empty() {
                             let prev = if row.current_idx == 0 { row.options.len() - 1 } else { row.current_idx - 1 };
                             let key_str = row.key;
                             if self.apply_and_sync_setting(key_str, prev) { return; }
                         }
+                }
+                // `r` — reset focused row to its `AppConfig::default()` value.
+                KeyCode::Char('r') => {
+                    if let Some(row) = super::settings::settings_row_at(&self.config, self.selected)
+                        && row.key != super::settings::RESET_ALL_KEY
+                        && row.current_idx != row.default_idx {
+                            let key_str = row.key;
+                            let def = row.default_idx;
+                            self.apply_and_sync_setting(key_str, def);
+                        }
+                }
+                // `R` (shift+r) — reset every row to default (matches the
+                // explicit Reset sentinel at the bottom).
+                KeyCode::Char('R') => {
+                    self.config = crate::config::AppConfig::default();
                 }
                 // Esc / `,` / `d` all close Settings and return to
                 // Dashboard. Going to full Browse on close was a bug

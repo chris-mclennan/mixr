@@ -957,7 +957,24 @@ impl App {
             }
             ViewMode::Settings => {
                 super::settings::render_settings(frame, content_area, &self.config, self.selected);
-                Self::push_list_row_targets(&mut self.click_targets, content_area, super::settings::settings_count(&self.config), 0);
+                // Click targets — only register rects for editable Row
+                // items (skip Section headers). `selected` is a row-index
+                // (sections don't count) so `ClickAction::SetSelected(N)`
+                // gets the right slot.
+                let items = super::settings::build_settings(&self.config);
+                let mut row_idx = 0usize;
+                for (line_idx, item) in items.iter().enumerate() {
+                    if let super::settings::SettingItem::Row(_) = item {
+                        let y = content_area.y + line_idx as u16;
+                        if y < content_area.y + content_area.height {
+                            self.click_targets.push(ClickTarget::new(
+                                content_area.x, y, content_area.width, 1,
+                                ClickAction::SetSelected(row_idx),
+                            ));
+                        }
+                        row_idx += 1;
+                    }
+                }
             }
             ViewMode::GenrePicker | ViewMode::FavoritesPicker => {
                 if let Some(ref picker) = self.genre_picker {

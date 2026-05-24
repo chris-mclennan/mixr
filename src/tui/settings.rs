@@ -19,144 +19,385 @@ pub struct SettingRow {
     pub label: &'static str,
     pub options: Vec<String>,
     pub current_idx: usize,
+    /// Index this row would carry under `AppConfig::default()`. Used
+    /// to paint the `*` modified marker + by `r` / reset-row to know
+    /// where to snap the value back to.
+    pub default_idx: usize,
+}
+
+/// One item in the rendered settings list — either a section header
+/// (`── <name> ──`, not focusable) or an editable row. Matches the
+/// family settings UI convention shared with mnml + tmnl (see
+/// `CLAUDE.md`).
+#[derive(Debug, Clone)]
+pub enum SettingItem {
+    Section(&'static str),
+    Row(SettingRow),
 }
 
 impl SettingRow {
-    fn new(key: &'static str, label: &'static str, options: Vec<String>, current_idx: usize) -> Self {
-        Self { key, label, options, current_idx }
+    fn new(
+        key: &'static str,
+        label: &'static str,
+        options: Vec<String>,
+        current_idx: usize,
+        default_idx: usize,
+    ) -> Self {
+        Self { key, label, options, current_idx, default_idx }
+    }
+    /// `true` when the live value differs from the `AppConfig::default()`
+    /// slot — drives the `*` modified marker.
+    pub fn modified(&self) -> bool {
+        self.current_idx != self.default_idx
     }
 }
 
-pub fn build_settings(config: &AppConfig) -> Vec<SettingRow> {
-    vec![
-        // FLAC is omitted — the dj.beatport.com web app's OAuth scope
-        // doesn't include the /download/ endpoint, so picking Lossless
-        // would silently fall back to 256k anyway. Branches with
-        // partner-scope auth re-add it.
-        SettingRow::new("audio_quality", "Audio Quality", vec!["256k".into(), "128k".into()],
-            match config.audio_quality { AudioQuality::Standard => 1, _ => 0 }),
-        SettingRow::new("preview_quality", "Preview Quality", vec!["128k".into(), "256k".into()],
-            match config.preview_quality { AudioQuality::Standard => 0, _ => 1 }),
-        SettingRow::new("bpm_mode", "BPM Mode", vec!["Glide".into(), "Lock".into()],
-            match config.bpm_mode { BpmMode::Glide => 0, BpmMode::Lock => 1 }),
-        SettingRow::new("split_cue", "Split Cue", vec!["Off".into(), "On".into()],
-            if config.split_cue { 1 } else { 0 }),
-        SettingRow::new("crossfade_bars", "Crossfade Bars", vec!["8".into(), "16".into(), "32".into(), "64".into(), "Auto".into()],
-            if config.crossfade_bars_auto { 4 }
-            else { match config.crossfade_bars { 8 => 0, 32 => 2, 64 => 3, _ => 1 } }),
-        SettingRow::new("glide_bars", "Glide Bars", vec!["8".into(), "16".into(), "32".into(), "64".into(), "Max".into()],
-            match config.glide_bars { 8 => 0, 32 => 2, 64 => 3, 0 => 4, _ => 1 }),
-        SettingRow::new("jump_bars", "Jump Bars", vec!["4".into(), "8".into(), "16".into(), "32".into()],
-            match config.jump_bars { 4 => 0, 16 => 2, 32 => 3, _ => 1 }),
-        SettingRow::new("quantize_on", "Quantize", vec!["Off".into(), "On".into()],
-            if config.quantize_on { 1 } else { 0 }),
-        SettingRow::new("quantize_beats", "Quantize Beats", vec!["1/8".into(), "1/4".into(), "1/2".into(), "1".into(), "2".into(), "4".into(), "8".into()], {
-            let q = config.quantize_beats;
-            if      q < 0.1875 { 0 } // 1/8
-            else if q < 0.375  { 1 } // 1/4
-            else if q < 0.75   { 2 } // 1/2
-            else if q < 1.5    { 3 } // 1
-            else if q < 3.0    { 4 } // 2
-            else if q < 6.0    { 5 } // 4
-            else               { 6 } // 8
-        }),
-        SettingRow::new("tempo_range", "Tempo Range", vec!["±4%".into(), "±6%".into(), "±8%".into(), "±10%".into(), "±16%".into()],
-            match config.tempo_range { 4 => 0, 6 => 1, 10 => 3, 16 => 4, _ => 2 }),
-        SettingRow::new("nudge_percent", "Nudge %", vec!["1%".into(), "2%".into(), "3%".into(), "4%".into(), "5%".into()],
-            match config.nudge_percent { 1 => 0, 2 => 1, 4 => 3, 5 => 4, _ => 2 }),
-        SettingRow::new("mix_in_point", "Mix In Point", vec!["First Beat".into(), "Drop".into(), "Middle".into()],
-            match config.mix_in_point { MixInPoint::FirstBeat | MixInPoint::FirstAudio => 0, MixInPoint::Drop => 1, MixInPoint::Middle => 2 }),
-        SettingRow::new("smart_mix_out", "Smart Mix Out", vec!["Off".into(), "On".into()],
-            if config.smart_mix_out { 1 } else { 0 }),
-        SettingRow::new("shuffle_on_play", "Shuffle on Play", vec!["Off".into(), "On".into()],
-            if config.shuffle_on_play { 1 } else { 0 }),
-        SettingRow::new("compact_view", "View Mode", vec!["Compact".into(), "Full".into()],
-            if config.compact_view { 0 } else { 1 }),
-        SettingRow::new("browser", "Browser", vec!["Google Chrome".into(), "Safari".into(), "Firefox".into(), "Arc".into()],
-            match config.browser.as_str() { "Safari" => 1, "Firefox" => 2, "Arc" => 3, _ => 0 }),
-        SettingRow::new("ai_beat_detection", "AI Beat Detection", vec!["Off".into(), "On".into()],
-            if config.ai_beat_detection { 1 } else { 0 }),
-        SettingRow::new("ai_grid_validation", "AI Grid Validation", vec!["Off".into(), "On".into()],
-            if config.ai_grid_validation { 1 } else { 0 }),
-        SettingRow::new("ai_phrase_detection", "AI Phrase Detection", vec!["Off".into(), "On".into()],
-            if config.ai_phrase_detection { 1 } else { 0 }),
-        SettingRow::new("tx_beatmatched", "Transition: BeatMatched", vec!["Off".into(), "On".into()],
-            if config.enabled_transitions.iter().any(|s| s == "BeatMatched") { 1 } else { 0 }),
-        SettingRow::new("tx_echoout", "Transition: EchoOut", vec!["Off".into(), "On".into()],
-            if config.enabled_transitions.iter().any(|s| s == "EchoOut") { 1 } else { 0 }),
-        SettingRow::new("tx_bassswap", "Transition: BassSwap", vec!["Off".into(), "On".into()],
-            if config.enabled_transitions.iter().any(|s| s == "BassSwap") { 1 } else { 0 }),
-        SettingRow::new("tx_filtersweep", "Transition: FilterSweep", vec!["Off".into(), "On".into()],
-            if config.enabled_transitions.iter().any(|s| s == "FilterSweep") { 1 } else { 0 }),
-        SettingRow::new("tx_looproll", "Transition: LoopRoll", vec!["Off".into(), "On".into()],
-            if config.enabled_transitions.iter().any(|s| s == "LoopRoll") { 1 } else { 0 }),
-        SettingRow::new("edit_rules", "Edit Transition Rules", vec!["Open".into()], 0),
-        SettingRow::new("output_device", "Output Device", {
+/// Sentinel `key` value for the "Reset all to defaults" row. Treated
+/// specially by both the renderer (no choice list) and `apply_setting`
+/// (wipes the live config back to `AppConfig::default()`).
+pub const RESET_ALL_KEY: &str = "__reset_all__";
+
+/// Audio-quality index helpers — defaults are AudioQuality::High for
+/// audio_quality (idx 0) and AudioQuality::High for preview_quality
+/// (idx 1). Captured once so the row builder + default-idx logic
+/// don't drift.
+fn audio_quality_idx(q: &AudioQuality) -> usize {
+    match q { AudioQuality::Standard => 1, _ => 0 }
+}
+fn preview_quality_idx(q: &AudioQuality) -> usize {
+    match q { AudioQuality::Standard => 0, _ => 1 }
+}
+
+pub fn build_settings(config: &AppConfig) -> Vec<SettingItem> {
+    let d = AppConfig::default();
+    let mut out: Vec<SettingItem> = Vec::with_capacity(64);
+
+    // ── Audio ──────────────────────────────────────────────────────
+    out.push(SettingItem::Section("Audio"));
+    // FLAC is omitted — the dj.beatport.com web app's OAuth scope
+    // doesn't include the /download/ endpoint, so picking Lossless
+    // would silently fall back to 256k anyway. Branches with
+    // partner-scope auth re-add it.
+    out.push(SettingItem::Row(SettingRow::new(
+        "audio_quality", "Audio Quality",
+        vec!["256k".into(), "128k".into()],
+        audio_quality_idx(&config.audio_quality),
+        audio_quality_idx(&d.audio_quality),
+    )));
+    out.push(SettingItem::Row(SettingRow::new(
+        "preview_quality", "Preview Quality",
+        vec!["128k".into(), "256k".into()],
+        preview_quality_idx(&config.preview_quality),
+        preview_quality_idx(&d.preview_quality),
+    )));
+    out.push(SettingItem::Row(SettingRow::new(
+        "output_device", "Output Device", {
             let mut opts: Vec<String> = vec!["System Default".into()];
             opts.extend(crate::audio::output_device_names());
             opts
-        }, {
-            let name = config.output_device.as_str();
-            if name.is_empty() { 0 } else {
-                crate::audio::output_device_names().iter()
-                    .position(|n| n == name).map(|i| i + 1).unwrap_or(0)
-            }
-        }),
-        SettingRow::new("monitor_device", "Monitor Device", {
+        }, output_device_idx(&config.output_device),
+        output_device_idx(&d.output_device),
+    )));
+    out.push(SettingItem::Row(SettingRow::new(
+        "monitor_device", "Monitor Device", {
             let mut opts: Vec<String> = vec!["Off".into()];
             opts.extend(crate::audio::output_device_names());
             opts
-        }, {
-            let name = config.monitor_device.as_str();
-            if name.is_empty() { 0 } else {
-                crate::audio::output_device_names().iter()
-                    .position(|n| n == name).map(|i| i + 1).unwrap_or(0)
-            }
-        }),
-        SettingRow::new("master_limiter", "Master Limiter", vec!["Off".into(), "Soft Knee".into()],
-            match config.master_limiter { LimiterMode::Off => 0, LimiterMode::SoftKnee => 1 }),
-        SettingRow::new("train_wreck", "Train Wreck", vec!["Off".into(), "Detect".into(), "Auto Bail".into()],
-            match config.train_wreck_mode {
-                crate::config::TrainWreckMode::Off => 0,
-                crate::config::TrainWreckMode::Detect => 1,
-                crate::config::TrainWreckMode::AutoBail => 2,
-            }),
-        SettingRow::new("pitch_stretch", "Pitch Stretch", vec![
+        }, monitor_device_idx(&config.monitor_device),
+        monitor_device_idx(&d.monitor_device),
+    )));
+    out.push(SettingItem::Row(SettingRow::new(
+        "master_limiter", "Master Limiter",
+        vec!["Off".into(), "Soft Knee".into()],
+        match config.master_limiter { LimiterMode::Off => 0, LimiterMode::SoftKnee => 1 },
+        match d.master_limiter { LimiterMode::Off => 0, LimiterMode::SoftKnee => 1 },
+    )));
+    out.push(SettingItem::Row(SettingRow::new(
+        "pitch_stretch", "Pitch Stretch", vec![
             "Off".into(),
             if cfg!(feature = "rubberband") { "Rubberband".into() }
             else { "Rubberband (build --features rubberband)".into() },
             if cfg!(feature = "timestretch") { "Timestretch".into() }
             else { "Timestretch (build --features timestretch)".into() },
-        ], match config.pitch_stretch_engine {
-            crate::audio::pitch_stretch::PitchStretchEngine::Off => 0,
-            crate::audio::pitch_stretch::PitchStretchEngine::Rubberband => 1,
-            crate::audio::pitch_stretch::PitchStretchEngine::Timestretch => 2,
-        }),
-        SettingRow::new("dj_mode", "DJ Mode", vec!["Auto".into(), "Assist".into(), "Manual".into()],
-            match config.claude_dj.mode { ClaudeDjMode::Auto => 0, ClaudeDjMode::Assist => 1, ClaudeDjMode::Manual => 2 }),
-        SettingRow::new("dj_camelot", "DJ Camelot", vec!["Strict".into(), "Prefer".into(), "Off".into()],
-            match config.claude_dj.camelot_strictness { Strictness::Strict => 0, Strictness::Prefer => 1, Strictness::Off => 2 }),
-        SettingRow::new("dj_bpm_gap", "DJ BPM Gap", vec!["Strict".into(), "Prefer".into(), "Off".into()],
-            match config.claude_dj.bpm_gap_strictness { Strictness::Strict => 0, Strictness::Prefer => 1, Strictness::Off => 2 }),
-        SettingRow::new("dj_transitions", "DJ Transitions", vec!["Engine".into(), "Claude".into()],
-            match config.claude_dj.transition_picker { TransitionPicker::Engine => 0, TransitionPicker::Claude => 1 }),
-        SettingRow::new("dj_style", "DJ Style", vec!["Underground".into(), "Mainstream".into(), "Exploratory".into()],
-            match config.claude_dj.style { DjStyle::Underground => 0, DjStyle::Mainstream => 1, DjStyle::Exploratory => 2 }),
-        SettingRow::new("dj_quick_mix", "DJ Quick Mix", vec!["Off".into(), "On".into()],
-            if config.claude_dj.quick_mix { 1 } else { 0 }),
-        SettingRow::new("dj_memory", "DJ Memory", vec!["Off".into(), "On".into()],
-            if config.claude_dj.memory_enabled { 1 } else { 0 }),
-        SettingRow::new("resume_session", "Resume Session", vec!["Never".into(), "Ask".into(), "Always".into()],
-            match config.resume_behavior { ResumeBehavior::Never => 0, ResumeBehavior::Ask => 1, ResumeBehavior::Always => 2 }),
-        SettingRow::new("analyzer_engine", "Analyzer Engine", vec![
+        ], pitch_stretch_idx(&config.pitch_stretch_engine),
+        pitch_stretch_idx(&d.pitch_stretch_engine),
+    )));
+
+    // ── Mixing ─────────────────────────────────────────────────────
+    out.push(SettingItem::Section("Mixing"));
+    out.push(SettingItem::Row(SettingRow::new(
+        "bpm_mode", "BPM Mode",
+        vec!["Glide".into(), "Lock".into()],
+        match config.bpm_mode { BpmMode::Glide => 0, BpmMode::Lock => 1 },
+        match d.bpm_mode { BpmMode::Glide => 0, BpmMode::Lock => 1 },
+    )));
+    out.push(SettingItem::Row(SettingRow::new(
+        "split_cue", "Split Cue",
+        vec!["Off".into(), "On".into()],
+        if config.split_cue { 1 } else { 0 },
+        if d.split_cue { 1 } else { 0 },
+    )));
+    out.push(SettingItem::Row(SettingRow::new(
+        "crossfade_bars", "Crossfade Bars",
+        vec!["8".into(), "16".into(), "32".into(), "64".into(), "Auto".into()],
+        crossfade_bars_idx(config.crossfade_bars, config.crossfade_bars_auto),
+        crossfade_bars_idx(d.crossfade_bars, d.crossfade_bars_auto),
+    )));
+    out.push(SettingItem::Row(SettingRow::new(
+        "glide_bars", "Glide Bars",
+        vec!["8".into(), "16".into(), "32".into(), "64".into(), "Max".into()],
+        glide_bars_idx(config.glide_bars),
+        glide_bars_idx(d.glide_bars),
+    )));
+    out.push(SettingItem::Row(SettingRow::new(
+        "jump_bars", "Jump Bars",
+        vec!["4".into(), "8".into(), "16".into(), "32".into()],
+        jump_bars_idx(config.jump_bars),
+        jump_bars_idx(d.jump_bars),
+    )));
+    out.push(SettingItem::Row(SettingRow::new(
+        "quantize_on", "Quantize",
+        vec!["Off".into(), "On".into()],
+        if config.quantize_on { 1 } else { 0 },
+        if d.quantize_on { 1 } else { 0 },
+    )));
+    out.push(SettingItem::Row(SettingRow::new(
+        "quantize_beats", "Quantize Beats",
+        vec!["1/8".into(), "1/4".into(), "1/2".into(), "1".into(), "2".into(), "4".into(), "8".into()],
+        quantize_beats_idx(config.quantize_beats),
+        quantize_beats_idx(d.quantize_beats),
+    )));
+    out.push(SettingItem::Row(SettingRow::new(
+        "tempo_range", "Tempo Range",
+        vec!["±4%".into(), "±6%".into(), "±8%".into(), "±10%".into(), "±16%".into()],
+        tempo_range_idx(config.tempo_range),
+        tempo_range_idx(d.tempo_range),
+    )));
+    out.push(SettingItem::Row(SettingRow::new(
+        "nudge_percent", "Nudge %",
+        vec!["1%".into(), "2%".into(), "3%".into(), "4%".into(), "5%".into()],
+        nudge_percent_idx(config.nudge_percent),
+        nudge_percent_idx(d.nudge_percent),
+    )));
+    out.push(SettingItem::Row(SettingRow::new(
+        "mix_in_point", "Mix In Point",
+        vec!["First Beat".into(), "Drop".into(), "Middle".into()],
+        mix_in_point_idx(&config.mix_in_point),
+        mix_in_point_idx(&d.mix_in_point),
+    )));
+    out.push(SettingItem::Row(SettingRow::new(
+        "smart_mix_out", "Smart Mix Out",
+        vec!["Off".into(), "On".into()],
+        if config.smart_mix_out { 1 } else { 0 },
+        if d.smart_mix_out { 1 } else { 0 },
+    )));
+    out.push(SettingItem::Row(SettingRow::new(
+        "train_wreck", "Train Wreck",
+        vec!["Off".into(), "Detect".into(), "Auto Bail".into()],
+        match config.train_wreck_mode {
+            crate::config::TrainWreckMode::Off => 0,
+            crate::config::TrainWreckMode::Detect => 1,
+            crate::config::TrainWreckMode::AutoBail => 2,
+        },
+        match d.train_wreck_mode {
+            crate::config::TrainWreckMode::Off => 0,
+            crate::config::TrainWreckMode::Detect => 1,
+            crate::config::TrainWreckMode::AutoBail => 2,
+        },
+    )));
+
+    // ── Playback ───────────────────────────────────────────────────
+    out.push(SettingItem::Section("Playback"));
+    out.push(SettingItem::Row(SettingRow::new(
+        "shuffle_on_play", "Shuffle on Play",
+        vec!["Off".into(), "On".into()],
+        if config.shuffle_on_play { 1 } else { 0 },
+        if d.shuffle_on_play { 1 } else { 0 },
+    )));
+    out.push(SettingItem::Row(SettingRow::new(
+        "compact_view", "View Mode",
+        vec!["Compact".into(), "Full".into()],
+        if config.compact_view { 0 } else { 1 },
+        if d.compact_view { 0 } else { 1 },
+    )));
+    out.push(SettingItem::Row(SettingRow::new(
+        "resume_session", "Resume Session",
+        vec!["Never".into(), "Ask".into(), "Always".into()],
+        match config.resume_behavior { ResumeBehavior::Never => 0, ResumeBehavior::Ask => 1, ResumeBehavior::Always => 2 },
+        match d.resume_behavior { ResumeBehavior::Never => 0, ResumeBehavior::Ask => 1, ResumeBehavior::Always => 2 },
+    )));
+
+    // ── Analysis ───────────────────────────────────────────────────
+    out.push(SettingItem::Section("Analysis"));
+    out.push(SettingItem::Row(SettingRow::new(
+        "ai_beat_detection", "AI Beat Detection",
+        vec!["Off".into(), "On".into()],
+        if config.ai_beat_detection { 1 } else { 0 },
+        if d.ai_beat_detection { 1 } else { 0 },
+    )));
+    out.push(SettingItem::Row(SettingRow::new(
+        "ai_grid_validation", "AI Grid Validation",
+        vec!["Off".into(), "On".into()],
+        if config.ai_grid_validation { 1 } else { 0 },
+        if d.ai_grid_validation { 1 } else { 0 },
+    )));
+    out.push(SettingItem::Row(SettingRow::new(
+        "ai_phrase_detection", "AI Phrase Detection",
+        vec!["Off".into(), "On".into()],
+        if config.ai_phrase_detection { 1 } else { 0 },
+        if d.ai_phrase_detection { 1 } else { 0 },
+    )));
+    out.push(SettingItem::Row(SettingRow::new(
+        "analyzer_engine", "Analyzer Engine", vec![
             "Built-in".into(),
             if cfg!(feature = "stratum") { "Stratum".into() }
             else { "Stratum (build --features stratum)".into() },
-        ], match config.analyzer_engine { AnalyzerEngine::Builtin => 0, AnalyzerEngine::Stratum => 1 }),
-        SettingRow::new("default_genre", "Default Genre", vec![config.default_genre.clone()], 0),
-        SettingRow::new("favorite_genres", "Favorite Genres", vec![format!("{} selected", config.favorite_genres.len())], 0),
-        SettingRow::new("logout", "Logout", vec![], 0),
-    ]
+        ],
+        match config.analyzer_engine { AnalyzerEngine::Builtin => 0, AnalyzerEngine::Stratum => 1 },
+        match d.analyzer_engine { AnalyzerEngine::Builtin => 0, AnalyzerEngine::Stratum => 1 },
+    )));
+
+    // ── Transitions ────────────────────────────────────────────────
+    out.push(SettingItem::Section("Transitions"));
+    for (key, name, label) in [
+        ("tx_beatmatched",  "BeatMatched",  "Transition: BeatMatched"),
+        ("tx_echoout",      "EchoOut",      "Transition: EchoOut"),
+        ("tx_bassswap",     "BassSwap",     "Transition: BassSwap"),
+        ("tx_filtersweep",  "FilterSweep",  "Transition: FilterSweep"),
+        ("tx_looproll",     "LoopRoll",     "Transition: LoopRoll"),
+    ] {
+        let cur = if config.enabled_transitions.iter().any(|s| s == name) { 1 } else { 0 };
+        let def = if d.enabled_transitions.iter().any(|s| s == name) { 1 } else { 0 };
+        out.push(SettingItem::Row(SettingRow::new(
+            key, label, vec!["Off".into(), "On".into()], cur, def,
+        )));
+    }
+    out.push(SettingItem::Row(SettingRow::new(
+        "edit_rules", "Edit Transition Rules",
+        vec!["Open".into()], 0, 0,
+    )));
+
+    // ── Claude DJ ──────────────────────────────────────────────────
+    out.push(SettingItem::Section("Claude DJ"));
+    out.push(SettingItem::Row(SettingRow::new(
+        "dj_mode", "DJ Mode",
+        vec!["Auto".into(), "Assist".into(), "Manual".into()],
+        match config.claude_dj.mode { ClaudeDjMode::Auto => 0, ClaudeDjMode::Assist => 1, ClaudeDjMode::Manual => 2 },
+        match d.claude_dj.mode { ClaudeDjMode::Auto => 0, ClaudeDjMode::Assist => 1, ClaudeDjMode::Manual => 2 },
+    )));
+    out.push(SettingItem::Row(SettingRow::new(
+        "dj_camelot", "DJ Camelot",
+        vec!["Strict".into(), "Prefer".into(), "Off".into()],
+        strictness_idx(&config.claude_dj.camelot_strictness),
+        strictness_idx(&d.claude_dj.camelot_strictness),
+    )));
+    out.push(SettingItem::Row(SettingRow::new(
+        "dj_bpm_gap", "DJ BPM Gap",
+        vec!["Strict".into(), "Prefer".into(), "Off".into()],
+        strictness_idx(&config.claude_dj.bpm_gap_strictness),
+        strictness_idx(&d.claude_dj.bpm_gap_strictness),
+    )));
+    out.push(SettingItem::Row(SettingRow::new(
+        "dj_transitions", "DJ Transitions",
+        vec!["Engine".into(), "Claude".into()],
+        match config.claude_dj.transition_picker { TransitionPicker::Engine => 0, TransitionPicker::Claude => 1 },
+        match d.claude_dj.transition_picker { TransitionPicker::Engine => 0, TransitionPicker::Claude => 1 },
+    )));
+    out.push(SettingItem::Row(SettingRow::new(
+        "dj_style", "DJ Style",
+        vec!["Underground".into(), "Mainstream".into(), "Exploratory".into()],
+        match config.claude_dj.style { DjStyle::Underground => 0, DjStyle::Mainstream => 1, DjStyle::Exploratory => 2 },
+        match d.claude_dj.style { DjStyle::Underground => 0, DjStyle::Mainstream => 1, DjStyle::Exploratory => 2 },
+    )));
+    out.push(SettingItem::Row(SettingRow::new(
+        "dj_quick_mix", "DJ Quick Mix",
+        vec!["Off".into(), "On".into()],
+        if config.claude_dj.quick_mix { 1 } else { 0 },
+        if d.claude_dj.quick_mix { 1 } else { 0 },
+    )));
+    out.push(SettingItem::Row(SettingRow::new(
+        "dj_memory", "DJ Memory",
+        vec!["Off".into(), "On".into()],
+        if config.claude_dj.memory_enabled { 1 } else { 0 },
+        if d.claude_dj.memory_enabled { 1 } else { 0 },
+    )));
+
+    // ── Browser ────────────────────────────────────────────────────
+    out.push(SettingItem::Section("Browser"));
+    out.push(SettingItem::Row(SettingRow::new(
+        "browser", "Browser",
+        vec!["Google Chrome".into(), "Safari".into(), "Firefox".into(), "Arc".into()],
+        browser_idx(&config.browser),
+        browser_idx(&d.browser),
+    )));
+    out.push(SettingItem::Row(SettingRow::new(
+        "default_genre", "Default Genre",
+        vec![config.default_genre.clone()], 0, 0,
+    )));
+    out.push(SettingItem::Row(SettingRow::new(
+        "favorite_genres", "Favorite Genres",
+        vec![format!("{} selected", config.favorite_genres.len())], 0, 0,
+    )));
+
+    // ── Account ────────────────────────────────────────────────────
+    out.push(SettingItem::Section("Account"));
+    out.push(SettingItem::Row(SettingRow::new(
+        "logout", "Logout", vec![], 0, 0,
+    )));
+
+    // ── Reset ──────────────────────────────────────────────────────
+    out.push(SettingItem::Section("Reset"));
+    out.push(SettingItem::Row(SettingRow::new(
+        RESET_ALL_KEY, "Reset all to defaults", Vec::new(), 0, 0,
+    )));
+
+    out
+}
+
+// ── helpers for current-idx + default-idx parity ──────────────────
+
+fn output_device_idx(name: &str) -> usize {
+    if name.is_empty() { 0 } else {
+        crate::audio::output_device_names().iter()
+            .position(|n| n == name).map(|i| i + 1).unwrap_or(0)
+    }
+}
+fn monitor_device_idx(name: &str) -> usize { output_device_idx(name) }
+fn pitch_stretch_idx(e: &crate::audio::pitch_stretch::PitchStretchEngine) -> usize {
+    match e {
+        crate::audio::pitch_stretch::PitchStretchEngine::Off => 0,
+        crate::audio::pitch_stretch::PitchStretchEngine::Rubberband => 1,
+        crate::audio::pitch_stretch::PitchStretchEngine::Timestretch => 2,
+    }
+}
+fn crossfade_bars_idx(bars: u32, auto: bool) -> usize {
+    if auto { 4 } else { match bars { 8 => 0, 32 => 2, 64 => 3, _ => 1 } }
+}
+fn glide_bars_idx(bars: u32) -> usize {
+    match bars { 8 => 0, 32 => 2, 64 => 3, 0 => 4, _ => 1 }
+}
+fn jump_bars_idx(bars: u32) -> usize {
+    match bars { 4 => 0, 16 => 2, 32 => 3, _ => 1 }
+}
+fn quantize_beats_idx(q: f64) -> usize {
+    if      q < 0.1875 { 0 } // 1/8
+    else if q < 0.375  { 1 } // 1/4
+    else if q < 0.75   { 2 } // 1/2
+    else if q < 1.5    { 3 } // 1
+    else if q < 3.0    { 4 } // 2
+    else if q < 6.0    { 5 } // 4
+    else               { 6 } // 8
+}
+fn tempo_range_idx(r: u32) -> usize { match r { 4 => 0, 6 => 1, 10 => 3, 16 => 4, _ => 2 } }
+fn nudge_percent_idx(n: u32) -> usize { match n { 1 => 0, 2 => 1, 4 => 3, 5 => 4, _ => 2 } }
+fn mix_in_point_idx(p: &MixInPoint) -> usize {
+    match p { MixInPoint::FirstBeat | MixInPoint::FirstAudio => 0, MixInPoint::Drop => 1, MixInPoint::Middle => 2 }
+}
+fn strictness_idx(s: &Strictness) -> usize {
+    match s { Strictness::Strict => 0, Strictness::Prefer => 1, Strictness::Off => 2 }
+}
+fn browser_idx(name: &str) -> usize {
+    match name { "Safari" => 1, "Firefox" => 2, "Arc" => 3, _ => 0 }
 }
 
 /// Apply a setting change to the config. Dispatches by stable key
@@ -297,6 +538,8 @@ pub fn apply_setting(config: &mut AppConfig, key: &str, option_idx: usize) -> Op
         "default_genre" => Some("pick_genre"),
         "favorite_genres" => Some("pick_favorites"),
         "logout" => Some("logout"),
+        // Reset sentinel — the dispatcher handles this specially.
+        RESET_ALL_KEY => Some("reset_all"),
         _ => None,
     }
 }
@@ -310,70 +553,98 @@ fn toggle_transition(config: &mut AppConfig, name: &str, on: bool) {
     }
 }
 
-/// Render the settings screen.
+/// Total focusable rows (Sections are not focusable). Used by the
+/// key handler in `keys.rs` to bound `self.selected`.
+pub fn settings_row_count(config: &AppConfig) -> usize {
+    build_settings(config).iter().filter(|i| matches!(i, SettingItem::Row(_))).count()
+}
+
+/// The `row_idx`-th focusable row, by skipping `Section` items.
+pub fn settings_row_at(config: &AppConfig, row_idx: usize) -> Option<SettingRow> {
+    build_settings(config).into_iter().filter_map(|i| match i {
+        SettingItem::Row(r) => Some(r),
+        _ => None,
+    }).nth(row_idx)
+}
+
+/// Render the settings screen. Paints `── Section ──` headers (not
+/// focusable), then `▸ <label>:  [active] / other  *` rows. `▸` =
+/// focused row; `[bracket]` = current choice; `*` = modified from
+/// `AppConfig::default()`. Matches the family settings UI convention
+/// — see CLAUDE.md.
 pub fn render_settings(
     frame: &mut Frame,
     area: Rect,
     config: &AppConfig,
     selected_row: usize,
 ) {
-    let settings = build_settings(config);
-    let inner = area; // no inner block — outer block in app.rs handles it
+    let items = build_settings(config);
+    let mut lines: Vec<Line> = Vec::with_capacity(items.len());
+    let mut row_counter = 0usize;
 
-    let mut lines: Vec<Line> = Vec::new();
+    for item in items.iter() {
+        match item {
+            SettingItem::Section(name) => {
+                lines.push(Line::from(Span::styled(
+                    format!("── {name} ──"),
+                    Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD),
+                )));
+            }
+            SettingItem::Row(row) => {
+                let is_selected = row_counter == selected_row;
+                row_counter += 1;
+                let marker = if is_selected { "▸ " } else { "  " };
+                let mut spans = vec![
+                    Span::styled(marker, Style::default().fg(if is_selected { Color::White } else { Color::DarkGray })),
+                    Span::styled(
+                        format!("{}:  ", row.label),
+                        Style::default().fg(if is_selected { Color::White } else { Color::Gray }),
+                    ),
+                ];
 
-    for (i, row) in settings.iter().enumerate() {
-        let is_selected = i == selected_row;
-        let marker = if is_selected { "▸ " } else { "  " };
-
-        let mut spans = vec![
-            Span::styled(marker, Style::default().fg(if is_selected { Color::White } else { Color::DarkGray })),
-            Span::styled(
-                format!("{}:  ", row.label),
-                Style::default().fg(if is_selected { Color::White } else { Color::Gray }),
-            ),
-        ];
-
-        if row.options.is_empty() {
-            // Logout — just the label
-            spans.push(Span::styled(
-                row.label.to_string(),
-                Style::default().fg(Color::Red),
-            ));
-        } else {
-            for (j, opt) in row.options.iter().enumerate() {
-                let is_current = j == row.current_idx;
-                if j > 0 {
-                    spans.push(Span::styled(" / ", Style::default().fg(Color::DarkGray)));
-                }
-                if is_current {
+                if row.key == RESET_ALL_KEY {
                     spans.push(Span::styled(
-                        format!("[{opt}]"),
-                        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                        "(Enter to reset)",
+                        Style::default().fg(Color::Red).add_modifier(
+                            if is_selected { Modifier::BOLD } else { Modifier::DIM },
+                        ),
+                    ));
+                } else if row.options.is_empty() {
+                    // Logout-style action row — just the label colored.
+                    spans.push(Span::styled(
+                        row.label.to_string(),
+                        Style::default().fg(Color::Red),
                     ));
                 } else {
-                    spans.push(Span::styled(
-                        opt.clone(),
-                        Style::default().fg(Color::DarkGray),
-                    ));
+                    for (j, opt) in row.options.iter().enumerate() {
+                        let is_current = j == row.current_idx;
+                        if j > 0 {
+                            spans.push(Span::styled(" / ", Style::default().fg(Color::DarkGray)));
+                        }
+                        if is_current {
+                            spans.push(Span::styled(
+                                format!("[{opt}]"),
+                                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                            ));
+                        } else {
+                            spans.push(Span::styled(opt.clone(), Style::default().fg(Color::DarkGray)));
+                        }
+                    }
+                    if row.modified() {
+                        spans.push(Span::styled(
+                            "  *",
+                            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                        ));
+                    }
                 }
+
+                lines.push(Line::from(spans));
             }
         }
-
-        lines.push(Line::from(spans));
     }
 
-    // Hints are rendered in the global hints bar, not here
-
     let paragraph = Paragraph::new(lines);
-    frame.render_widget(paragraph, inner);
-}
-
-/// Number of settings rows. Convenience wrapper around
-/// `build_settings(...).len()` for callers that just need the count
-/// (selection bounds, click target generation).
-pub fn settings_count(config: &AppConfig) -> usize {
-    build_settings(config).len()
+    frame.render_widget(paragraph, area);
 }
 
 #[cfg(test)]
@@ -382,48 +653,54 @@ mod tests {
     use crate::config::AppConfig;
 
     #[test]
+    fn build_settings_has_sections_and_reset() {
+        let cfg = AppConfig::default();
+        let items = build_settings(&cfg);
+        // At least one section header.
+        assert!(items.iter().any(|i| matches!(i, SettingItem::Section(_))));
+        // Reset sentinel exists at the end.
+        let reset = items.iter().find_map(|i| match i {
+            SettingItem::Row(r) if r.key == RESET_ALL_KEY => Some(r),
+            _ => None,
+        });
+        assert!(reset.is_some(), "reset sentinel row missing");
+    }
+
+    #[test]
+    fn modified_marker_lights_on_change() {
+        let mut cfg = AppConfig::default();
+        let pre = settings_row_at(&cfg, 0).unwrap();
+        let pre_modified = pre.modified();
+        // Flip the same key the first row maps to (whatever it is).
+        let n = pre.options.len();
+        if n > 1 {
+            let next = (pre.current_idx + 1) % n;
+            apply_setting(&mut cfg, pre.key, next);
+            let post = settings_row_at(&cfg, 0).unwrap();
+            // At least one of the two states should have modified=true
+            // (depending on whether the default was the "off" or "on"
+            // index, flipping toggles modified into the opposite state).
+            assert!(pre_modified != post.modified());
+        }
+    }
+
+    #[test]
+    fn settings_row_count_excludes_sections() {
+        let cfg = AppConfig::default();
+        let total = build_settings(&cfg).len();
+        let rows = settings_row_count(&cfg);
+        assert!(rows < total, "rows should be fewer than total (sections exist)");
+    }
+
+    #[test]
     fn apply_setting_by_key_updates_ai_flags() {
-        let mut c = AppConfig::default();
-        apply_setting(&mut c, "ai_beat_detection", 1);
-        assert!(c.ai_beat_detection);
-        apply_setting(&mut c, "ai_grid_validation", 1);
-        assert!(c.ai_grid_validation);
-        apply_setting(&mut c, "ai_phrase_detection", 1);
-        assert!(c.ai_phrase_detection);
-    }
+        let mut cfg = AppConfig { ai_beat_detection: false, ..Default::default() };
+        let result = apply_setting(&mut cfg, "ai_beat_detection", 1);
+        assert!(cfg.ai_beat_detection);
+        assert!(result.is_none());
 
-    #[test]
-    fn unknown_key_is_silent_no_op() {
-        let mut c = AppConfig::default();
-        let before = c.audio_quality;
-        let action = apply_setting(&mut c, "this_key_does_not_exist", 7);
-        assert!(action.is_none(), "unknown keys must return None");
-        assert_eq!(c.audio_quality, before, "config must be unchanged");
-    }
-
-    #[test]
-    fn keys_are_unique() {
-        // Two rows with the same key would silently shadow each other
-        // — dispatch matches first arm, second row's UI works but its
-        // updates land on the first arm's match.
-        let config = AppConfig::default();
-        let rows = build_settings(&config);
-        let mut seen = std::collections::HashSet::new();
-        for row in &rows {
-            assert!(seen.insert(row.key),
-                "duplicate setting key: {:?}", row.key);
-        }
-    }
-
-    #[test]
-    fn build_settings_current_index_in_bounds() {
-        let config = AppConfig::default();
-        for (i, row) in build_settings(&config).iter().enumerate() {
-            if !row.options.is_empty() {
-                assert!(row.current_idx < row.options.len(),
-                    "row {i} ({}): current={} >= options.len()={}",
-                    row.label, row.current_idx, row.options.len());
-            }
-        }
+        let result = apply_setting(&mut cfg, "ai_beat_detection", 0);
+        assert!(!cfg.ai_beat_detection);
+        assert!(result.is_none());
     }
 }
