@@ -2,8 +2,8 @@
 //! Three methods: DSP (log-energy), AI text (peak data), AI vision (waveform image).
 //! Combined pipeline runs all available methods and takes consensus.
 
-use anyhow::Result;
 use crate::claude::api::ClaudeAPI;
+use anyhow::Result;
 
 const MODEL: &str = "claude-haiku-4-5-20251001";
 
@@ -31,7 +31,11 @@ fn onset_tool() -> serde_json::Value {
 }
 
 /// AI method 1: Send peak-per-ms text data, use tool calling.
-pub async fn detect_from_peaks(samples: &[f32], sample_rate: u32, bpm: f64) -> Result<(f64, String)> {
+pub async fn detect_from_peaks(
+    samples: &[f32],
+    sample_rate: u32,
+    bpm: f64,
+) -> Result<(f64, String)> {
     let api = ClaudeAPI::from_key_file()?;
 
     let bin_size = (sample_rate as usize / 1000).max(1);
@@ -41,7 +45,10 @@ pub async fn detect_from_peaks(samples: &[f32], sample_rate: u32, bpm: f64) -> R
     for ms in 0..num_ms {
         let start = ms * bin_size;
         let end = (start + bin_size).min(samples.len());
-        let peak: f32 = samples[start..end].iter().map(|s| s.abs()).fold(0.0f32, f32::max);
+        let peak: f32 = samples[start..end]
+            .iter()
+            .map(|s| s.abs())
+            .fold(0.0f32, f32::max);
         if peak > 0.0005 || ms < 300 {
             data_lines.push(format!("{ms}: {peak:.4}"));
         }
@@ -71,7 +78,11 @@ Data (ms: peak_amplitude):
 
 /// AI method 2: Render waveform as a simple ASCII/text visualization + tool calling.
 /// More visual than raw numbers — shows the shape of the waveform.
-pub async fn detect_from_visual(samples: &[f32], sample_rate: u32, bpm: f64) -> Result<(f64, String)> {
+pub async fn detect_from_visual(
+    samples: &[f32],
+    sample_rate: u32,
+    bpm: f64,
+) -> Result<(f64, String)> {
     let api = ClaudeAPI::from_key_file()?;
 
     let bin_size = (sample_rate as usize / 1000).max(1);
@@ -82,7 +93,10 @@ pub async fn detect_from_visual(samples: &[f32], sample_rate: u32, bpm: f64) -> 
     for ms in 0..num_ms {
         let start = ms * bin_size;
         let end = (start + bin_size).min(samples.len());
-        let peak: f32 = samples[start..end].iter().map(|s| s.abs()).fold(0.0f32, f32::max);
+        let peak: f32 = samples[start..end]
+            .iter()
+            .map(|s| s.abs())
+            .fold(0.0f32, f32::max);
         let bar_len = (peak * 60.0) as usize;
         let bar: String = "█".repeat(bar_len.min(60));
         visual.push_str(&format!("{ms:>4}ms |{bar}\n"));
@@ -111,27 +125,32 @@ Find the exact millisecond where the first kick drum attack begins — the first
 
 /// Parse the tool call response to extract onset_ms.
 fn parse_tool_response(json: &serde_json::Value) -> Result<(f64, String)> {
-    let content = json["content"].as_array()
+    let content = json["content"]
+        .as_array()
         .ok_or_else(|| anyhow::anyhow!("No content in response"))?;
 
     for block in content {
-        if block["type"].as_str() == Some("tool_use") && block["name"].as_str() == Some("report_onset") {
-            let onset_ms = block["input"]["onset_ms"].as_f64()
+        if block["type"].as_str() == Some("tool_use")
+            && block["name"].as_str() == Some("report_onset")
+        {
+            let onset_ms = block["input"]["onset_ms"]
+                .as_f64()
                 .ok_or_else(|| anyhow::anyhow!("No onset_ms in tool response"))?;
-            let confidence = block["input"]["confidence"].as_str().unwrap_or("unknown").to_string();
+            let confidence = block["input"]["confidence"]
+                .as_str()
+                .unwrap_or("unknown")
+                .to_string();
             return Ok((onset_ms / 1000.0, confidence));
         }
     }
 
-    Err(anyhow::anyhow!("No report_onset tool call in response: {json}"))
+    Err(anyhow::anyhow!(
+        "No report_onset tool call in response: {json}"
+    ))
 }
 
 /// Combined pipeline: run DSP + available AI methods, take consensus.
-pub async fn detect_combined(
-    samples: &[f32],
-    sample_rate: u32,
-    bpm: f64,
-) -> (f64, String) {
+pub async fn detect_combined(samples: &[f32], sample_rate: u32, bpm: f64) -> (f64, String) {
     // DSP result (always available, instant)
     let dsp_result = super::analyzer::find_first_beat(samples, sample_rate, bpm);
 
@@ -259,14 +278,21 @@ pub async fn validate_grid(
         let window_start_ms = phrase_ms.saturating_sub(bar_duration_ms);
         let window_end_ms = (phrase_ms + bar_duration_ms).min(samples.len() / bin_size);
 
-        if window_end_ms <= window_start_ms { continue; }
+        if window_end_ms <= window_start_ms {
+            continue;
+        }
 
         let mut lines = Vec::new();
         for ms in window_start_ms..window_end_ms {
             let start = ms * bin_size;
             let end = (start + bin_size).min(samples.len());
-            if end > samples.len() { break; }
-            let peak: f32 = samples[start..end].iter().map(|s| s.abs()).fold(0.0f32, f32::max);
+            if end > samples.len() {
+                break;
+            }
+            let peak: f32 = samples[start..end]
+                .iter()
+                .map(|s| s.abs())
+                .fold(0.0f32, f32::max);
             // Relative ms from expected phrase start
             let rel_ms = ms as i64 - phrase_ms as i64;
             lines.push(format!("{rel_ms:>+5}: {peak:.4}"));
@@ -319,27 +345,40 @@ If all offsets are similar non-zero values, the first_beat needs adjustment.
     let json = api.post(&body).await?;
 
     // Parse tool response
-    let content = json["content"].as_array()
+    let content = json["content"]
+        .as_array()
         .ok_or_else(|| anyhow::anyhow!("No content"))?;
 
     for block in content {
-        if block["type"].as_str() == Some("tool_use") && block["name"].as_str() == Some("report_grid_validation") {
+        if block["type"].as_str() == Some("tool_use")
+            && block["name"].as_str() == Some("report_grid_validation")
+        {
             let input = &block["input"];
 
-            let phrase_offsets: Vec<(f64, f64)> = input["phrase_offsets"].as_array()
-                .map(|arr| arr.iter().filter_map(|p| {
-                    Some((p["phrase_time_s"].as_f64()?, p["offset_ms"].as_f64()?))
-                }).collect())
+            let phrase_offsets: Vec<(f64, f64)> = input["phrase_offsets"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|p| {
+                            Some((p["phrase_time_s"].as_f64()?, p["offset_ms"].as_f64()?))
+                        })
+                        .collect()
+                })
                 .unwrap_or_default();
 
             let bpm_correction = input["bpm_correction"].as_f64();
-            let first_beat_correction = input["first_beat_correction_ms"].as_f64()
+            let first_beat_correction = input["first_beat_correction_ms"]
+                .as_f64()
                 .map(|ms| ms / 1000.0);
             let summary = input["summary"].as_str().unwrap_or("").to_string();
 
             let details = format!(
                 "offsets: [{}], bpm_corr: {:?}, fb_corr: {:?}ms — {}",
-                phrase_offsets.iter().map(|(t, o)| format!("{t:.0}s:{o:+.0}ms")).collect::<Vec<_>>().join(", "),
+                phrase_offsets
+                    .iter()
+                    .map(|(t, o)| format!("{t:.0}s:{o:+.0}ms"))
+                    .collect::<Vec<_>>()
+                    .join(", "),
                 bpm_correction,
                 first_beat_correction.map(|c| c * 1000.0),
                 summary
@@ -395,7 +434,9 @@ pub async fn detect_phrases_ai(
 
     let sr = sample_rate as usize;
     let beat_samples = ((60.0 / bpm) * sr as f64) as usize;
-    if beat_samples == 0 { return Err(anyhow::anyhow!("Invalid BPM")); }
+    if beat_samples == 0 {
+        return Err(anyhow::anyhow!("Invalid BPM"));
+    }
     let beat_duration = 60.0 / bpm;
     let num_beats = samples.len() / beat_samples;
     let duration = samples.len() as f64 / sr as f64;
@@ -406,13 +447,18 @@ pub async fn detect_phrases_ai(
         let start = beat * beat_samples;
         let end = (start + beat_samples).min(samples.len());
         let rms: f64 = {
-            let sum: f64 = samples[start..end].iter().map(|s| (*s as f64) * (*s as f64)).sum();
+            let sum: f64 = samples[start..end]
+                .iter()
+                .map(|s| (*s as f64) * (*s as f64))
+                .sum();
             (sum / (end - start) as f64).sqrt()
         };
         let time = beat as f64 * beat_duration;
         let bar = beat / 4;
         let beat_in_bar = beat % 4 + 1;
-        beat_data.push(format!("{beat:>4} (bar{bar:>3}.{beat_in_bar}) {time:>7.3}s: {rms:.4}"));
+        beat_data.push(format!(
+            "{beat:>4} (bar{bar:>3}.{beat_in_bar}) {time:>7.3}s: {rms:.4}"
+        ));
     }
 
     let prompt = format!(
@@ -445,24 +491,36 @@ Data (beat#, bar.beat, time_seconds, RMS):
 
     let json = api.post(&body).await?;
 
-    let content = json["content"].as_array()
+    let content = json["content"]
+        .as_array()
         .ok_or_else(|| anyhow::anyhow!("No content in response: {}", json))?;
 
     for block in content {
-        if block["type"].as_str() == Some("tool_use") && block["name"].as_str() == Some("report_phrases") {
-            let phrases: Vec<(f64, String)> = block["input"]["phrases"].as_array()
-                .map(|arr| arr.iter().filter_map(|p| {
-                    Some((p["time_s"].as_f64()?, p["label"].as_str()?.to_string()))
-                }).collect())
+        if block["type"].as_str() == Some("tool_use")
+            && block["name"].as_str() == Some("report_phrases")
+        {
+            let phrases: Vec<(f64, String)> = block["input"]["phrases"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|p| {
+                            Some((p["time_s"].as_f64()?, p["label"].as_str()?.to_string()))
+                        })
+                        .collect()
+                })
                 .unwrap_or_default();
 
             // Refine each phrase time to sub-beat precision using log-energy onset
-            let refined: Vec<(f64, String)> = phrases.into_iter().map(|(t, label)| {
-                let refined_t = refine_phrase_onset(samples, sample_rate, t);
-                (refined_t, label)
-            }).collect();
+            let refined: Vec<(f64, String)> = phrases
+                .into_iter()
+                .map(|(t, label)| {
+                    let refined_t = refine_phrase_onset(samples, sample_rate, t);
+                    (refined_t, label)
+                })
+                .collect();
 
-            let summary: Vec<String> = refined.iter()
+            let summary: Vec<String> = refined
+                .iter()
                 .map(|(t, l)| format!("{l}@{t:.3}s"))
                 .collect();
             tracing::info!("AI phrases (refined): [{}]", summary.join(", "));
@@ -484,20 +542,30 @@ fn refine_phrase_onset(samples: &[f32], sample_rate: u32, rough_time: f64) -> f6
     let start_ms = center_ms.saturating_sub(window);
     let end_ms = (center_ms + window).min(samples.len() / bin_size);
 
-    if end_ms <= start_ms + 2 { return rough_time; }
+    if end_ms <= start_ms + 2 {
+        return rough_time;
+    }
 
     let eps: f64 = 1e-10;
 
     // Log-energy per ms
     let num_bins = end_ms - start_ms;
-    let log_e: Vec<f64> = (0..num_bins).map(|i| {
-        let ms = start_ms + i;
-        let s = ms * bin_size;
-        let e = ((ms + 1) * bin_size).min(samples.len());
-        if e > samples.len() { return -100.0; }
-        let energy: f64 = samples[s..e].iter().map(|&x| (x as f64) * (x as f64)).sum::<f64>() / bin_size as f64;
-        10.0 * (energy + eps).log10()
-    }).collect();
+    let log_e: Vec<f64> = (0..num_bins)
+        .map(|i| {
+            let ms = start_ms + i;
+            let s = ms * bin_size;
+            let e = ((ms + 1) * bin_size).min(samples.len());
+            if e > samples.len() {
+                return -100.0;
+            }
+            let energy: f64 = samples[s..e]
+                .iter()
+                .map(|&x| (x as f64) * (x as f64))
+                .sum::<f64>()
+                / bin_size as f64;
+            10.0 * (energy + eps).log10()
+        })
+        .collect();
 
     // Find the biggest positive jump (energy onset)
     let mut best_jump = 0.0f64;
@@ -575,7 +643,9 @@ pub async fn analyze_mix_alignment(
 
     let bars = 4;
     let bar_ms = ((60.0 / playing_bpm) * 4.0 * 1000.0) as usize;
-    let window_ms = (bar_ms * bars).min(playing_peaks.len()).min(incoming_peaks.len());
+    let window_ms = (bar_ms * bars)
+        .min(playing_peaks.len())
+        .min(incoming_peaks.len());
 
     let mut playing_data: Vec<String> = Vec::new();
     for ms in 0..window_ms {
@@ -613,11 +683,14 @@ Data (ms from capture start: Playing_peak Incoming_peak):
 
     let json = api.post(&body).await?;
 
-    let content = json["content"].as_array()
+    let content = json["content"]
+        .as_array()
         .ok_or_else(|| anyhow::anyhow!("No content"))?;
 
     for block in content {
-        if block["type"].as_str() == Some("tool_use") && block["name"].as_str() == Some("report_mix_alignment") {
+        if block["type"].as_str() == Some("tool_use")
+            && block["name"].as_str() == Some("report_mix_alignment")
+        {
             let input = &block["input"];
             let nudge_ms = input["nudge_ms"].as_f64().unwrap_or(0.0);
             let rate_correction = input["rate_correction"].as_f64();
@@ -626,7 +699,9 @@ Data (ms from capture start: Playing_peak Incoming_peak):
 
             let details = format!(
                 "nudge={nudge_ms:+.1}ms, rate={}, aligned={is_aligned} — {summary}",
-                rate_correction.map(|r| format!("{r:.4}")).unwrap_or("none".into())
+                rate_correction
+                    .map(|r| format!("{r:.4}"))
+                    .unwrap_or("none".into())
             );
             tracing::info!("Mix alignment: {details}");
 

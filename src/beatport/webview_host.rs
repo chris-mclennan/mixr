@@ -27,14 +27,14 @@ use anyhow::Result;
 use std::io::Write;
 
 use tao::{
+    dpi::LogicalSize,
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop, EventLoopBuilder},
     window::WindowBuilder,
-    dpi::LogicalSize,
 };
+use wry::WebViewBuilder;
 #[cfg(target_os = "macos")]
 use wry::WebViewBuilderExtDarwin;
-use wry::WebViewBuilder;
 
 /// Stable identifier for the WebKit data store. Lets the user stay
 /// signed in across launches — Beatport's session cookies persist
@@ -43,8 +43,7 @@ use wry::WebViewBuilder;
 /// to the redirect when its session cookie is valid).
 #[cfg(target_os = "macos")]
 const DATA_STORE_ID: [u8; 16] = [
-    0x6d, 0x69, 0x78, 0x72, 0x2d, 0x72, 0x73, 0x2d,
-    0x62, 0x65, 0x61, 0x74, 0x70, 0x6f, 0x72, 0x74,
+    0x6d, 0x69, 0x78, 0x72, 0x2d, 0x72, 0x73, 0x2d, 0x62, 0x65, 0x61, 0x74, 0x70, 0x6f, 0x72, 0x74,
 ];
 
 /// Driven by EventLoopProxy so the page-load callback can wake the
@@ -93,11 +92,11 @@ pub fn run(authorize_url: &str) -> Result<()> {
             }
             // Match the OAuth redirect — Beatport sends us to
             // dj.beatport.com/home?code=...&state=... after sign-in.
-            if !url.contains("dj.beatport.com/home") { return; }
+            if !url.contains("dj.beatport.com/home") {
+                return;
+            }
             if let Some((code, state)) = parse_redirect(&url) {
-                let _ = proxy_for_load.send_event(HostEvent::CodeCaptured {
-                    code, state,
-                });
+                let _ = proxy_for_load.send_event(HostEvent::CodeCaptured { code, state });
             }
         })
         .build()?;
@@ -133,7 +132,8 @@ pub fn run(authorize_url: &str) -> Result<()> {
                 let line = serde_json::to_string(&serde_json::json!({
                     "code": code,
                     "state": state,
-                })).unwrap_or_default();
+                }))
+                .unwrap_or_default();
                 let mut out = std::io::stdout().lock();
                 let _ = writeln!(out, "{line}");
                 let _ = out.flush();
@@ -151,13 +151,17 @@ pub fn run(authorize_url: &str) -> Result<()> {
                 window.set_focus();
                 shown_via_timer = true;
             }
-            Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
+            Event::WindowEvent {
+                event: WindowEvent::CloseRequested,
+                ..
+            } => {
                 // User closed the window without signing in. Print
                 // an error JSON so the parent can give a clean
                 // message + exit non-zero so the parent knows.
                 let line = serde_json::to_string(&serde_json::json!({
                     "error": "user closed sign-in window",
-                })).unwrap_or_default();
+                }))
+                .unwrap_or_default();
                 let mut out = std::io::stdout().lock();
                 let _ = writeln!(out, "{line}");
                 let _ = out.flush();
@@ -205,9 +209,10 @@ pub fn run_discover() -> Result<()> {
         .with_ipc_handler(move |req| {
             let body = req.body();
             if let Ok(v) = serde_json::from_str::<serde_json::Value>(body)
-                && let Some(cid) = v.get("client_id").and_then(|x| x.as_str()) {
-                    let _ = proxy_for_ipc.send_event(DiscoverEvent::Found(cid.to_string()));
-                }
+                && let Some(cid) = v.get("client_id").and_then(|x| x.as_str())
+            {
+                let _ = proxy_for_ipc.send_event(DiscoverEvent::Found(cid.to_string()));
+            }
         })
         .build()?;
 
@@ -219,29 +224,31 @@ pub fn run_discover() -> Result<()> {
         let _ = proxy_for_timer.send_event(DiscoverEvent::Timeout);
     });
 
-    event_loop.run(move |event, _, _| {
-        match event {
-            Event::UserEvent(DiscoverEvent::Found(cid)) => {
-                let line = serde_json::to_string(&serde_json::json!({
-                    "client_id": cid,
-                })).unwrap_or_default();
-                let mut out = std::io::stdout().lock();
-                let _ = writeln!(out, "{line}");
-                let _ = out.flush();
-                tracing::info!("WebView: discovered client_id (len={})", cid.len());
-                std::process::exit(0);
-            }
-            Event::UserEvent(DiscoverEvent::Timeout) => {
-                let mut out = std::io::stdout().lock();
-                let _ = writeln!(out, "{{\"error\":\"client_id discovery timed out\"}}");
-                let _ = out.flush();
-                std::process::exit(1);
-            }
-            Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
-                std::process::exit(1);
-            }
-            _ => {}
+    event_loop.run(move |event, _, _| match event {
+        Event::UserEvent(DiscoverEvent::Found(cid)) => {
+            let line = serde_json::to_string(&serde_json::json!({
+                "client_id": cid,
+            }))
+            .unwrap_or_default();
+            let mut out = std::io::stdout().lock();
+            let _ = writeln!(out, "{line}");
+            let _ = out.flush();
+            tracing::info!("WebView: discovered client_id (len={})", cid.len());
+            std::process::exit(0);
         }
+        Event::UserEvent(DiscoverEvent::Timeout) => {
+            let mut out = std::io::stdout().lock();
+            let _ = writeln!(out, "{{\"error\":\"client_id discovery timed out\"}}");
+            let _ = out.flush();
+            std::process::exit(1);
+        }
+        Event::WindowEvent {
+            event: WindowEvent::CloseRequested,
+            ..
+        } => {
+            std::process::exit(1);
+        }
+        _ => {}
     });
 }
 
@@ -287,7 +294,9 @@ const DISCOVER_SCRIPT: &str = r#"
 /// in its own process (the EventLoop::run quirk on macOS).
 pub fn run_logout() -> Result<()> {
     #[derive(Debug, Clone, Copy)]
-    enum LogoutEvent { Done }
+    enum LogoutEvent {
+        Done,
+    }
 
     let event_loop: EventLoop<LogoutEvent> = EventLoopBuilder::with_user_event().build();
     let window = WindowBuilder::new()
@@ -311,9 +320,11 @@ pub fn run_logout() -> Result<()> {
         std::thread::sleep(std::time::Duration::from_millis(1000));
         let _ = proxy.send_event(LogoutEvent::Done);
     });
-    event_loop.run(move |event, _, _| if let Event::UserEvent(LogoutEvent::Done) = event {
-        tracing::info!("WebView cookies cleared");
-        std::process::exit(0);
+    event_loop.run(move |event, _, _| {
+        if let Event::UserEvent(LogoutEvent::Done) = event {
+            tracing::info!("WebView cookies cleared");
+            std::process::exit(0);
+        }
     });
 }
 
@@ -337,7 +348,7 @@ fn parse_redirect(url: &str) -> Option<(String, Option<String>)> {
 /// the WebView's password and email text fields.
 #[cfg(target_os = "macos")]
 fn install_edit_menu() {
-    use muda::{Menu, Submenu, PredefinedMenuItem};
+    use muda::{Menu, PredefinedMenuItem, Submenu};
     let menu = Menu::new();
     let edit = Submenu::new("Edit", true);
     let _ = edit.append(&PredefinedMenuItem::cut(None));

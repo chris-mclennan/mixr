@@ -5,11 +5,11 @@
 //! so the user can audit what the AI has been doing and why.
 
 use ratatui::{
+    Frame,
     layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::Paragraph,
-    Frame,
 };
 use std::sync::Arc;
 use tokio::sync::Mutex as TokioMutex;
@@ -52,13 +52,20 @@ pub fn render_claude_screen(
     };
     lines.push(Line::from(vec![
         Span::raw("  "),
-        Span::styled(format!("{dot} Claude DJ — "), Style::default().fg(color).add_modifier(Modifier::BOLD)),
-        Span::styled(label, Style::default().fg(color).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            format!("{dot} Claude DJ — "),
+            Style::default().fg(color).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            label,
+            Style::default().fg(color).add_modifier(Modifier::BOLD),
+        ),
     ]));
     lines.push(Line::from(""));
-    lines.push(Line::from(vec![
-        Span::styled("  [C] toggle   [/] ask   [Esc] back", Style::default().fg(Color::DarkGray)),
-    ]));
+    lines.push(Line::from(vec![Span::styled(
+        "  [C] toggle   [/] ask   [Esc] back",
+        Style::default().fg(Color::DarkGray),
+    )]));
     lines.push(Line::from(""));
 
     // Log
@@ -71,7 +78,9 @@ pub fn render_claude_screen(
     } else {
         lines.push(Line::from(Span::styled(
             format!("  Activity ({} entries)", log.len()),
-            Style::default().fg(Color::Gray).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::Gray)
+                .add_modifier(Modifier::BOLD),
         )));
         lines.push(Line::from(""));
         // Newest first; respect scroll_offset so user can page up
@@ -88,7 +97,10 @@ pub fn render_claude_screen(
             };
             lines.push(Line::from(vec![
                 Span::raw("  "),
-                Span::styled(icon, Style::default().fg(color).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    icon,
+                    Style::default().fg(color).add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("  "),
                 Span::styled(e.message.clone(), Style::default().fg(Color::White)),
             ]));

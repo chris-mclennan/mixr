@@ -27,7 +27,11 @@ pub struct CallbackSample {
 impl CallbackSample {
     /// total / budget. > 0.9 = near-miss; > 1.0 = dropout.
     pub fn ratio(&self) -> f32 {
-        if self.budget_us == 0 { 0.0 } else { self.total_us as f32 / self.budget_us as f32 }
+        if self.budget_us == 0 {
+            0.0
+        } else {
+            self.total_us as f32 / self.budget_us as f32
+        }
     }
 }
 
@@ -41,8 +45,8 @@ pub struct ProfileStats {
     pub max_total_us: u32,
     pub avg_ratio: f32,
     pub p99_ratio: f32,
-    pub miss_count: u32,         // ratio > 1.0 (dropout)
-    pub near_miss_count: u32,    // ratio > 0.9
+    pub miss_count: u32,      // ratio > 1.0 (dropout)
+    pub near_miss_count: u32, // ratio > 0.9
     pub avg_decks_us: u32,
     pub avg_echo_us: u32,
     pub avg_mix_us: u32,
@@ -72,13 +76,17 @@ impl AudioProfiler {
     pub fn push(&mut self, s: CallbackSample) {
         self.ring[self.head] = s;
         self.head = (self.head + 1) % self.capacity;
-        if self.count < self.capacity { self.count += 1; }
+        if self.count < self.capacity {
+            self.count += 1;
+        }
     }
 
     /// Compute current rolling stats. Allocates a temporary buffer for the
     /// percentile sort — call from the main thread, not the audio callback.
     pub fn stats(&self) -> ProfileStats {
-        if self.count == 0 { return ProfileStats::default(); }
+        if self.count == 0 {
+            return ProfileStats::default();
+        }
         let n = self.count;
         let mut totals: Vec<u32> = self.ring[..n].iter().map(|s| s.total_us).collect();
         totals.sort_unstable();
@@ -101,9 +109,14 @@ impl AudioProfiler {
             sum_mix += s.mix_us as u64;
             let r = s.ratio();
             sum_ratio += r;
-            if r > max_ratio { max_ratio = r; }
-            if r > 1.0 { miss += 1; }
-            else if r > 0.9 { near += 1; }
+            if r > max_ratio {
+                max_ratio = r;
+            }
+            if r > 1.0 {
+                miss += 1;
+            } else if r > 0.9 {
+                near += 1;
+            }
         }
         ProfileStats {
             samples: n as u32,
@@ -132,22 +145,38 @@ impl AudioProfiler {
     /// stands out. Turn on DEBUG (`RUST_LOG=mixr=debug` or equivalent) if
     /// you're watching baseline perf.
     pub fn maybe_log(&mut self) -> bool {
-        if self.last_log.elapsed().as_secs() < 10 { return false; }
+        if self.last_log.elapsed().as_secs() < 10 {
+            return false;
+        }
         let s = self.stats();
-        if s.samples == 0 { return false; }
+        if s.samples == 0 {
+            return false;
+        }
         let noisy = s.miss_count > 0 || s.p99_ratio > 0.5;
         let line = format!(
             "audio: avg={}µs p50={}µs p95={}µs p99={}µs max={}µs ratio_avg={:.2} ratio_max={:.2} misses={} near={} | decks={}µs echo={}µs mix={}µs",
-            s.avg_total_us, s.p50_total_us, s.p95_total_us, s.p99_total_us, s.max_total_us,
-            s.avg_ratio, s.p99_ratio, s.miss_count, s.near_miss_count,
-            s.avg_decks_us, s.avg_echo_us, s.avg_mix_us,
+            s.avg_total_us,
+            s.p50_total_us,
+            s.p95_total_us,
+            s.p99_total_us,
+            s.max_total_us,
+            s.avg_ratio,
+            s.p99_ratio,
+            s.miss_count,
+            s.near_miss_count,
+            s.avg_decks_us,
+            s.avg_echo_us,
+            s.avg_mix_us,
         );
-        if noisy { tracing::info!("{line}"); } else { tracing::debug!("{line}"); }
+        if noisy {
+            tracing::info!("{line}");
+        } else {
+            tracing::debug!("{line}");
+        }
         self.last_log = Instant::now();
         true
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -157,7 +186,11 @@ mod tests {
     fn ring_wraps_correctly() {
         let mut p = AudioProfiler::new(4);
         for i in 0..10u32 {
-            p.push(CallbackSample { total_us: i, budget_us: 100, ..Default::default() });
+            p.push(CallbackSample {
+                total_us: i,
+                budget_us: 100,
+                ..Default::default()
+            });
         }
         assert_eq!(p.count, 4); // saturated
         let s = p.stats();
@@ -173,7 +206,11 @@ mod tests {
         // sample at 95 → 0.95 (near-miss)
         // sample at 110 → 1.10 (miss)
         for us in [50, 95, 110, 50] {
-            p.push(CallbackSample { total_us: us, budget_us: 100, ..Default::default() });
+            p.push(CallbackSample {
+                total_us: us,
+                budget_us: 100,
+                ..Default::default()
+            });
         }
         let s = p.stats();
         assert_eq!(s.miss_count, 1);

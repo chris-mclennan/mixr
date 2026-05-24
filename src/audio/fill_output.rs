@@ -2,10 +2,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Host, Stream};
 use std::sync::{Arc, Mutex};
 
-use super::engine::{
-    AudioState, DeckId, EngineState, MonitorSource,
-    profiler_enabled,
-};
+use super::engine::{AudioState, DeckId, EngineState, MonitorSource, profiler_enabled};
 use crate::config::AppConfig;
 
 /// Enumerate cpal output devices on the default host. Exposed for the
@@ -38,10 +35,19 @@ pub fn pick_output_device(host: &cpal::Host, name: &str) -> Option<cpal::Device>
 /// Build the optional monitor stream. Returns None when the config entry is
 /// empty or when the named device isn't found. Installs a shared sample ring
 /// onto `audio_state.monitor_ring` so the main callback can push samples.
-pub(crate) fn build_monitor_stream(host: &Host, config: &AppConfig, audio_state: &Arc<Mutex<AudioState>>) -> Option<Stream> {
+pub(crate) fn build_monitor_stream(
+    host: &Host,
+    config: &AppConfig,
+    audio_state: &Arc<Mutex<AudioState>>,
+) -> Option<Stream> {
     let name = config.monitor_device.trim();
-    if name.is_empty() { return None; }
-    let device = host.output_devices().ok()?.find(|d| d.name().map(|n| n == name).unwrap_or(false))?;
+    if name.is_empty() {
+        return None;
+    }
+    let device = host
+        .output_devices()
+        .ok()?
+        .find(|d| d.name().map(|n| n == name).unwrap_or(false))?;
     let supported = device.default_output_config().ok()?;
     let channels = supported.channels() as usize;
 
@@ -58,27 +64,31 @@ pub(crate) fn build_monitor_stream(host: &Host, config: &AppConfig, audio_state:
     }
 
     let ring_r = Arc::clone(&ring);
-    let stream = device.build_output_stream(
-        &supported.into(),
-        move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-            // try_lock on the RT thread: if the main audio callback is mid-push,
-            // output silence this buffer instead of blocking (which would stall
-            // the monitor cpal thread while the other audio callback runs,
-            // creating an RT-on-RT wait).
-            match ring_r.try_lock() {
-                Ok(mut r) => {
-                    // Mono source → fill every channel with the same sample.
-                    for frame in data.chunks_mut(channels) {
-                        let s = r.pop_front().unwrap_or(0.0);
-                        for slot in frame.iter_mut() { *slot = s; }
+    let stream = device
+        .build_output_stream(
+            &supported.into(),
+            move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+                // try_lock on the RT thread: if the main audio callback is mid-push,
+                // output silence this buffer instead of blocking (which would stall
+                // the monitor cpal thread while the other audio callback runs,
+                // creating an RT-on-RT wait).
+                match ring_r.try_lock() {
+                    Ok(mut r) => {
+                        // Mono source → fill every channel with the same sample.
+                        for frame in data.chunks_mut(channels) {
+                            let s = r.pop_front().unwrap_or(0.0);
+                            for slot in frame.iter_mut() {
+                                *slot = s;
+                            }
+                        }
                     }
+                    Err(_) => data.fill(0.0),
                 }
-                Err(_) => data.fill(0.0),
-            }
-        },
-        |err| tracing::error!("Monitor audio error: {err}"),
-        None,
-    ).ok()?;
+            },
+            |err| tracing::error!("Monitor audio error: {err}"),
+            None,
+        )
+        .ok()?;
     stream.play().ok()?;
     tracing::info!("Monitor stream opened: {name}");
     Some(stream)
@@ -111,8 +121,9 @@ pub(crate) fn apply_limiter(x: f32, mode: crate::config::LimiterMode) -> f32 {
         crate::config::LimiterMode::Off => x.clamp(-1.0, 1.0),
         crate::config::LimiterMode::SoftKnee => {
             let a = x.abs();
-            if a < 0.7 { x }
-            else {
+            if a < 0.7 {
+                x
+            } else {
                 let s = if x.is_sign_negative() { -1.0 } else { 1.0 };
                 s * (0.7 + 0.3 * ((a - 0.7) * 3.0).tanh())
             }
@@ -120,7 +131,11 @@ pub(crate) fn apply_limiter(x: f32, mode: crate::config::LimiterMode) -> f32 {
     }
 }
 
-pub(crate) fn metronome_click(grid: super::beat_grid::BeatGrid, time: f64, _sample_rate: f64) -> f32 {
+pub(crate) fn metronome_click(
+    grid: super::beat_grid::BeatGrid,
+    time: f64,
+    _sample_rate: f64,
+) -> f32 {
     let beat_phase = grid.phase(time); // 0.0 = on the beat
     let bar_phase = grid.bar_phase(time); // 0.0 = beat 1 of bar
 
@@ -147,20 +162,24 @@ pub(crate) fn metronome_click(grid: super::beat_grid::BeatGrid, time: f64, _samp
 
 pub(crate) fn fill_output(state: &mut AudioState, data: &mut [f32], channels: usize) {
     let prof = profiler_enabled();
-    let cb_start = if prof { Some(std::time::Instant::now()) } else { None };
+    let cb_start = if prof {
+        Some(std::time::Instant::now())
+    } else {
+        None
+    };
     if channels == 0 {
         data.fill(0.0);
         return;
     }
     let frames = data.len() / channels;
-    
-    
-    
 
     // Scratch buffers are pre-allocated to 65536 frames at construction.
     // If cpal ever requests more, zero-fill and bail — never allocate on the RT thread.
     if state.scratch_a.len() < frames {
-        tracing::error!("Audio buffer {frames} exceeds scratch capacity {}", state.scratch_a.len());
+        tracing::error!(
+            "Audio buffer {frames} exceeds scratch capacity {}",
+            state.scratch_a.len()
+        );
         data.fill(0.0);
         return;
     }
@@ -210,7 +229,13 @@ pub(crate) fn fill_output(state: &mut AudioState, data: &mut [f32], channels: us
             DeckId::A => &state.deck_a,
             DeckId::B => &state.deck_b,
         };
-        playing.beat_grid.map(|grid| (grid, playing.current_time(), playing.output_sample_rate as f64))
+        playing.beat_grid.map(|grid| {
+            (
+                grid,
+                playing.current_time(),
+                playing.output_sample_rate as f64,
+            )
+        })
     } else {
         None
     };
@@ -220,17 +245,37 @@ pub(crate) fn fill_output(state: &mut AudioState, data: &mut [f32], channels: us
     state.scratch_echo_a[..frames].fill(0.0);
     state.scratch_echo_b[..frames].fill(0.0);
 
-    let t_decks_start = if prof { Some(std::time::Instant::now()) } else { None };
+    let t_decks_start = if prof {
+        Some(std::time::Instant::now())
+    } else {
+        None
+    };
     state.deck_a.fill_buffer(&mut state.scratch_a[..frames]);
     state.deck_b.fill_buffer(&mut state.scratch_b[..frames]);
-    let t_decks: u32 = t_decks_start.map(|t| t.elapsed().as_micros().min(u32::MAX as u128) as u32).unwrap_or(0);
+    let t_decks: u32 = t_decks_start
+        .map(|t| t.elapsed().as_micros().min(u32::MAX as u128) as u32)
+        .unwrap_or(0);
 
     let progress = state.crossfade_progress;
-    let t_echo_start = if prof { Some(std::time::Instant::now()) } else { None };
-    state.deck_a.read_echo(&mut state.scratch_echo_a[..frames], frames, progress);
-    state.deck_b.read_echo(&mut state.scratch_echo_b[..frames], frames, progress);
-    let t_echo: u32 = t_echo_start.map(|t| t.elapsed().as_micros().min(u32::MAX as u128) as u32).unwrap_or(0);
-    let t_mix_start = if prof { Some(std::time::Instant::now()) } else { None };
+    let t_echo_start = if prof {
+        Some(std::time::Instant::now())
+    } else {
+        None
+    };
+    state
+        .deck_a
+        .read_echo(&mut state.scratch_echo_a[..frames], frames, progress);
+    state
+        .deck_b
+        .read_echo(&mut state.scratch_echo_b[..frames], frames, progress);
+    let t_echo: u32 = t_echo_start
+        .map(|t| t.elapsed().as_micros().min(u32::MAX as u128) as u32)
+        .unwrap_or(0);
+    let t_mix_start = if prof {
+        Some(std::time::Instant::now())
+    } else {
+        None
+    };
 
     // Copy scratch data to local vecs for the per-frame loop
     // (can't borrow multiple fields of state simultaneously)
@@ -258,37 +303,42 @@ pub(crate) fn fill_output(state: &mut AudioState, data: &mut [f32], channels: us
     if let Some(ref ring) = state.monitor_ring {
         let cap = state.monitor_ring_cap;
         if cap > 0
-            && let Ok(mut r) = ring.try_lock() {
-                match state.monitor_source {
-                    MonitorSource::Both => {
-                        // Sum both decks for headphone monitoring.
-                        let need = frames;
-                        let after = r.len() + need;
-                        if after > cap {
-                            let drop_n = after - cap;
-                            for _ in 0..drop_n.min(r.len()) { r.pop_front(); }
-                        }
-                        for i in 0..frames {
-                            r.push_back(state.scratch_a[i] + state.scratch_b[i]);
+            && let Ok(mut r) = ring.try_lock()
+        {
+            match state.monitor_source {
+                MonitorSource::Both => {
+                    // Sum both decks for headphone monitoring.
+                    let need = frames;
+                    let after = r.len() + need;
+                    if after > cap {
+                        let drop_n = after - cap;
+                        for _ in 0..drop_n.min(r.len()) {
+                            r.pop_front();
                         }
                     }
-                    _ => {
-                        let src_buf: &[f32] = match state.monitor_source {
-                            MonitorSource::Incoming => incoming_buf,
-                            MonitorSource::DeckA => &state.scratch_a[..frames],
-                            MonitorSource::DeckB => &state.scratch_b[..frames],
-                            MonitorSource::Both => unreachable!(),
-                        };
-                        let need = src_buf.len();
-                        let after = r.len() + need;
-                        if after > cap {
-                            let drop_n = after - cap;
-                            for _ in 0..drop_n.min(r.len()) { r.pop_front(); }
-                        }
-                        r.extend(src_buf.iter().copied());
+                    for i in 0..frames {
+                        r.push_back(state.scratch_a[i] + state.scratch_b[i]);
                     }
                 }
+                _ => {
+                    let src_buf: &[f32] = match state.monitor_source {
+                        MonitorSource::Incoming => incoming_buf,
+                        MonitorSource::DeckA => &state.scratch_a[..frames],
+                        MonitorSource::DeckB => &state.scratch_b[..frames],
+                        MonitorSource::Both => unreachable!(),
+                    };
+                    let need = src_buf.len();
+                    let after = r.len() + need;
+                    if after > cap {
+                        let drop_n = after - cap;
+                        for _ in 0..drop_n.min(r.len()) {
+                            r.pop_front();
+                        }
+                    }
+                    r.extend(src_buf.iter().copied());
+                }
             }
+        }
     }
 
     let met_info = met_pre_time;
@@ -303,19 +353,27 @@ pub(crate) fn fill_output(state: &mut AudioState, data: &mut [f32], channels: us
     const SPLIT_LEAD_SECS: f64 = 3.0; // head-start before mix
     const SPLIT_TRAIL_SECS: f64 = 3.0; // linger after mix completes
     let within_lead = state.state == EngineState::Playing
-        && state.cached_trigger_time.map(|trigger| {
-            let pt = match state.playing_deck {
-                DeckId::A => state.deck_a.current_time(),
-                DeckId::B => state.deck_b.current_time(),
-            };
-            let remaining = trigger - pt;
-            remaining > 0.0 && remaining <= SPLIT_LEAD_SECS
-        }).unwrap_or(false);
-    let within_trail = state.last_crossfade_end.map(|t|
-        t.elapsed().as_secs_f64() < SPLIT_TRAIL_SECS
-    ).unwrap_or(false);
+        && state
+            .cached_trigger_time
+            .map(|trigger| {
+                let pt = match state.playing_deck {
+                    DeckId::A => state.deck_a.current_time(),
+                    DeckId::B => state.deck_b.current_time(),
+                };
+                let remaining = trigger - pt;
+                remaining > 0.0 && remaining <= SPLIT_LEAD_SECS
+            })
+            .unwrap_or(false);
+    let within_trail = state
+        .last_crossfade_end
+        .map(|t| t.elapsed().as_secs_f64() < SPLIT_TRAIL_SECS)
+        .unwrap_or(false);
     let is_mixing = state.state == EngineState::Crossfading;
-    let split_target: f32 = if split_enabled && (is_mixing || within_lead || within_trail) { 1.0 } else { 0.0 };
+    let split_target: f32 = if split_enabled && (is_mixing || within_lead || within_trail) {
+        1.0
+    } else {
+        0.0
+    };
     // ~1s time constant — gradual, like the stereo image slowly
     // opening / collapsing. With 3s lead, ramp reaches ~95% by the
     // time the mix begins; trail-out fades back to mono over ~3s
@@ -329,7 +387,10 @@ pub(crate) fn fill_output(state: &mut AudioState, data: &mut [f32], channels: us
             (1.0_f32, 1.0_f32)
         } else {
             let p = state.crossfade_progress;
-            (state.transition_type.playing_volume(p), state.transition_type.incoming_volume(p))
+            (
+                state.transition_type.playing_volume(p),
+                state.transition_type.incoming_volume(p),
+            )
         }
     } else {
         (1.0, 0.0)
@@ -399,7 +460,9 @@ pub(crate) fn fill_output(state: &mut AudioState, data: &mut [f32], channels: us
         }
     }
 
-    let t_mix: u32 = t_mix_start.map(|t| t.elapsed().as_micros().min(u32::MAX as u128) as u32).unwrap_or(0);
+    let t_mix: u32 = t_mix_start
+        .map(|t| t.elapsed().as_micros().min(u32::MAX as u128) as u32)
+        .unwrap_or(0);
 
     // Record the per-section breakdown for this callback (only when the
     // profiler is enabled — otherwise we skipped every timing syscall above
@@ -407,9 +470,7 @@ pub(crate) fn fill_output(state: &mut AudioState, data: &mut [f32], channels: us
     if let Some(cb_start) = cb_start {
         let total_us = cb_start.elapsed().as_micros().min(u32::MAX as u128) as u32;
         let sr = state.deck_a.output_sample_rate as u64;
-        let budget_us = (frames as u64 * 1_000_000)
-            .checked_div(sr)
-            .unwrap_or(0) as u32;
+        let budget_us = (frames as u64 * 1_000_000).checked_div(sr).unwrap_or(0) as u32;
         state.profiler.push(super::profiler::CallbackSample {
             total_us,
             decks_us: t_decks,

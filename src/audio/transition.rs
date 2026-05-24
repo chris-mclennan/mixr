@@ -1,6 +1,6 @@
-use std::f64::consts::FRAC_PI_2;
 use super::deck::DeckPlayer;
 use super::mixer::Mixer;
+use std::f64::consts::FRAC_PI_2;
 
 /// Transition types control how two decks blend during a crossfade.
 /// Each type defines: prepare (one-shot setup), apply (per-tick automation),
@@ -55,7 +55,11 @@ impl TransitionType {
             return Self::EchoOut;
         }
         let ratio = playing_bpm.max(incoming_bpm) / min_bpm;
-        let normalized = if (1.8..=2.2).contains(&ratio) { ratio / 2.0 } else { ratio };
+        let normalized = if (1.8..=2.2).contains(&ratio) {
+            ratio / 2.0
+        } else {
+            ratio
+        };
         if normalized > 1.08 {
             return Self::EchoOut;
         }
@@ -103,7 +107,13 @@ impl TransitionType {
     /// preparations, stale kills don't bleed into the next mix. Without
     /// this, a prior `BassSwap::prepare` leaving `eq_low=-24` would keep
     /// the bass dropped throughout a subsequent BeatMatched.
-    pub fn prepare(&self, playing: &mut DeckPlayer, incoming: &mut DeckPlayer, playing_bpm: f64, _incoming_bpm: f64) {
+    pub fn prepare(
+        &self,
+        playing: &mut DeckPlayer,
+        incoming: &mut DeckPlayer,
+        playing_bpm: f64,
+        _incoming_bpm: f64,
+    ) {
         // Defensive reset: every transition starts from a clean incoming
         // tone stack. Variants that want a non-neutral start override below.
         Mixer::set_eq_low(incoming, 0.0);
@@ -164,8 +174,8 @@ impl TransitionType {
                     let t = (progress - 0.48) / 0.04; // 0..1 across the swap
                     // Cosine ease: smooth-in smooth-out
                     let eased = 0.5 - 0.5 * (std::f64::consts::PI * t).cos();
-                    let down = -24.0 * eased;       // 0 → -24
-                    let up = -24.0 + 24.0 * eased;  // -24 → 0
+                    let down = -24.0 * eased; // 0 → -24
+                    let up = -24.0 + 24.0 * eased; // -24 → 0
                     (down, up)
                 } else {
                     (-24.0, 0.0)
@@ -210,42 +220,61 @@ impl TransitionType {
     /// Playing deck volume at this progress.
     pub fn playing_volume(&self, progress: f64) -> f32 {
         match self {
-            Self::BeatMatched | Self::FilterSweep | Self::LoopRoll => (FRAC_PI_2 * progress).cos() as f32,
+            Self::BeatMatched | Self::FilterSweep | Self::LoopRoll => {
+                (FRAC_PI_2 * progress).cos() as f32
+            }
             // Very fast cut — 0.5% ramp to avoid single-sample click
-            Self::EchoOut => if progress < 0.005 { (1.0 - progress / 0.005) as f32 } else { 0.0 },
+            Self::EchoOut => {
+                if progress < 0.005 {
+                    (1.0 - progress / 0.005) as f32
+                } else {
+                    0.0
+                }
+            }
             // Both full until the last ~10%, then fade the (now bass-less) playing out.
-            Self::BassSwap => if progress < 0.9 { 1.0 } else {
-                let t = (progress - 0.9) / 0.1;
-                (FRAC_PI_2 * t).cos() as f32
-            },
+            Self::BassSwap => {
+                if progress < 0.9 {
+                    1.0
+                } else {
+                    let t = (progress - 0.9) / 0.1;
+                    (FRAC_PI_2 * t).cos() as f32
+                }
+            }
         }
     }
 
     /// Incoming deck volume at this progress.
     pub fn incoming_volume(&self, progress: f64) -> f32 {
         match self {
-            Self::BeatMatched | Self::FilterSweep | Self::LoopRoll => (FRAC_PI_2 * progress).sin() as f32,
-            Self::EchoOut => if progress < 0.40625 {
-                0.0
-            } else if progress < 0.41125 {
-                // Click-free ramp 0 → 0.9 over ~0.5% of the crossfade (~40 ms
-                // at 8-bar / 128 BPM). Fast enough to still feel like a drop,
-                // continuous enough to avoid the step discontinuity.
-                let r = (progress - 0.40625) / 0.005;
-                (0.9 * r) as f32
-            } else if progress < 0.75 {
-                let fade = (progress - 0.41125) / (0.75 - 0.41125);
-                (0.9 + 0.1 * fade) as f32
-            } else {
-                1.0
-            },
+            Self::BeatMatched | Self::FilterSweep | Self::LoopRoll => {
+                (FRAC_PI_2 * progress).sin() as f32
+            }
+            Self::EchoOut => {
+                if progress < 0.40625 {
+                    0.0
+                } else if progress < 0.41125 {
+                    // Click-free ramp 0 → 0.9 over ~0.5% of the crossfade (~40 ms
+                    // at 8-bar / 128 BPM). Fast enough to still feel like a drop,
+                    // continuous enough to avoid the step discontinuity.
+                    let r = (progress - 0.40625) / 0.005;
+                    (0.9 * r) as f32
+                } else if progress < 0.75 {
+                    let fade = (progress - 0.41125) / (0.75 - 0.41125);
+                    (0.9 + 0.1 * fade) as f32
+                } else {
+                    1.0
+                }
+            }
             // Incoming at full from the very start (lows are EQ'd out until the swap).
             Self::BassSwap => 1.0,
         }
     }
 
     pub fn use_phase_sync(&self) -> bool {
-        matches!(self, Self::BeatMatched | Self::BassSwap | Self::FilterSweep | Self::LoopRoll)
+        matches!(
+            self,
+            Self::BeatMatched | Self::BassSwap | Self::FilterSweep | Self::LoopRoll
+        )
     }
 
     /// Whether crossfade progress is driven by wall-clock time rather
@@ -267,26 +296,34 @@ impl TransitionType {
     pub fn fader_position(&self, progress: f64) -> f64 {
         match self {
             // Smooth equal-power sweep matching the sin volume curve.
-            Self::BeatMatched | Self::FilterSweep | Self::LoopRoll => (std::f64::consts::FRAC_PI_2 * progress).sin(),
+            Self::BeatMatched | Self::FilterSweep | Self::LoopRoll => {
+                (std::f64::consts::FRAC_PI_2 * progress).sin()
+            }
             // Fader sweeps A → B during the echo tail (0..40% of
             // progress) and holds at B while incoming fades up.
             // Matches what a DJ's hand actually does: move the fader
             // over while the echo rings, then it's just sitting there
             // as the new track drops.
-            Self::EchoOut => if progress < 0.40 {
-                let t = progress / 0.40;
-                (FRAC_PI_2 * t).sin()
-            } else { 1.0 },
+            Self::EchoOut => {
+                if progress < 0.40 {
+                    let t = progress / 0.40;
+                    (FRAC_PI_2 * t).sin()
+                } else {
+                    1.0
+                }
+            }
             // Needle steps at the bass-swap midpoint, then sweeps the fade-out tail.
-            Self::BassSwap => if progress < 0.48 {
-                progress * (0.5 / 0.48)
-            } else if progress < 0.52 {
-                0.5 + (progress - 0.48) / 0.04 * 0.4
-            } else if progress < 0.9 {
-                0.9 + (progress - 0.52) / 0.38 * 0.05
-            } else {
-                0.95 + (progress - 0.9) / 0.1 * 0.05
-            },
+            Self::BassSwap => {
+                if progress < 0.48 {
+                    progress * (0.5 / 0.48)
+                } else if progress < 0.52 {
+                    0.5 + (progress - 0.48) / 0.04 * 0.4
+                } else if progress < 0.9 {
+                    0.9 + (progress - 0.52) / 0.38 * 0.05
+                } else {
+                    0.95 + (progress - 0.9) / 0.1 * 0.05
+                }
+            }
         }
     }
 }
@@ -315,11 +352,19 @@ pub(crate) fn camelot_distance(a: &str, b: &str) -> usize {
     fn p(k: &str) -> Option<(i32, u8)> {
         let k = k.trim();
         let l = *k.as_bytes().last()?;
-        if l != b'A' && l != b'B' { return None; }
-        k[..k.len()-1].parse().ok().map(|n| (n, l))
+        if l != b'A' && l != b'B' {
+            return None;
+        }
+        k[..k.len() - 1].parse().ok().map(|n| (n, l))
     }
-    let (na, la) = match p(a) { Some(v) => v, None => return 99 };
-    let (nb, lb) = match p(b) { Some(v) => v, None => return 99 };
+    let (na, la) = match p(a) {
+        Some(v) => v,
+        None => return 99,
+    };
+    let (nb, lb) = match p(b) {
+        Some(v) => v,
+        None => return 99,
+    };
     let wheel = |n: i32, m: i32| {
         let d = (n - m).unsigned_abs() as usize;
         d.min(12 - d)
@@ -377,7 +422,10 @@ mod tests {
         assert!(t.fader_position(0.0) <= 0.01);
         // Mid-sweep: well past 0, well shy of 1.
         let mid = t.fader_position(0.20);
-        assert!((0.3..0.9).contains(&mid), "expected mid-sweep ≈ 0.3..0.9, got {mid}");
+        assert!(
+            (0.3..0.9).contains(&mid),
+            "expected mid-sweep ≈ 0.3..0.9, got {mid}"
+        );
         // By 40% we should be at (or very near) full B.
         assert!((t.fader_position(0.40) - 1.0).abs() < 1e-6);
         // Held at B for the rest of the crossfade.
@@ -397,28 +445,52 @@ mod tests {
         // constant tweaks that would silently shift the routing.
         let base = 128.0;
         // Just under 8% — matched.
-        assert_eq!(TransitionType::choose(base, base * 1.07, None, None), TransitionType::BeatMatched);
+        assert_eq!(
+            TransitionType::choose(base, base * 1.07, None, None),
+            TransitionType::BeatMatched
+        );
         // Just over 8% — EchoOut.
-        assert_eq!(TransitionType::choose(base, base * 1.09, None, None), TransitionType::EchoOut);
+        assert_eq!(
+            TransitionType::choose(base, base * 1.09, None, None),
+            TransitionType::EchoOut
+        );
         // Large gap — EchoOut.
-        assert_eq!(TransitionType::choose(base, base * 1.5, None, None), TransitionType::EchoOut);
+        assert_eq!(
+            TransitionType::choose(base, base * 1.5, None, None),
+            TransitionType::EchoOut
+        );
         // Symmetric on the negative side.
-        assert_eq!(TransitionType::choose(base, base * 0.91, None, None), TransitionType::EchoOut);
+        assert_eq!(
+            TransitionType::choose(base, base * 0.91, None, None),
+            TransitionType::EchoOut
+        );
     }
 
     #[test]
     fn choose_falls_back_to_beatmatched_when_keys_unknown() {
-        assert_eq!(TransitionType::choose(128.0, 130.0, None, None), TransitionType::BeatMatched);
+        assert_eq!(
+            TransitionType::choose(128.0, 130.0, None, None),
+            TransitionType::BeatMatched
+        );
     }
 
     #[test]
     fn choose_routes_by_camelot_distance() {
         // Matched BPMs, same key → BassSwap
-        assert_eq!(TransitionType::choose(128.0, 130.0, Some("8A"), Some("8A")), TransitionType::BassSwap);
+        assert_eq!(
+            TransitionType::choose(128.0, 130.0, Some("8A"), Some("8A")),
+            TransitionType::BassSwap
+        );
         // Dist 2 → FilterSweep
-        assert_eq!(TransitionType::choose(128.0, 130.0, Some("8A"), Some("10A")), TransitionType::FilterSweep);
+        assert_eq!(
+            TransitionType::choose(128.0, 130.0, Some("8A"), Some("10A")),
+            TransitionType::FilterSweep
+        );
         // Far key → BeatMatched
-        assert_eq!(TransitionType::choose(128.0, 130.0, Some("8A"), Some("2A")), TransitionType::BeatMatched);
+        assert_eq!(
+            TransitionType::choose(128.0, 130.0, Some("8A"), Some("2A")),
+            TransitionType::BeatMatched
+        );
     }
 
     #[test]
@@ -428,10 +500,19 @@ mod tests {
         // a ~100% BPM gap and fire EchoOut. With inclusive bounds, both
         // ratio=1.8 (halves to 0.9) and ratio=2.0 (halves to 1.0) stay
         // inside the ≤1.08 normalized gap and choose BeatMatched.
-        assert_eq!(TransitionType::choose(128.0, 256.0, None, None), TransitionType::BeatMatched);
-        assert_eq!(TransitionType::choose(128.0, 230.4, None, None), TransitionType::BeatMatched);
+        assert_eq!(
+            TransitionType::choose(128.0, 256.0, None, None),
+            TransitionType::BeatMatched
+        );
+        assert_eq!(
+            TransitionType::choose(128.0, 230.4, None, None),
+            TransitionType::BeatMatched
+        );
         // ratio just past 2.2 halves to > 1.1 and correctly fires EchoOut.
-        assert_eq!(TransitionType::choose(128.0, 300.0, None, None), TransitionType::EchoOut);
+        assert_eq!(
+            TransitionType::choose(128.0, 300.0, None, None),
+            TransitionType::EchoOut
+        );
     }
 
     #[test]
@@ -442,12 +523,16 @@ mod tests {
         assert_eq!(t.incoming_volume(0.40624), 0.0);
         // Just past the ramp start should still be near zero (monotonic rise).
         let just_past = t.incoming_volume(0.40626);
-        assert!((0.0..0.1).contains(&just_past),
-            "expected tiny ramp value near zero, got {just_past}");
+        assert!(
+            (0.0..0.1).contains(&just_past),
+            "expected tiny ramp value near zero, got {just_past}"
+        );
         // By the end of the short ramp we've reached 0.9.
         let after_ramp = t.incoming_volume(0.41125);
-        assert!((after_ramp - 0.9).abs() < 0.01,
-            "expected ~0.9 after ramp, got {after_ramp}");
+        assert!(
+            (after_ramp - 0.9).abs() < 0.01,
+            "expected ~0.9 after ramp, got {after_ramp}"
+        );
         // And it continues up to 1.0 by progress 0.75.
         assert!((t.incoming_volume(0.75) - 1.0).abs() < 0.01);
     }
@@ -462,8 +547,11 @@ mod tests {
                 let p = i as f64 / 20.0;
                 let pv = t.playing_volume(p) as f64;
                 let iv = t.incoming_volume(p) as f64;
-                assert!((pv * pv + iv * iv - 1.0).abs() < 0.01,
-                    "{t:?} p={p} sum²={}", pv * pv + iv * iv);
+                assert!(
+                    (pv * pv + iv * iv - 1.0).abs() < 0.01,
+                    "{t:?} p={p} sum²={}",
+                    pv * pv + iv * iv
+                );
             }
         }
     }
@@ -479,8 +567,10 @@ mod tests {
         for i in 1..=10_000 {
             let p = i as f64 / 10_000.0;
             let v = t.incoming_volume(p);
-            assert!((v - prev).abs() < 0.05,
-                "discontinuity at p={p}: jumped {prev} → {v}");
+            assert!(
+                (v - prev).abs() < 0.05,
+                "discontinuity at p={p}: jumped {prev} → {v}"
+            );
             prev = v;
         }
     }
@@ -494,8 +584,10 @@ mod tests {
         let just_before = t.playing_volume(0.8999);
         let just_after = t.playing_volume(0.9001);
         assert!((just_before - 1.0).abs() < 1e-6);
-        assert!((just_after - 1.0).abs() < 0.01,
-            "bassswap notch at 0.9 boundary: before={just_before} after={just_after}");
+        assert!(
+            (just_after - 1.0).abs() < 0.01,
+            "bassswap notch at 0.9 boundary: before={just_before} after={just_after}"
+        );
     }
 
     #[test]
@@ -513,8 +605,10 @@ mod tests {
             for i in 1..=1000 {
                 let p = i as f64 / 1000.0;
                 let v = t.incoming_volume(p);
-                assert!(v + 1e-5 >= prev,
-                    "{t:?} incoming went backwards at p={p}: {prev} → {v}");
+                assert!(
+                    v + 1e-5 >= prev,
+                    "{t:?} incoming went backwards at p={p}: {prev} → {v}"
+                );
                 prev = v;
             }
         }
@@ -535,8 +629,10 @@ mod tests {
             for i in 1..=1000 {
                 let p = i as f64 / 1000.0;
                 let v = t.fader_position(p);
-                assert!(v + 1e-6 >= prev,
-                    "{t:?} fader retreated at p={p}: {prev} → {v}");
+                assert!(
+                    v + 1e-6 >= prev,
+                    "{t:?} fader retreated at p={p}: {prev} → {v}"
+                );
                 prev = v;
             }
         }
@@ -555,7 +651,11 @@ mod tests {
             TransitionType::BassSwap,
         ] {
             assert!(t.fader_position(0.0) <= 0.01, "{t:?} start not at 0");
-            assert!(t.fader_position(1.0) >= 0.99, "{t:?} end not at 1, got {}", t.fader_position(1.0));
+            assert!(
+                t.fader_position(1.0) >= 0.99,
+                "{t:?} end not at 1, got {}",
+                t.fader_position(1.0)
+            );
         }
     }
 
@@ -602,7 +702,10 @@ mod tests {
         // Quadratic decay between 0.125 and 0.5.
         let mid = echoout_delay_wet(0.3125); // halfway through fade
         // fade=0.5 → curve=(1-0.5)²=0.25
-        assert!((mid - 0.25).abs() < 1e-3, "expected ~0.25 at p=0.3125, got {mid}");
+        assert!(
+            (mid - 0.25).abs() < 1e-3,
+            "expected ~0.25 at p=0.3125, got {mid}"
+        );
         // Approaches 0 at the end of the fade window.
         assert!(echoout_delay_wet(0.499) < 0.01);
         // Strict zero past 50%.

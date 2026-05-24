@@ -9,8 +9,8 @@
 //! Claude reads the entries directly. Small, interpretable, and the
 //! user can edit the file by hand if they want to tune its behavior.
 
-use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 /// How many entries each of `good` / `bad` keeps. Older entries drop
 /// when the file is rewritten so the memory stays bounded and the
@@ -57,7 +57,9 @@ pub struct MixEntry {
 }
 
 fn memory_path() -> PathBuf {
-    dirs::home_dir().unwrap_or_default().join(".mixr/dj_memory.json")
+    dirs::home_dir()
+        .unwrap_or_default()
+        .join(".mixr/dj_memory.json")
 }
 
 impl DjMemory {
@@ -66,7 +68,9 @@ impl DjMemory {
     /// start fresh than crash the DJ.
     pub fn load() -> Self {
         let path = memory_path();
-        let Ok(text) = std::fs::read_to_string(&path) else { return Self::default(); };
+        let Ok(text) = std::fs::read_to_string(&path) else {
+            return Self::default();
+        };
         serde_json::from_str(&text).unwrap_or_else(|e| {
             tracing::warn!("dj_memory.json parse failed ({e}) — starting fresh");
             Self::default()
@@ -80,9 +84,10 @@ impl DjMemory {
         self.trim();
         let path = memory_path();
         if let Ok(text) = serde_json::to_string_pretty(self)
-            && let Err(e) = std::fs::write(&path, text) {
-                tracing::warn!("dj_memory.json write failed: {e}");
-            }
+            && let Err(e) = std::fs::write(&path, text)
+        {
+            tracing::warn!("dj_memory.json write failed: {e}");
+        }
     }
 
     fn trim(&mut self) {
@@ -113,7 +118,11 @@ impl DjMemory {
     /// stale or contradictory feedback. Returns true if an entry was
     /// removed.
     pub fn unremember_by_rated_at(&mut self, timestamp: i64, was_good: bool) -> bool {
-        let bucket = if was_good { &mut self.good } else { &mut self.bad };
+        let bucket = if was_good {
+            &mut self.good
+        } else {
+            &mut self.bad
+        };
         if let Some(pos) = bucket.iter().rposition(|e| e.rated_at == Some(timestamp)) {
             bucket.remove(pos);
             true
@@ -128,11 +137,23 @@ impl DjMemory {
     /// empty — the prompt composer checks this to avoid dangling
     /// "MEMORY:" headers.
     pub fn prompt_summary(&self) -> String {
-        if self.good.is_empty() && self.bad.is_empty() { return String::new(); }
-        let good: Vec<String> = self.good.iter().rev().take(PROMPT_INJECT_LIMIT)
-            .map(|e| Self::format_entry(e, "+")).collect();
-        let bad: Vec<String> = self.bad.iter().rev().take(PROMPT_INJECT_LIMIT)
-            .map(|e| Self::format_entry(e, "−")).collect();
+        if self.good.is_empty() && self.bad.is_empty() {
+            return String::new();
+        }
+        let good: Vec<String> = self
+            .good
+            .iter()
+            .rev()
+            .take(PROMPT_INJECT_LIMIT)
+            .map(|e| Self::format_entry(e, "+"))
+            .collect();
+        let bad: Vec<String> = self
+            .bad
+            .iter()
+            .rev()
+            .take(PROMPT_INJECT_LIMIT)
+            .map(|e| Self::format_entry(e, "−"))
+            .collect();
         let mut parts = Vec::new();
         if !good.is_empty() {
             parts.push(format!("GOOD MIXES (do more of): {}", good.join("; ")));
@@ -145,9 +166,15 @@ impl DjMemory {
 
     fn format_entry(e: &MixEntry, prefix: &str) -> String {
         let mut s = format!("{prefix} {}", e.pair);
-        if let Some([a, b]) = e.bpm { s.push_str(&format!(" ({a:.0}→{b:.0}bpm)")); }
-        if let Some(k) = &e.key { s.push_str(&format!(" {k}")); }
-        if let Some(note) = &e.note { s.push_str(&format!(" — {note}")); }
+        if let Some([a, b]) = e.bpm {
+            s.push_str(&format!(" ({a:.0}→{b:.0}bpm)"));
+        }
+        if let Some(k) = &e.key {
+            s.push_str(&format!(" {k}"));
+        }
+        if let Some(note) = &e.note {
+            s.push_str(&format!(" — {note}"));
+        }
         s
     }
 }
@@ -158,17 +185,22 @@ mod tests {
 
     fn entry(pair: &str) -> MixEntry {
         MixEntry {
-            pair: pair.into(), bpm: Some([128.0, 130.0]),
-            key: Some("9A→8A".into()), transition: Some("BeatMatched".into()),
-            note: Some("clean".into()), rated_at: Some(1_700_000_000),
+            pair: pair.into(),
+            bpm: Some([128.0, 130.0]),
+            key: Some("9A→8A".into()),
+            transition: Some("BeatMatched".into()),
+            note: Some("clean".into()),
+            rated_at: Some(1_700_000_000),
         }
     }
 
     #[test]
     fn empty_memory_produces_empty_summary() {
         let m = DjMemory::default();
-        assert!(m.prompt_summary().is_empty(),
-            "no entries → no summary so the prompt doesn't carry a dangling header");
+        assert!(
+            m.prompt_summary().is_empty(),
+            "no entries → no summary so the prompt doesn't carry a dangling header"
+        );
     }
 
     #[test]
@@ -192,10 +224,14 @@ mod tests {
         let s = m.prompt_summary();
         // The first overflow entry (t0) must not appear — rev().take(N)
         // keeps the N most-recent.
-        assert!(!s.contains("t0 →"),
-            "oldest entries past PROMPT_INJECT_LIMIT should be dropped");
-        assert!(s.contains(&format!("t{} →", PROMPT_INJECT_LIMIT + 4)),
-            "most-recent entry must appear");
+        assert!(
+            !s.contains("t0 →"),
+            "oldest entries past PROMPT_INJECT_LIMIT should be dropped"
+        );
+        assert!(
+            s.contains(&format!("t{} →", PROMPT_INJECT_LIMIT + 4)),
+            "most-recent entry must appear"
+        );
     }
 
     #[test]

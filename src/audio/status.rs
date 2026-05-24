@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use super::beat_grid::BeatGrid;
-use super::engine::{DeckId, EngineState, MixEngine, QueueEntry, HistoryEntry};
+use super::engine::{DeckId, EngineState, HistoryEntry, MixEngine, QueueEntry};
 use crate::beatport::models::BeatportTrack;
 
 /// Alignment readout for manual-mode beatmatching. `beat_phase_ms` is
@@ -127,23 +127,35 @@ impl MixEngine {
         let (beat_phase_ms, beat_phase_fraction) = match (playing.beat_grid, incoming.beat_grid) {
             (Some(pg), Some(ig)) => {
                 let phase_s = BeatGrid::phase_offset(
-                    &pg, playing.current_time(),
-                    &ig, incoming.current_time(),
+                    &pg,
+                    playing.current_time(),
+                    &ig,
+                    incoming.current_time(),
                 );
                 let pa = pg.phase(playing.current_time());
                 let pb = ig.phase(incoming.current_time());
                 let mut frac = (pa - pb).abs();
-                if frac > 0.5 { frac = 1.0 - frac; }
+                if frac > 0.5 {
+                    frac = 1.0 - frac;
+                }
                 (phase_s * 1000.0, frac)
             }
             _ => (0.0, 0.0),
         };
-        let beat_in_bar_a = s.deck_a.beat_grid
-            .map(|g| g.beat_in_bar(s.deck_a.current_time())).unwrap_or(0);
-        let beat_in_bar_b = s.deck_b.beat_grid
-            .map(|g| g.beat_in_bar(s.deck_b.current_time())).unwrap_or(0);
+        let beat_in_bar_a = s
+            .deck_a
+            .beat_grid
+            .map(|g| g.beat_in_bar(s.deck_a.current_time()))
+            .unwrap_or(0);
+        let beat_in_bar_b = s
+            .deck_b
+            .beat_grid
+            .map(|g| g.beat_in_bar(s.deck_b.current_time()))
+            .unwrap_or(0);
         let bar_in_phrase = |d: &super::deck::DeckPlayer| -> u32 {
-            d.beat_grid.map(|g| (g.bar_index(d.current_time()).rem_euclid(16)) as u32).unwrap_or(0)
+            d.beat_grid
+                .map(|g| (g.bar_index(d.current_time()).rem_euclid(16)) as u32)
+                .unwrap_or(0)
         };
         AlignmentReadout {
             beat_phase_ms,
@@ -160,12 +172,16 @@ impl MixEngine {
     /// ~30KB output) rather than cloning raw samples (~5MB).
     pub fn alignment_peaks(&self) -> Option<AlignmentPeaks> {
         let s = self.audio_state.lock().unwrap_or_else(|e| e.into_inner());
-        if s.state != EngineState::Crossfading { return None; }
+        if s.state != EngineState::Crossfading {
+            return None;
+        }
         let (playing, incoming) = match s.playing_deck {
             DeckId::A => (&s.deck_a, &s.deck_b),
             DeckId::B => (&s.deck_b, &s.deck_a),
         };
-        if playing.samples.is_empty() || incoming.samples.is_empty() { return None; }
+        if playing.samples.is_empty() || incoming.samples.is_empty() {
+            return None;
+        }
         let p_bpm = playing.beat_grid.map(|g| g.bpm).unwrap_or(128.0);
         let i_bpm = incoming.beat_grid.map(|g| g.bpm).unwrap_or(p_bpm);
         let sr = playing.sample_rate as usize;
@@ -180,13 +196,23 @@ impl MixEngine {
             let ps = p_start_sample + ms * bin;
             let pe = (ps + bin).min(playing.samples.len());
             p_peaks.push(if pe > ps && pe <= playing.samples.len() {
-                playing.samples[ps..pe].iter().map(|s| s.abs()).fold(0.0f32, f32::max)
-            } else { 0.0 });
+                playing.samples[ps..pe]
+                    .iter()
+                    .map(|s| s.abs())
+                    .fold(0.0f32, f32::max)
+            } else {
+                0.0
+            });
             let is = i_start_sample + ms * bin;
             let ie = (is + bin).min(incoming.samples.len());
             i_peaks.push(if ie > is && ie <= incoming.samples.len() {
-                incoming.samples[is..ie].iter().map(|s| s.abs()).fold(0.0f32, f32::max)
-            } else { 0.0 });
+                incoming.samples[is..ie]
+                    .iter()
+                    .map(|s| s.abs())
+                    .fold(0.0f32, f32::max)
+            } else {
+                0.0
+            });
         }
         Some(AlignmentPeaks {
             playing_peaks: p_peaks,
@@ -238,11 +264,14 @@ impl MixEngine {
                 eq_high_db: d.eq_high_db,
                 filter_pos: d.filter_pos,
                 loop_active: d.loop_active,
-                cues: [d.cues[0].is_some(), d.cues[1].is_some(),
-                       d.cues[2].is_some(), d.cues[3].is_some()],
+                cues: [
+                    d.cues[0].is_some(),
+                    d.cues[1].is_some(),
+                    d.cues[2].is_some(),
+                    d.cues[3].is_some(),
+                ],
             }
         }
-
 
         // Phase 1 — hold the audio state lock only long enough to pull out
         // scalar values + cheap Arc clones. No iteration, no allocation-heavy
@@ -260,7 +289,12 @@ impl MixEngine {
                     && s.transition_type.fader_position(s.crossfade_progress) >= 1.0;
                 match (&playing.beat_grid, &incoming.beat_grid) {
                     (Some(pg), Some(ig)) if incoming.playing && !fader_at_b => {
-                        let ph = BeatGrid::phase_offset(pg, playing.current_time(), ig, incoming.current_time()) * 1000.0;
+                        let ph = BeatGrid::phase_offset(
+                            pg,
+                            playing.current_time(),
+                            ig,
+                            incoming.current_time(),
+                        ) * 1000.0;
                         // Bar-level: 1s land together (mod 4 beats).
                         // Phrase-level alignment was tried here too but
                         // `bar_index % 16` is just arithmetic from beat 0
@@ -269,7 +303,12 @@ impl MixEngine {
                         // anyway. Keep the indicator focused on the "1s
                         // land together" claim so the green dot is
                         // useful, not punitive.
-                        let aligned = BeatGrid::bar_offset_beats(pg, playing.current_time(), ig, incoming.current_time()) == 0;
+                        let aligned = BeatGrid::bar_offset_beats(
+                            pg,
+                            playing.current_time(),
+                            ig,
+                            incoming.current_time(),
+                        ) == 0;
                         (ph, aligned)
                     }
                     // Single deck (or pre-mix): treat as aligned so the
@@ -282,7 +321,8 @@ impl MixEngine {
                 0.0
             } else {
                 let wrapped = s.phase_display_ema.signum() != raw_phase_ms.signum()
-                    && s.phase_display_ema.abs() > 10.0 && raw_phase_ms.abs() > 10.0;
+                    && s.phase_display_ema.abs() > 10.0
+                    && raw_phase_ms.abs() > 10.0;
                 if !wrapped {
                     s.phase_display_ema = s.phase_display_ema * 0.95 + raw_phase_ms * 0.05;
                 }
@@ -301,7 +341,9 @@ impl MixEngine {
                 s.crossfader_pos,
                 s.cached_trigger_time,
                 phase_offset_ms,
-                s.session_start.map(|t| (t.elapsed().as_secs() / 60) as u32).unwrap_or(0),
+                s.session_start
+                    .map(|t| (t.elapsed().as_secs() / 60) as u32)
+                    .unwrap_or(0),
                 s.crossfade_controller.as_ref().map(|c| c.crossfade_bars),
                 s.crossfade_bars,
                 downbeat_aligned,
@@ -309,14 +351,31 @@ impl MixEngine {
             )
         }; // lock released here
 
-        let (a, b, playing_deck, state, crossfade_progress, transition_type,
-             channel_fader_a, channel_fader_b, crossfader_pos, mix_point_time,
-             phase_offset_ms, session_time_min,
-             active_crossfade_bars, config_crossfade_bars, downbeat_aligned,
-             jump_bars) = snap;
+        let (
+            a,
+            b,
+            playing_deck,
+            state,
+            crossfade_progress,
+            transition_type,
+            channel_fader_a,
+            channel_fader_b,
+            crossfader_pos,
+            mix_point_time,
+            phase_offset_ms,
+            session_time_min,
+            active_crossfade_bars,
+            config_crossfade_bars,
+            downbeat_aligned,
+            jump_bars,
+        ) = snap;
 
         // Snap to zero on the formatter's noise floor — avoids -0.0/+0.0 flicker.
-        let phase_offset_ms = if phase_offset_ms.abs() < 0.1 { 0.0 } else { phase_offset_ms };
+        let phase_offset_ms = if phase_offset_ms.abs() < 0.1 {
+            0.0
+        } else {
+            phase_offset_ms
+        };
 
         let beat_pos = |s: &DeckSnap| -> f64 {
             match s.bpm {
@@ -324,7 +383,11 @@ impl MixEngine {
                 _ => 0.0,
             }
         };
-        let (playing_snap, incoming_snap) = if playing_deck == DeckId::A { (&a, &b) } else { (&b, &a) };
+        let (playing_snap, incoming_snap) = if playing_deck == DeckId::A {
+            (&a, &b)
+        } else {
+            (&b, &a)
+        };
 
         let transition_type_name = match transition_type {
             super::transition::TransitionType::BeatMatched => "BeatMatched",
@@ -339,13 +402,16 @@ impl MixEngine {
         // what the next mix would use. Transitions with a fixed bar
         // count (EchoOut = 8) bypass the crossfade_bars setting.
         let transition_bars = active_crossfade_bars.unwrap_or_else(|| {
-            transition_type.absolute_bars().unwrap_or_else(||
-                (config_crossfade_bars as f64 * transition_type.duration_multiplier()).max(1.0) as u32
-            )
+            transition_type.absolute_bars().unwrap_or_else(|| {
+                (config_crossfade_bars as f64 * transition_type.duration_multiplier()).max(1.0)
+                    as u32
+            })
         });
         let fader_sweep_progress = if state == EngineState::Crossfading {
             transition_type.fader_position(crossfade_progress)
-        } else { 0.0 };
+        } else {
+            0.0
+        };
         let crossfader_visual = {
             // During a crossfade: follow the transition's volume curve
             // so the needle moves naturally with the mix.
@@ -355,7 +421,11 @@ impl MixEngine {
             // is making sound.
             let base = if playing_deck == DeckId::A { 0.0 } else { 1.0 };
             if state == EngineState::Crossfading {
-                if playing_deck == DeckId::A { fader_sweep_progress } else { 1.0 - fader_sweep_progress }
+                if playing_deck == DeckId::A {
+                    fader_sweep_progress
+                } else {
+                    1.0 - fader_sweep_progress
+                }
             } else if crossfader_pos.abs() > 1e-3 {
                 // crossfader_pos: -1.0 = full A (left), +1.0 = full B (right)
                 // visual:          0.0 = full A (left), 1.0 = full B (right)

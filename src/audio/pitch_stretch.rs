@@ -30,7 +30,6 @@ pub enum PitchStretchEngine {
     Timestretch,
 }
 
-
 pub trait Stretcher: Send {
     /// Produce output samples at the given stretch rate (1.0 = no change,
     /// 1.05 = 5% faster). `source` is the full source buffer;
@@ -52,19 +51,27 @@ pub fn make(engine: PitchStretchEngine) -> Option<Box<dyn Stretcher>> {
         PitchStretchEngine::Off => None,
         PitchStretchEngine::Rubberband => {
             #[cfg(feature = "rubberband")]
-            { Some(Box::new(RubberbandStretcher::new())) }
+            {
+                Some(Box::new(RubberbandStretcher::new()))
+            }
             #[cfg(not(feature = "rubberband"))]
             {
-                tracing::warn!("Rubberband engine requested but `rubberband` feature not compiled — pitch stretch disabled");
+                tracing::warn!(
+                    "Rubberband engine requested but `rubberband` feature not compiled — pitch stretch disabled"
+                );
                 None
             }
         }
         PitchStretchEngine::Timestretch => {
             #[cfg(feature = "timestretch")]
-            { Some(Box::new(TimestretchStretcher::new())) }
+            {
+                Some(Box::new(TimestretchStretcher::new()))
+            }
             #[cfg(not(feature = "timestretch"))]
             {
-                tracing::warn!("Timestretch engine requested but `timestretch` feature not compiled — pitch stretch disabled");
+                tracing::warn!(
+                    "Timestretch engine requested but `timestretch` feature not compiled — pitch stretch disabled"
+                );
                 None
             }
         }
@@ -96,7 +103,12 @@ mod rb_ffi {
         pub fn rubberband_delete(h: Handle);
         pub fn rubberband_set_time_ratio(h: Handle, ratio: c_double);
         pub fn rubberband_reset(h: Handle);
-        pub fn rubberband_process(h: Handle, input: *const *const f32, samples: c_uint, final_: c_int);
+        pub fn rubberband_process(
+            h: Handle,
+            input: *const *const f32,
+            samples: c_uint,
+            final_: c_int,
+        );
         pub fn rubberband_available(h: Handle) -> c_int;
         pub fn rubberband_retrieve(h: Handle, output: *const *mut f32, samples: c_uint) -> c_uint;
     }
@@ -114,9 +126,16 @@ pub struct RubberbandStretcher {
 impl RubberbandStretcher {
     pub fn new() -> Self {
         let sample_rate = 48_000u32;
-        let opts = rb_ffi::OPT_PROCESS_REALTIME | rb_ffi::OPT_PITCH_HIGH_QUALITY | rb_ffi::OPT_PHASE_INDEPENDENT;
+        let opts = rb_ffi::OPT_PROCESS_REALTIME
+            | rb_ffi::OPT_PITCH_HIGH_QUALITY
+            | rb_ffi::OPT_PHASE_INDEPENDENT;
         let handle = unsafe { rb_ffi::rubberband_new(sample_rate, 1, opts, 1.0, 1.0) };
-        Self { handle, pending: VecDeque::with_capacity(4096), read_offset: 0.0, last_rate: 1.0 }
+        Self {
+            handle,
+            pending: VecDeque::with_capacity(4096),
+            read_offset: 0.0,
+            last_rate: 1.0,
+        }
     }
 }
 
@@ -124,7 +143,9 @@ impl RubberbandStretcher {
 impl Drop for RubberbandStretcher {
     fn drop(&mut self) {
         if !self.handle.is_null() {
-            unsafe { rb_ffi::rubberband_delete(self.handle); }
+            unsafe {
+                rb_ffi::rubberband_delete(self.handle);
+            }
             self.handle = std::ptr::null_mut();
         }
     }
@@ -166,7 +187,13 @@ impl TimestretchStretcher {
 
 #[cfg(feature = "timestretch")]
 impl Stretcher for TimestretchStretcher {
-    fn process(&mut self, source: &[f32], source_pos_start: f64, output: &mut [f32], rate: f64) -> (usize, f64) {
+    fn process(
+        &mut self,
+        source: &[f32],
+        source_pos_start: f64,
+        output: &mut [f32],
+        rate: f64,
+    ) -> (usize, f64) {
         // Stretch ratio convention matches Rubberband: ratio = output_dur
         // / input_dur = 1 / rate. Speeding up (rate > 1) → ratio < 1
         // (output is shorter than input).
@@ -180,14 +207,22 @@ impl Stretcher for TimestretchStretcher {
 
         while self.pending.len() < output.len() {
             let start = (source_pos_start + read_offset) as usize;
-            if start + FEED_FRAMES >= source.len() { break; }
+            if start + FEED_FRAMES >= source.len() {
+                break;
+            }
             let slice = &source[start..start + FEED_FRAMES];
             self.scratch_out.clear();
-            if self.proc.process_into(slice, &mut self.scratch_out).is_err() {
+            if self
+                .proc
+                .process_into(slice, &mut self.scratch_out)
+                .is_err()
+            {
                 break;
             }
             read_offset += FEED_FRAMES as f64;
-            for s in self.scratch_out.iter() { self.pending.push_back(*s); }
+            for s in self.scratch_out.iter() {
+                self.pending.push_back(*s);
+            }
         }
 
         let written = output.len().min(self.pending.len());
@@ -219,8 +254,16 @@ pub struct FakeStretcher;
 
 #[cfg(test)]
 impl Stretcher for FakeStretcher {
-    fn process(&mut self, _source: &[f32], _source_pos_start: f64, output: &mut [f32], rate: f64) -> (usize, f64) {
-        for s in output.iter_mut() { *s = 0.0; }
+    fn process(
+        &mut self,
+        _source: &[f32],
+        _source_pos_start: f64,
+        output: &mut [f32],
+        rate: f64,
+    ) -> (usize, f64) {
+        for s in output.iter_mut() {
+            *s = 0.0;
+        }
         let written = output.len();
         // Must mirror RubberbandStretcher's accounting.
         let consumed = written as f64 * rate;
@@ -239,8 +282,16 @@ pub struct BrokenStretcher;
 
 #[cfg(test)]
 impl Stretcher for BrokenStretcher {
-    fn process(&mut self, _source: &[f32], _source_pos_start: f64, output: &mut [f32], _rate: f64) -> (usize, f64) {
-        for s in output.iter_mut() { *s = 0.0; }
+    fn process(
+        &mut self,
+        _source: &[f32],
+        _source_pos_start: f64,
+        output: &mut [f32],
+        _rate: f64,
+    ) -> (usize, f64) {
+        for s in output.iter_mut() {
+            *s = 0.0;
+        }
         (output.len(), output.len() as f64)
     }
     fn reset(&mut self) {}
@@ -281,17 +332,27 @@ mod tests {
         let mut s = BrokenStretcher;
         let mut out = vec![0.0_f32; 480];
         let (_, c) = s.process(&[], 0.0, &mut out, 1.05);
-        assert!((c - 480.0 * 1.05).abs() > 1.0,
-            "BrokenStretcher must diverge from the correct formula");
+        assert!(
+            (c - 480.0 * 1.05).abs() > 1.0,
+            "BrokenStretcher must diverge from the correct formula"
+        );
     }
 }
 
 #[cfg(feature = "rubberband")]
 impl Stretcher for RubberbandStretcher {
-    fn process(&mut self, source: &[f32], source_pos_start: f64, output: &mut [f32], rate: f64) -> (usize, f64) {
+    fn process(
+        &mut self,
+        source: &[f32],
+        source_pos_start: f64,
+        output: &mut [f32],
+        rate: f64,
+    ) -> (usize, f64) {
         // time_ratio = output_duration / input_duration = 1 / rate.
         if (rate - self.last_rate).abs() > 1e-6 {
-            unsafe { rb_ffi::rubberband_set_time_ratio(self.handle, 1.0 / rate); }
+            unsafe {
+                rb_ffi::rubberband_set_time_ratio(self.handle, 1.0 / rate);
+            }
             self.last_rate = rate;
         }
 
@@ -299,10 +360,14 @@ impl Stretcher for RubberbandStretcher {
 
         while self.pending.len() < output.len() {
             let start = (source_pos_start + self.read_offset) as usize;
-            if start + FEED_FRAMES >= source.len() { break; }
+            if start + FEED_FRAMES >= source.len() {
+                break;
+            }
             let slice = &source[start..start + FEED_FRAMES];
             let ptrs = [slice.as_ptr()];
-            unsafe { rb_ffi::rubberband_process(self.handle, ptrs.as_ptr(), FEED_FRAMES as u32, 0); }
+            unsafe {
+                rb_ffi::rubberband_process(self.handle, ptrs.as_ptr(), FEED_FRAMES as u32, 0);
+            }
             self.read_offset += FEED_FRAMES as f64;
 
             let avail = unsafe { rb_ffi::rubberband_available(self.handle) };
@@ -310,8 +375,12 @@ impl Stretcher for RubberbandStretcher {
                 let want = avail as usize;
                 let mut buf = vec![0.0f32; want];
                 let bufp: [*mut f32; 1] = [buf.as_mut_ptr()];
-                let n = unsafe { rb_ffi::rubberband_retrieve(self.handle, bufp.as_ptr(), want as u32) } as usize;
-                for s in &buf[..n] { self.pending.push_back(*s); }
+                let n =
+                    unsafe { rb_ffi::rubberband_retrieve(self.handle, bufp.as_ptr(), want as u32) }
+                        as usize;
+                for s in &buf[..n] {
+                    self.pending.push_back(*s);
+                }
             }
         }
 
@@ -327,7 +396,9 @@ impl Stretcher for RubberbandStretcher {
     }
 
     fn reset(&mut self) {
-        unsafe { rb_ffi::rubberband_reset(self.handle); }
+        unsafe {
+            rb_ffi::rubberband_reset(self.handle);
+        }
         self.pending.clear();
         self.read_offset = 0.0;
     }
@@ -360,7 +431,9 @@ mod rubberband_tests {
         // full output frames. Early calls will return `written < out.len()`;
         // we want to measure steady state.
         let rate = 1.05;
-        for _ in 0..40 { rb.process(&src, 0.0, &mut out, rate); }
+        for _ in 0..40 {
+            rb.process(&src, 0.0, &mut out, rate);
+        }
 
         // Capture several steady-state calls and assert `consumed` tracks
         // `written * rate` — the exact invariant BrokenStretcher violates.
@@ -368,10 +441,14 @@ mod rubberband_tests {
         // samples, so allow ±2 samples of slack per call.
         for _ in 0..10 {
             let (w, c) = rb.process(&src, 0.0, &mut out, rate);
-            if w == 0 { continue; } // starvation — skip
+            if w == 0 {
+                continue;
+            } // starvation — skip
             let expected = w as f64 * rate;
-            assert!((c - expected).abs() < 2.0,
-                "rubberband accounting: written={w} expected consumed≈{expected}, got {c}");
+            assert!(
+                (c - expected).abs() < 2.0,
+                "rubberband accounting: written={w} expected consumed≈{expected}, got {c}"
+            );
         }
     }
 }

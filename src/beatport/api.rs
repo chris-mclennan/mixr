@@ -47,11 +47,12 @@ impl BeatportAPI {
     // -- Search --
 
     pub async fn search(&mut self, query: &str) -> Result<Vec<BeatportTrack>> {
-        let data = self.request("catalog/search/", &[
-            ("q", query),
-            ("type", "tracks"),
-            ("per_page", "20"),
-        ]).await?;
+        let data = self
+            .request(
+                "catalog/search/",
+                &[("q", query), ("type", "tracks"), ("per_page", "20")],
+            )
+            .await?;
         Ok(Self::parse_search_tracks(&data))
     }
 
@@ -73,19 +74,26 @@ impl BeatportAPI {
     // -- Charts --
 
     pub async fn global_top_100(&mut self) -> Result<Vec<BeatportTrack>> {
-        let data = self.request("catalog/tracks/top/100/", &[
-            ("enabled", "true"),
-            ("is_hype", "false"),
-            ("per_page", "100"),
-        ]).await?;
+        let data = self
+            .request(
+                "catalog/tracks/top/100/",
+                &[
+                    ("enabled", "true"),
+                    ("is_hype", "false"),
+                    ("per_page", "100"),
+                ],
+            )
+            .await?;
         Ok(Self::parse_tracks(&data))
     }
 
     pub async fn genre_top_100(&mut self, genre_id: i64) -> Result<Vec<BeatportTrack>> {
-        let data = self.request(&format!("catalog/genres/{genre_id}/top/100/"), &[
-            ("per_page", "100"),
-            ("hype", "false"),
-        ]).await?;
+        let data = self
+            .request(
+                &format!("catalog/genres/{genre_id}/top/100/"),
+                &[("per_page", "100"), ("hype", "false")],
+            )
+            .await?;
         Ok(Self::parse_tracks(&data))
     }
 
@@ -93,21 +101,32 @@ impl BeatportAPI {
         self.genre_tracks_page(genre_id, 1).await
     }
 
-    pub async fn genre_tracks_page(&mut self, genre_id: i64, page: u32) -> Result<Vec<BeatportTrack>> {
+    pub async fn genre_tracks_page(
+        &mut self,
+        genre_id: i64,
+        page: u32,
+    ) -> Result<Vec<BeatportTrack>> {
         let gid = genre_id.to_string();
         let pg = page.to_string();
-        let data = self.request("catalog/tracks/", &[
-            ("genre_id", gid.as_str()),
-            ("per_page", "100"),
-            ("preorder", "false"),
-            ("order_by", "-publish_date"),
-            ("page", pg.as_str()),
-        ]).await?;
+        let data = self
+            .request(
+                "catalog/tracks/",
+                &[
+                    ("genre_id", gid.as_str()),
+                    ("per_page", "100"),
+                    ("preorder", "false"),
+                    ("order_by", "-publish_date"),
+                    ("page", pg.as_str()),
+                ],
+            )
+            .await?;
         Ok(Self::parse_tracks(&data))
     }
 
     pub async fn chart_tracks(&mut self, chart_id: i64) -> Result<Vec<BeatportTrack>> {
-        let data = self.request(&format!("catalog/charts/{chart_id}/tracks/"), &[]).await?;
+        let data = self
+            .request(&format!("catalog/charts/{chart_id}/tracks/"), &[])
+            .await?;
         Ok(Self::parse_tracks(&data))
     }
 
@@ -115,115 +134,164 @@ impl BeatportAPI {
         self.genre_charts_page(genre_id, 1).await
     }
 
-    pub async fn genre_charts_page(&mut self, genre_id: i64, page: u32) -> Result<Vec<BeatportChart>> {
+    pub async fn genre_charts_page(
+        &mut self,
+        genre_id: i64,
+        page: u32,
+    ) -> Result<Vec<BeatportChart>> {
         let gid = genre_id.to_string();
         let pg = page.to_string();
-        let data = self.request("catalog/charts/", &[
-            ("genre_id", &gid),
-            ("per_page", "100"),
-            ("page", &pg),
-        ]).await?;
+        let data = self
+            .request(
+                "catalog/charts/",
+                &[("genre_id", &gid), ("per_page", "100"), ("page", &pg)],
+            )
+            .await?;
         Ok(Self::parse_charts(&data))
     }
 
     pub async fn artist_top_100(&mut self, artist_id: i64) -> Result<Vec<BeatportTrack>> {
-        let data = self.request(&format!("catalog/artists/{artist_id}/top/100/"), &[
-            ("per_page", "100"),
-        ]).await?;
+        let data = self
+            .request(
+                &format!("catalog/artists/{artist_id}/top/100/"),
+                &[("per_page", "100")],
+            )
+            .await?;
         Ok(Self::parse_tracks(&data))
     }
 
     pub async fn label_top_100(&mut self, label_id: i64) -> Result<Vec<BeatportTrack>> {
-        let data = self.request(&format!("catalog/labels/{label_id}/top/100/"), &[
-            ("per_page", "100"),
-        ]).await?;
+        let data = self
+            .request(
+                &format!("catalog/labels/{label_id}/top/100/"),
+                &[("per_page", "100")],
+            )
+            .await?;
         Ok(Self::parse_tracks(&data))
     }
 
     pub async fn release_tracks(&mut self, release_id: i64) -> Result<Vec<BeatportTrack>> {
-        let data = self.request(&format!("catalog/releases/{release_id}/tracks/"), &[]).await?;
+        let data = self
+            .request(&format!("catalog/releases/{release_id}/tracks/"), &[])
+            .await?;
         Ok(Self::parse_tracks(&data))
     }
 
     // -- Hype --
 
     pub async fn hype_top_100(&mut self) -> Result<Vec<BeatportTrack>> {
-        let data = self.request("catalog/tracks/top/100/", &[
-            ("enabled", "true"),
-            ("hype", "true"),
-            ("per_page", "100"),
-        ]).await?;
+        let data = self
+            .request(
+                "catalog/tracks/top/100/",
+                &[("enabled", "true"), ("hype", "true"), ("per_page", "100")],
+            )
+            .await?;
         Ok(Self::parse_tracks(&data))
     }
 
     pub async fn genre_hype(&mut self, genre_id: i64) -> Result<Vec<BeatportTrack>> {
-        let data = self.request("catalog/tracks/", &[
-            ("genre_id", &genre_id.to_string()),
-            ("is_hype", "true"),
-            ("per_page", "100"),
-            ("preorder", "false"),
-            ("order_by", "-publish_date"),
-        ]).await?;
+        let data = self
+            .request(
+                "catalog/tracks/",
+                &[
+                    ("genre_id", &genre_id.to_string()),
+                    ("is_hype", "true"),
+                    ("per_page", "100"),
+                    ("preorder", "false"),
+                    ("order_by", "-publish_date"),
+                ],
+            )
+            .await?;
         Ok(Self::parse_tracks(&data))
     }
 
     pub async fn genre_exclusives(&mut self, genre_id: i64) -> Result<Vec<BeatportTrack>> {
-        let data = self.request("catalog/tracks/", &[
-            ("genre_id", &genre_id.to_string()),
-            ("was_ever_exclusive", "true"),
-            ("per_page", "100"),
-            ("preorder", "false"),
-            ("order_by", "-publish_date"),
-        ]).await?;
+        let data = self
+            .request(
+                "catalog/tracks/",
+                &[
+                    ("genre_id", &genre_id.to_string()),
+                    ("was_ever_exclusive", "true"),
+                    ("per_page", "100"),
+                    ("preorder", "false"),
+                    ("order_by", "-publish_date"),
+                ],
+            )
+            .await?;
         Ok(Self::parse_tracks(&data))
     }
 
     // -- Releases --
 
     pub async fn genre_releases(&mut self, genre_id: i64) -> Result<Vec<BeatportRelease>> {
-        let data = self.request("catalog/releases/", &[
-            ("genre_id", &genre_id.to_string()),
-            ("enabled", "true"),
-            ("preorder", "false"),
-            ("order_by", "-publish_date"),
-            ("per_page", "100"),
-        ]).await?;
+        let data = self
+            .request(
+                "catalog/releases/",
+                &[
+                    ("genre_id", &genre_id.to_string()),
+                    ("enabled", "true"),
+                    ("preorder", "false"),
+                    ("order_by", "-publish_date"),
+                    ("per_page", "100"),
+                ],
+            )
+            .await?;
         Ok(Self::parse_releases(&data))
     }
 
     pub async fn artist_tracks(&mut self, artist_id: i64) -> Result<Vec<BeatportTrack>> {
-        let data = self.request("catalog/tracks/", &[
-            ("artist_id", &artist_id.to_string()),
-            ("per_page", "100"),
-            ("order_by", "-publish_date"),
-        ]).await?;
+        let data = self
+            .request(
+                "catalog/tracks/",
+                &[
+                    ("artist_id", &artist_id.to_string()),
+                    ("per_page", "100"),
+                    ("order_by", "-publish_date"),
+                ],
+            )
+            .await?;
         Ok(Self::parse_tracks(&data))
     }
 
     pub async fn artist_releases(&mut self, artist_id: i64) -> Result<Vec<BeatportRelease>> {
-        let data = self.request("catalog/releases/", &[
-            ("artist_id", &artist_id.to_string()),
-            ("per_page", "100"),
-            ("order_by", "-publish_date"),
-        ]).await?;
+        let data = self
+            .request(
+                "catalog/releases/",
+                &[
+                    ("artist_id", &artist_id.to_string()),
+                    ("per_page", "100"),
+                    ("order_by", "-publish_date"),
+                ],
+            )
+            .await?;
         Ok(Self::parse_releases(&data))
     }
 
     pub async fn label_tracks(&mut self, label_id: i64) -> Result<Vec<BeatportTrack>> {
-        let data = self.request("catalog/tracks/", &[
-            ("label_id", &label_id.to_string()),
-            ("per_page", "100"),
-            ("order_by", "-publish_date"),
-        ]).await?;
+        let data = self
+            .request(
+                "catalog/tracks/",
+                &[
+                    ("label_id", &label_id.to_string()),
+                    ("per_page", "100"),
+                    ("order_by", "-publish_date"),
+                ],
+            )
+            .await?;
         Ok(Self::parse_tracks(&data))
     }
 
     pub async fn label_releases(&mut self, label_id: i64) -> Result<Vec<BeatportRelease>> {
-        let data = self.request("catalog/releases/", &[
-            ("label_id", &label_id.to_string()),
-            ("per_page", "100"),
-            ("order_by", "-publish_date"),
-        ]).await?;
+        let data = self
+            .request(
+                "catalog/releases/",
+                &[
+                    ("label_id", &label_id.to_string()),
+                    ("per_page", "100"),
+                    ("order_by", "-publish_date"),
+                ],
+            )
+            .await?;
         Ok(Self::parse_releases(&data))
     }
 
@@ -231,29 +299,31 @@ impl BeatportAPI {
 
     pub async fn trending_artists(&mut self, genre_id: Option<i64>) -> Result<Vec<BeatportArtist>> {
         let gid_str = genre_id.map(|g| g.to_string());
-        let mut params = vec![
-            ("sort", "trending"),
-            ("per_page", "100"),
-        ];
-        if let Some(ref gid) = gid_str { params.push(("genre_id", gid)); }
+        let mut params = vec![("sort", "trending"), ("per_page", "100")];
+        if let Some(ref gid) = gid_str {
+            params.push(("genre_id", gid));
+        }
         let data = self.request("catalog/artists/", &params).await?;
         Ok(Self::parse_artists(&data))
     }
 
     pub async fn trending_labels(&mut self, genre_id: Option<i64>) -> Result<Vec<BeatportLabel>> {
         let gid_str = genre_id.map(|g| g.to_string());
-        let mut params = vec![
-            ("sort", "trending"),
-            ("per_page", "100"),
-        ];
-        if let Some(ref gid) = gid_str { params.push(("genre_id", gid)); }
+        let mut params = vec![("sort", "trending"), ("per_page", "100")];
+        if let Some(ref gid) = gid_str {
+            params.push(("genre_id", gid));
+        }
         let data = self.request("catalog/labels/", &params).await?;
         Ok(Self::parse_labels(&data))
     }
 
     // -- Decades --
 
-    pub async fn tracks_by_date_range(&mut self, range: &str, genre_id: Option<i64>) -> Result<Vec<BeatportTrack>> {
+    pub async fn tracks_by_date_range(
+        &mut self,
+        range: &str,
+        genre_id: Option<i64>,
+    ) -> Result<Vec<BeatportTrack>> {
         let gid_str = genre_id.map(|g| g.to_string());
         let mut params = vec![
             ("publish_date", range),
@@ -261,12 +331,18 @@ impl BeatportAPI {
             ("preorder", "false"),
             ("order_by", "-publish_date"),
         ];
-        if let Some(ref gid) = gid_str { params.push(("genre_id", gid)); }
+        if let Some(ref gid) = gid_str {
+            params.push(("genre_id", gid));
+        }
         let data = self.request("catalog/tracks/", &params).await?;
         Ok(Self::parse_tracks(&data))
     }
 
-    pub async fn releases_by_date_range(&mut self, range: &str, genre_id: Option<i64>) -> Result<Vec<BeatportRelease>> {
+    pub async fn releases_by_date_range(
+        &mut self,
+        range: &str,
+        genre_id: Option<i64>,
+    ) -> Result<Vec<BeatportRelease>> {
         let gid_str = genre_id.map(|g| g.to_string());
         let mut params = vec![
             ("publish_date", range),
@@ -275,18 +351,23 @@ impl BeatportAPI {
             ("order_by", "-publish_date"),
             ("per_page", "100"),
         ];
-        if let Some(ref gid) = gid_str { params.push(("genre_id", gid)); }
+        if let Some(ref gid) = gid_str {
+            params.push(("genre_id", gid));
+        }
         let data = self.request("catalog/releases/", &params).await?;
         Ok(Self::parse_releases(&data))
     }
 
-    pub async fn charts_by_date_range(&mut self, range: &str, genre_id: Option<i64>) -> Result<Vec<BeatportChart>> {
+    pub async fn charts_by_date_range(
+        &mut self,
+        range: &str,
+        genre_id: Option<i64>,
+    ) -> Result<Vec<BeatportChart>> {
         let gid_str = genre_id.map(|g| g.to_string());
-        let mut params = vec![
-            ("publish_date", range),
-            ("per_page", "50"),
-        ];
-        if let Some(ref gid) = gid_str { params.push(("genre_id", gid)); }
+        let mut params = vec![("publish_date", range), ("per_page", "50")];
+        if let Some(ref gid) = gid_str {
+            params.push(("genre_id", gid));
+        }
         let data = self.request("catalog/charts/", &params).await?;
         Ok(Self::parse_charts(&data))
     }
@@ -294,33 +375,46 @@ impl BeatportAPI {
     // -- My Beatport --
 
     pub async fn my_tracks(&mut self) -> Result<Vec<BeatportTrack>> {
-        let data = self.request("my/beatport/tracks/", &[
-            ("preorder", "false"),
-            ("per_page", "100"),
-            ("order_by", "-publish_date"),
-        ]).await?;
+        let data = self
+            .request(
+                "my/beatport/tracks/",
+                &[
+                    ("preorder", "false"),
+                    ("per_page", "100"),
+                    ("order_by", "-publish_date"),
+                ],
+            )
+            .await?;
         Ok(Self::parse_tracks(&data))
     }
 
     pub async fn my_artists(&mut self) -> Result<Vec<BeatportArtist>> {
-        let data = self.request("my/beatport/artists/", &[("per_page", "100")]).await?;
+        let data = self
+            .request("my/beatport/artists/", &[("per_page", "100")])
+            .await?;
         Ok(Self::parse_artists(&data))
     }
 
     pub async fn my_labels(&mut self) -> Result<Vec<BeatportLabel>> {
-        let data = self.request("my/beatport/labels/", &[("per_page", "100")]).await?;
+        let data = self
+            .request("my/beatport/labels/", &[("per_page", "100")])
+            .await?;
         Ok(Self::parse_labels(&data))
     }
 
     pub async fn recommendations(&mut self) -> Result<Vec<BeatportTrack>> {
-        let data = self.request("catalog/v1/recommendations/user/", &[("per_page", "100")]).await?;
+        let data = self
+            .request("catalog/v1/recommendations/user/", &[("per_page", "100")])
+            .await?;
         Ok(Self::parse_tracks(&data))
     }
 
     // -- My Library --
 
     pub async fn my_downloads(&mut self) -> Result<Vec<BeatportTrack>> {
-        let data = self.request("my/downloads/", &[("per_page", "100")]).await?;
+        let data = self
+            .request("my/downloads/", &[("per_page", "100")])
+            .await?;
         Ok(Self::parse_tracks(&data))
     }
 
@@ -340,7 +434,9 @@ impl BeatportAPI {
     pub async fn add_to_cart(&mut self, track_id: i64) -> Result<()> {
         let url = format!("{BASE_URL}/my/default-cart/items/");
         let body = serde_json::json!({"track_id": track_id});
-        let mut req = self.client.post(&url)
+        let mut req = self
+            .client
+            .post(&url)
             .header("Content-Type", "application/json")
             .header("Accept", "application/json")
             .header("Origin", "https://dj.beatport.com")
@@ -365,7 +461,9 @@ impl BeatportAPI {
     #[allow(dead_code)]
     pub async fn remove_from_cart(&mut self, item_id: i64) -> Result<()> {
         let url = format!("{BASE_URL}/my/default-cart/items/{item_id}/");
-        let mut req = self.client.delete(&url)
+        let mut req = self
+            .client
+            .delete(&url)
             .header("Accept", "application/json")
             .header("Origin", "https://dj.beatport.com")
             .header("Referer", "https://dj.beatport.com/");
@@ -375,8 +473,12 @@ impl BeatportAPI {
         let resp = req.send().await?;
         let status = resp.status().as_u16();
         // 204 = success, 404 = already gone (treat as success).
-        if status == 204 || status == 404 { return Ok(()); }
-        if (200..=299).contains(&status) { return Ok(()); }
+        if status == 204 || status == 404 {
+            return Ok(());
+        }
+        if (200..=299).contains(&status) {
+            return Ok(());
+        }
         anyhow::bail!("remove from cart failed: HTTP {status}")
     }
 
@@ -388,7 +490,11 @@ impl BeatportAPI {
 
     // -- Pagination helper --
 
-    pub async fn paginated_tracks(&mut self, base_params: &[(&str, &str)], page: u32) -> Result<Vec<BeatportTrack>> {
+    pub async fn paginated_tracks(
+        &mut self,
+        base_params: &[(&str, &str)],
+        page: u32,
+    ) -> Result<Vec<BeatportTrack>> {
         let pg = page.to_string();
         let mut params: Vec<(&str, &str)> = base_params.to_vec();
         params.push(("per_page", "100"));
@@ -397,7 +503,12 @@ impl BeatportAPI {
         Ok(Self::parse_tracks(&data))
     }
 
-    pub async fn tracks_by_date_range_page(&mut self, range: &str, genre_id: Option<i64>, page: u32) -> Result<Vec<BeatportTrack>> {
+    pub async fn tracks_by_date_range_page(
+        &mut self,
+        range: &str,
+        genre_id: Option<i64>,
+        page: u32,
+    ) -> Result<Vec<BeatportTrack>> {
         let gid_str = genre_id.map(|g| g.to_string());
         let pg = page.to_string();
         let mut params = vec![
@@ -407,17 +518,26 @@ impl BeatportAPI {
             ("order_by", "-publish_date"),
             ("page", &pg),
         ];
-        if let Some(ref gid) = gid_str { params.push(("genre_id", gid)); }
+        if let Some(ref gid) = gid_str {
+            params.push(("genre_id", gid));
+        }
         let data = self.request("catalog/tracks/", &params).await?;
         Ok(Self::parse_tracks(&data))
     }
 
-    pub async fn paginated_charts(&mut self, params: &[(&str, &str)]) -> Result<Vec<BeatportChart>> {
+    pub async fn paginated_charts(
+        &mut self,
+        params: &[(&str, &str)],
+    ) -> Result<Vec<BeatportChart>> {
         let data = self.request("catalog/charts/", params).await?;
         Ok(Self::parse_charts(&data))
     }
 
-    pub async fn paginated_releases(&mut self, base_params: &[(&str, &str)], page: u32) -> Result<Vec<BeatportRelease>> {
+    pub async fn paginated_releases(
+        &mut self,
+        base_params: &[(&str, &str)],
+        page: u32,
+    ) -> Result<Vec<BeatportRelease>> {
         let pg = page.to_string();
         let mut params: Vec<(&str, &str)> = base_params.to_vec();
         params.push(("per_page", "100"));
@@ -429,19 +549,23 @@ impl BeatportAPI {
     // -- Follow / Unfollow --
 
     pub async fn follow_artist(&mut self, artist_id: i64) -> Result<()> {
-        self.my_beatport_action("POST", &serde_json::json!({"artist_ids": [artist_id]})).await
+        self.my_beatport_action("POST", &serde_json::json!({"artist_ids": [artist_id]}))
+            .await
     }
 
     pub async fn unfollow_artist(&mut self, artist_id: i64) -> Result<()> {
-        self.my_beatport_action("DELETE", &serde_json::json!({"artist_ids": [artist_id]})).await
+        self.my_beatport_action("DELETE", &serde_json::json!({"artist_ids": [artist_id]}))
+            .await
     }
 
     pub async fn follow_label(&mut self, label_id: i64) -> Result<()> {
-        self.my_beatport_action("POST", &serde_json::json!({"label_ids": [label_id]})).await
+        self.my_beatport_action("POST", &serde_json::json!({"label_ids": [label_id]}))
+            .await
     }
 
     pub async fn unfollow_label(&mut self, label_id: i64) -> Result<()> {
-        self.my_beatport_action("DELETE", &serde_json::json!({"label_ids": [label_id]})).await
+        self.my_beatport_action("DELETE", &serde_json::json!({"label_ids": [label_id]}))
+            .await
     }
 
     async fn my_beatport_action(&mut self, method: &str, body: &Value) -> Result<()> {
@@ -472,7 +596,9 @@ impl BeatportAPI {
     pub async fn create_playlist(&mut self, name: &str) -> Result<i64> {
         let url = format!("{BASE_URL}/my/playlists/");
         let body = serde_json::json!({"name": name, "is_public": false});
-        let mut req = self.client.post(&url)
+        let mut req = self
+            .client
+            .post(&url)
             .header("Content-Type", "application/json")
             .header("Accept", "application/json")
             .header("Origin", "https://dj.beatport.com")
@@ -483,7 +609,9 @@ impl BeatportAPI {
         }
         let resp = req.send().await?;
         let data: Value = resp.json().await?;
-        data["id"].as_i64().ok_or_else(|| anyhow::anyhow!("no playlist id in response"))
+        data["id"]
+            .as_i64()
+            .ok_or_else(|| anyhow::anyhow!("no playlist id in response"))
     }
 
     /// Delete a playlist by id. The Beatport Web API accepts
@@ -494,7 +622,9 @@ impl BeatportAPI {
     /// for cleanup.
     pub async fn delete_playlist(&mut self, playlist_id: i64) -> Result<()> {
         let url = format!("{BASE_URL}/my/playlists/{playlist_id}/");
-        let mut req = self.client.delete(&url)
+        let mut req = self
+            .client
+            .delete(&url)
             .header("Accept", "application/json")
             .header("Origin", "https://dj.beatport.com")
             .header("Referer", "https://dj.beatport.com/");
@@ -505,15 +635,21 @@ impl BeatportAPI {
         let status = resp.status().as_u16();
         // 204 = success, 404 = already gone (treat as success so
         // cleanup is idempotent).
-        if status == 204 || status == 404 { return Ok(()); }
-        if (200..=299).contains(&status) { return Ok(()); }
+        if status == 204 || status == 404 {
+            return Ok(());
+        }
+        if (200..=299).contains(&status) {
+            return Ok(());
+        }
         anyhow::bail!("delete playlist failed: HTTP {status}")
     }
 
     pub async fn add_to_playlist(&mut self, playlist_id: i64, track_ids: &[i64]) -> Result<()> {
         let url = format!("{BASE_URL}/my/playlists/{playlist_id}/tracks/");
         let body = serde_json::json!({"track_ids": track_ids});
-        let mut req = self.client.post(&url)
+        let mut req = self
+            .client
+            .post(&url)
             .header("Content-Type", "application/json")
             .header("Accept", "application/json")
             .header("Origin", "https://dj.beatport.com")
@@ -533,19 +669,28 @@ impl BeatportAPI {
     // -- Editorial --
 
     pub async fn editorial_playlists(&mut self, genre_id: i64) -> Result<Vec<BeatportChart>> {
-        let data = self.request("catalog/charts/", &[
-            ("enabled", "true"),
-            ("is_published", "true"),
-            ("per_page", "100"),
-            ("dj_id", "36047"),
-            ("genre_id", &genre_id.to_string()),
-        ]).await?;
+        let data = self
+            .request(
+                "catalog/charts/",
+                &[
+                    ("enabled", "true"),
+                    ("is_published", "true"),
+                    ("per_page", "100"),
+                    ("dj_id", "36047"),
+                    ("genre_id", &genre_id.to_string()),
+                ],
+            )
+            .await?;
         Ok(Self::parse_charts(&data))
     }
 
     // -- Streaming --
 
-    pub async fn get_track_source(&mut self, track_id: i64, quality: AudioQuality) -> Result<TrackSource> {
+    pub async fn get_track_source(
+        &mut self,
+        track_id: i64,
+        quality: AudioQuality,
+    ) -> Result<TrackSource> {
         // The /download/ endpoint (lossless FLAC + 256k AAC direct
         // download) requires partner-grade OAuth scope that the
         // dj.beatport.com web app's PKCE token doesn't have — every
@@ -554,7 +699,9 @@ impl BeatportAPI {
         // web app's scope DOES allow. Audio quality on main caps at
         // 256k AAC via this path.
         let _ = quality; // kept for ABI parity with branches that have FLAC scope
-        let data = self.request(&format!("catalog/tracks/{track_id}/stream/"), &[]).await?;
+        let data = self
+            .request(&format!("catalog/tracks/{track_id}/stream/"), &[])
+            .await?;
         let mut stream_url = data["stream_url"]
             .as_str()
             .ok_or(BeatportError::InvalidStreamUrl)?
@@ -567,7 +714,11 @@ impl BeatportAPI {
         let url = url::Url::parse(&stream_url).map_err(|_| BeatportError::InvalidStreamUrl)?;
         tracing::info!(
             "{}k HLS source for track {track_id}",
-            if stream_url.contains("256k") { "256" } else { "128" }
+            if stream_url.contains("256k") {
+                "256"
+            } else {
+                "128"
+            }
         );
         Ok(TrackSource::Hls(url))
     }
@@ -580,13 +731,17 @@ impl BeatportAPI {
         // are evicted lazily on access — no background task needed.
         let key = Self::cache_key(path, params);
         if let Some((value, at)) = self.browse_cache.get(&key)
-            && at.elapsed() < BROWSE_CACHE_TTL {
-                tracing::debug!("Beatport cache HIT: {path} (age {:.0}s)",
-                    at.elapsed().as_secs_f64());
-                return Ok(Value::clone(value));
-            }
+            && at.elapsed() < BROWSE_CACHE_TTL
+        {
+            tracing::debug!(
+                "Beatport cache HIT: {path} (age {:.0}s)",
+                at.elapsed().as_secs_f64()
+            );
+            return Ok(Value::clone(value));
+        }
         let value = self.request_inner(path, params, false).await?;
-        self.browse_cache.insert(key, (Arc::new(value.clone()), std::time::Instant::now()));
+        self.browse_cache
+            .insert(key, (Arc::new(value.clone()), std::time::Instant::now()));
         Ok(value)
     }
 
@@ -595,11 +750,16 @@ impl BeatportAPI {
     fn cache_key(path: &str, params: &[(&str, &str)]) -> String {
         let mut pairs: Vec<(&str, &str)> = params.iter().map(|&(k, v)| (k, v)).collect();
         pairs.sort_by_key(|&(k, _)| k);
-        let q: String = pairs.iter()
+        let q: String = pairs
+            .iter()
             .map(|(k, v)| format!("{k}={v}"))
             .collect::<Vec<_>>()
             .join("&");
-        if q.is_empty() { path.to_string() } else { format!("{path}?{q}") }
+        if q.is_empty() {
+            path.to_string()
+        } else {
+            format!("{path}?{q}")
+        }
     }
 
     /// Clear all cached responses. Called on logout / credential change
@@ -620,7 +780,12 @@ impl BeatportAPI {
         self.browse_cache.len()
     }
 
-    fn request_inner<'a>(&'a mut self, path: &'a str, params: &'a [(&'a str, &'a str)], retried: bool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Value>> + Send + 'a>> {
+    fn request_inner<'a>(
+        &'a mut self,
+        path: &'a str,
+        params: &'a [(&'a str, &'a str)],
+        retried: bool,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Value>> + Send + 'a>> {
         Box::pin(async move {
             let url = format!("{BASE_URL}/{path}");
             let mut req = self.client.get(&url);
@@ -643,21 +808,23 @@ impl BeatportAPI {
                     // refresh once if we have a refresh_token + cached
                     // client_id (refresh needs both).
                     if !retried
-                        && let (Some(rt), Some(cid)) = (
-                            self.auth.refresh_token.clone(),
-                            self.auth.client_id.clone(),
-                        ) {
-                            tracing::info!("Got {status}, refreshing token…");
-                            match super::auth::refresh(&rt, &cid).await {
-                                Ok(new_auth) => {
-                                    self.auth = new_auth;
-                                    return self.request_inner(path, params, true).await;
-                                }
-                                Err(e) => tracing::warn!("Refresh failed: {e}"),
+                        && let (Some(rt), Some(cid)) =
+                            (self.auth.refresh_token.clone(), self.auth.client_id.clone())
+                    {
+                        tracing::info!("Got {status}, refreshing token…");
+                        match super::auth::refresh(&rt, &cid).await {
+                            Ok(new_auth) => {
+                                self.auth = new_auth;
+                                return self.request_inner(path, params, true).await;
                             }
+                            Err(e) => tracing::warn!("Refresh failed: {e}"),
                         }
-                    if status == 401 { Err(BeatportError::Unauthorized.into()) }
-                    else { Err(BeatportError::Forbidden.into()) }
+                    }
+                    if status == 401 {
+                        Err(BeatportError::Unauthorized.into())
+                    } else {
+                        Err(BeatportError::Forbidden.into())
+                    }
                 }
                 404 => Err(BeatportError::NotFound.into()),
                 _ => Err(BeatportError::ServerError(status).into()),
@@ -697,7 +864,8 @@ impl BeatportAPI {
 
     fn parse_track(json: &Value) -> Option<BeatportTrack> {
         let id = json["id"].as_i64()?;
-        let title = json["name"].as_str()
+        let title = json["name"]
+            .as_str()
             .or_else(|| json["title"].as_str())?
             .to_string();
 
@@ -716,17 +884,26 @@ impl BeatportAPI {
             .unwrap_or_default();
 
         let artists = if artists.is_empty() {
-            vec![BeatportTrackArtist { id: 0, name: "Unknown Artist".into() }]
+            vec![BeatportTrackArtist {
+                id: 0,
+                name: "Unknown Artist".into(),
+            }]
         } else {
             artists
         };
 
         // Key parsing
         let key = if let Some(key_obj) = json["key"].as_object() {
-            if let (Some(cn), Some(cl)) = (key_obj.get("camelot_number").and_then(|v| v.as_i64()), key_obj.get("camelot_letter").and_then(|v| v.as_str())) {
+            if let (Some(cn), Some(cl)) = (
+                key_obj.get("camelot_number").and_then(|v| v.as_i64()),
+                key_obj.get("camelot_letter").and_then(|v| v.as_str()),
+            ) {
                 Some(format!("{cn}{cl}"))
             } else {
-                key_obj.get("name").and_then(|v| v.as_str()).map(String::from)
+                key_obj
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .map(String::from)
             }
         } else {
             json["key"].as_str().map(String::from)
@@ -739,9 +916,11 @@ impl BeatportAPI {
             .or_else(|| json["length"].as_f64());
 
         // Label
-        let label_id = json["label"]["id"].as_i64()
+        let label_id = json["label"]["id"]
+            .as_i64()
             .or_else(|| json["release"]["label"]["id"].as_i64());
-        let label_name = json["label"]["name"].as_str()
+        let label_name = json["label"]["name"]
+            .as_str()
             .or_else(|| json["release"]["label"]["name"].as_str())
             .map(String::from);
 
@@ -752,7 +931,8 @@ impl BeatportAPI {
 
         // Release
         let release_id = json["release"]["id"].as_i64();
-        let release_date = json["publish_date"].as_str()
+        let release_date = json["publish_date"]
+            .as_str()
             .or_else(|| json["new_release_date"].as_str())
             .map(|s| s[..10.min(s.len())].to_string());
 
@@ -808,7 +988,8 @@ impl BeatportAPI {
         Self::parse_results(data)
             .into_iter()
             .filter_map(|v| {
-                let owner_name = v["person"]["owner_name"].as_str()
+                let owner_name = v["person"]["owner_name"]
+                    .as_str()
                     .or_else(|| v["person"]["display_name"].as_str())
                     .or_else(|| v["person"]["name"].as_str())
                     .or_else(|| v["owner"]["display_name"].as_str())
@@ -856,20 +1037,31 @@ impl BeatportAPI {
             .filter_map(|v| {
                 let id = v["id"].as_i64()?;
                 let name = v["name"].as_str()?.to_string();
-                let artist_name = v["artists"].as_array()
-                    .map(|arr| arr.iter()
-                        .filter_map(|a| a["name"].as_str())
-                        .filter(|n| !n.is_empty())
-                        .collect::<Vec<_>>()
-                        .join(", "))
+                let artist_name = v["artists"]
+                    .as_array()
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|a| a["name"].as_str())
+                            .filter(|n| !n.is_empty())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    })
                     .filter(|s| !s.is_empty())
                     .unwrap_or_default();
                 let label_name = v["label"]["name"].as_str().map(String::from);
                 let track_count = v["track_count"].as_i64();
-                let release_date = v["publish_date"].as_str()
+                let release_date = v["publish_date"]
+                    .as_str()
                     .or(v["new_release_date"].as_str())
                     .map(|s| s[..10.min(s.len())].to_string());
-                Some(BeatportRelease { id, name, artist_name, label_name, track_count, release_date })
+                Some(BeatportRelease {
+                    id,
+                    name,
+                    artist_name,
+                    label_name,
+                    track_count,
+                    release_date,
+                })
             })
             .collect()
     }
@@ -886,7 +1078,6 @@ pub enum TrackSource {
     Hls(url::Url),
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -896,8 +1087,10 @@ mod tests {
         // Same effective call, different param order → same key.
         // Otherwise a call like (a=1,b=2) and (b=2,a=1) would cache
         // separately and defeat the point.
-        let k1 = BeatportAPI::cache_key("catalog/top-100", &[("genre_id", "5"), ("per_page", "20")]);
-        let k2 = BeatportAPI::cache_key("catalog/top-100", &[("per_page", "20"), ("genre_id", "5")]);
+        let k1 =
+            BeatportAPI::cache_key("catalog/top-100", &[("genre_id", "5"), ("per_page", "20")]);
+        let k2 =
+            BeatportAPI::cache_key("catalog/top-100", &[("per_page", "20"), ("genre_id", "5")]);
         assert_eq!(k1, k2);
     }
 
@@ -921,8 +1114,14 @@ mod tests {
         // eventually surface. Regression guard so the constant isn't
         // silently bumped to something absurd.
         let secs = BROWSE_CACHE_TTL.as_secs();
-        assert!(secs >= 30 * 60, "TTL must be at least 30 min for session coverage, got {secs}s");
-        assert!(secs <= 4 * 60 * 60, "TTL above 4h would miss daily chart updates, got {secs}s");
+        assert!(
+            secs >= 30 * 60,
+            "TTL must be at least 30 min for session coverage, got {secs}s"
+        );
+        assert!(
+            secs <= 4 * 60 * 60,
+            "TTL above 4h would miss daily chart updates, got {secs}s"
+        );
     }
 
     #[test]
@@ -931,12 +1130,18 @@ mod tests {
         // Mirrors the lookup branch in request() without spinning up a
         // WebView subprocess: we test the HashMap + TTL filter in
         // isolation, which is what request() also does internally.
-        let mut cache: std::collections::HashMap<String, (Arc<Value>, std::time::Instant)>
-            = std::collections::HashMap::new();
+        let mut cache: std::collections::HashMap<String, (Arc<Value>, std::time::Instant)> =
+            std::collections::HashMap::new();
         let key = "test/path".to_string();
-        cache.insert(key.clone(),
-            (Arc::new(serde_json::json!({"ok": true})), std::time::Instant::now()));
-        let hit = cache.get(&key)
+        cache.insert(
+            key.clone(),
+            (
+                Arc::new(serde_json::json!({"ok": true})),
+                std::time::Instant::now(),
+            ),
+        );
+        let hit = cache
+            .get(&key)
             .filter(|(_, at)| at.elapsed() < BROWSE_CACHE_TTL)
             .map(|(v, _)| v.clone());
         assert!(hit.is_some(), "fresh entry must hit the cache");
@@ -946,14 +1151,15 @@ mod tests {
     #[test]
     fn cache_lookup_misses_on_expired_entry() {
         // An entry whose age exceeds TTL must miss.
-        let mut cache: std::collections::HashMap<String, (Arc<Value>, std::time::Instant)>
-            = std::collections::HashMap::new();
+        let mut cache: std::collections::HashMap<String, (Arc<Value>, std::time::Instant)> =
+            std::collections::HashMap::new();
         let key = "test/expired".to_string();
         let stale = std::time::Instant::now()
             .checked_sub(BROWSE_CACHE_TTL + std::time::Duration::from_secs(60))
             .expect("Instant arithmetic should land in the past");
         cache.insert(key.clone(), (Arc::new(serde_json::json!({})), stale));
-        let hit = cache.get(&key)
+        let hit = cache
+            .get(&key)
             .filter(|(_, at)| at.elapsed() < BROWSE_CACHE_TTL);
         assert!(hit.is_none(), "stale entry past TTL must miss");
     }
@@ -961,10 +1167,14 @@ mod tests {
     #[test]
     fn clear_browse_cache_empties_and_is_idempotent() {
         let mut api = BeatportAPI::new(super::super::auth::StoredAuth::default());
-        api.browse_cache.insert("x".into(),
-            (Arc::new(serde_json::Value::Null), std::time::Instant::now()));
-        api.browse_cache.insert("y".into(),
-            (Arc::new(serde_json::Value::Null), std::time::Instant::now()));
+        api.browse_cache.insert(
+            "x".into(),
+            (Arc::new(serde_json::Value::Null), std::time::Instant::now()),
+        );
+        api.browse_cache.insert(
+            "y".into(),
+            (Arc::new(serde_json::Value::Null), std::time::Instant::now()),
+        );
         assert_eq!(api.browse_cache_len(), 2);
         api.clear_browse_cache();
         assert_eq!(api.browse_cache_len(), 0);

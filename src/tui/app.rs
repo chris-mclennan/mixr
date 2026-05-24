@@ -1,14 +1,14 @@
 use anyhow::Result;
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
-    Frame,
 };
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{mpsc, Mutex as TokioMutex};
+use tokio::sync::{Mutex as TokioMutex, mpsc};
 
 use crate::audio::engine::{EngineEvent, MixEngine, NowPlayingInfo};
 use crate::beatport::api::BeatportAPI;
@@ -20,13 +20,13 @@ use crate::beatport::catalog::{self, BrowseScreen, MenuAction};
 /// queues a full 100-track screen. The memory itself is FIFO of size
 /// `MEMORY_LEN` in `claude/dj.rs`, so only the last few survive anyway.
 pub(crate) const MEMORY_RECENT_CAP: usize = 8;
+use super::dashboard::{self, WaveformMode};
+use super::screens;
+use super::toast::Toast;
 use crate::beatport::models::BeatportTrack;
 use crate::beatport::stream::StreamDownloader;
 use crate::config::AppConfig;
 use crate::favorites::FavoritesDB;
-use super::dashboard::{self, WaveformMode};
-use super::screens;
-use super::toast::Toast;
 
 // AppAction flows through an unbounded mpsc channel. The TrackDecoded /
 // PreviewReady variants carry Vec<f32> sample buffers + AnalysisResult,
@@ -85,43 +85,62 @@ pub(crate) enum ViewMode {
     Dashboard,
     Help,
     Settings,
-    GenrePicker,        // picking default genre
-    FavoritesPicker,    // toggling favorite genres
-    PlaylistPicker,     // adding track to playlist
-    PlaylistNameInput,  // typing new playlist name
-    Mixer,              // virtual mixer control overlay
-    TransitionRules,    // rule editor overlay
-    ClaudeDj,           // full Claude DJ status / log screen
-    MidiLearn,          // MIDI controller mapping editor — see midi_learn.rs
+    GenrePicker,       // picking default genre
+    FavoritesPicker,   // toggling favorite genres
+    PlaylistPicker,    // adding track to playlist
+    PlaylistNameInput, // typing new playlist name
+    Mixer,             // virtual mixer control overlay
+    TransitionRules,   // rule editor overlay
+    ClaudeDj,          // full Claude DJ status / log screen
+    MidiLearn,         // MIDI controller mapping editor — see midi_learn.rs
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum MixerRow { EqLow, EqMid, EqHigh, Filter, Fader }
+pub(crate) enum MixerRow {
+    EqLow,
+    EqMid,
+    EqHigh,
+    Filter,
+    Fader,
+}
 impl MixerRow {
     pub(crate) fn next(self) -> Self {
         match self {
-            Self::EqLow => Self::EqMid, Self::EqMid => Self::EqHigh,
-            Self::EqHigh => Self::Filter, Self::Filter => Self::Fader,
+            Self::EqLow => Self::EqMid,
+            Self::EqMid => Self::EqHigh,
+            Self::EqHigh => Self::Filter,
+            Self::Filter => Self::Fader,
             Self::Fader => Self::EqLow,
         }
     }
     pub(crate) fn prev(self) -> Self {
         match self {
-            Self::EqLow => Self::Fader, Self::EqMid => Self::EqLow,
-            Self::EqHigh => Self::EqMid, Self::Filter => Self::EqHigh,
+            Self::EqLow => Self::Fader,
+            Self::EqMid => Self::EqLow,
+            Self::EqHigh => Self::EqMid,
+            Self::Filter => Self::EqHigh,
             Self::Fader => Self::Filter,
         }
     }
     pub(crate) fn label(&self) -> &'static str {
         match self {
-            Self::EqLow => "EQ Low", Self::EqMid => "EQ Mid", Self::EqHigh => "EQ High",
-            Self::Filter => "Filter", Self::Fader => "Fader",
+            Self::EqLow => "EQ Low",
+            Self::EqMid => "EQ Mid",
+            Self::EqHigh => "EQ High",
+            Self::Filter => "Filter",
+            Self::Fader => "Fader",
         }
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DashFocus { Controller, Queue, History, Browse, Log }
+pub enum DashFocus {
+    Controller,
+    Queue,
+    History,
+    Browse,
+    Log,
+}
 
 /// MixEntry alongside an optional rating. Lets us mark history
 /// entries the user already gave feedback on so duplicates don't
@@ -204,14 +223,26 @@ mod confirm_tests {
 
     #[test]
     fn y_commits() {
-        assert_eq!(route_confirm_key(KeyCode::Char('y')), ConfirmDecision::Commit);
-        assert_eq!(route_confirm_key(KeyCode::Char('Y')), ConfirmDecision::Commit);
+        assert_eq!(
+            route_confirm_key(KeyCode::Char('y')),
+            ConfirmDecision::Commit
+        );
+        assert_eq!(
+            route_confirm_key(KeyCode::Char('Y')),
+            ConfirmDecision::Commit
+        );
     }
 
     #[test]
     fn n_cancels() {
-        assert_eq!(route_confirm_key(KeyCode::Char('n')), ConfirmDecision::Cancel);
-        assert_eq!(route_confirm_key(KeyCode::Char('N')), ConfirmDecision::Cancel);
+        assert_eq!(
+            route_confirm_key(KeyCode::Char('n')),
+            ConfirmDecision::Cancel
+        );
+        assert_eq!(
+            route_confirm_key(KeyCode::Char('N')),
+            ConfirmDecision::Cancel
+        );
     }
 
     #[test]
@@ -436,7 +467,15 @@ pub struct ClickTarget {
 
 impl ClickTarget {
     pub fn new(x: u16, y: u16, w: u16, h: u16, action: ClickAction) -> Self {
-        Self { x, y, w, h, action, label: None, midi_action: None }
+        Self {
+            x,
+            y,
+            w,
+            h,
+            action,
+            label: None,
+            midi_action: None,
+        }
     }
     /// Attach a stable lookup name. See `ClickTarget::label` for why.
     pub fn labeled(mut self, label: &'static str) -> Self {
@@ -450,8 +489,7 @@ impl ClickTarget {
         self
     }
     pub fn contains(&self, col: u16, row: u16) -> bool {
-        col >= self.x && col < self.x + self.w
-            && row >= self.y && row < self.y + self.h
+        col >= self.x && col < self.x + self.w && row >= self.y && row < self.y + self.h
     }
 }
 
@@ -506,7 +544,11 @@ pub enum ClickAction {
     /// for both Down and Drag mouse events — clicking a strip sets
     /// the value AND focuses the section so the scroll wheel can
     /// fine-tune from there.
-    SetVerticalRange { control: RangeControl, y_min: u16, y_max: u16 },
+    SetVerticalRange {
+        control: RangeControl,
+        y_min: u16,
+        y_max: u16,
+    },
 }
 
 /// Which vertical control a drag target adjusts. Values are mapped
@@ -516,9 +558,11 @@ pub enum ClickAction {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RangeControl {
     /// Playback rate. Range mapped to 1.0 ± (config.tempo_range / 100).
-    TempoA, TempoB,
+    TempoA,
+    TempoB,
     /// Channel fader (0.0..=1.0).
-    VolumeA, VolumeB,
+    VolumeA,
+    VolumeB,
 }
 
 #[derive(Debug, Clone)]
@@ -546,7 +590,11 @@ pub(crate) enum TestMixState {
 }
 
 impl App {
-    pub async fn new(config: AppConfig, action_tx: mpsc::UnboundedSender<AppAction>, auth: StoredAuth) -> Result<Self> {
+    pub async fn new(
+        config: AppConfig,
+        action_tx: mpsc::UnboundedSender<AppAction>,
+        auth: StoredAuth,
+    ) -> Result<Self> {
         let engine = MixEngine::new(&config)?;
         engine.set_pitch_stretch_engine(config.pitch_stretch_engine);
         engine.set_limiter_mode(config.master_limiter);
@@ -582,7 +630,12 @@ impl App {
             toast: Toast::new(),
             status_writer: crate::ipc::StatusWriter::new(),
             waveform_mode: WaveformMode::Phrase,
-            screen_stack: vec![catalog::root_screen_v3(local_lib_present, rekordbox_present, engine_present, serato_present)],
+            screen_stack: vec![catalog::root_screen_v3(
+                local_lib_present,
+                rekordbox_present,
+                engine_present,
+                serato_present,
+            )],
             screen_stack_back: Vec::new(),
             selected: 0,
             scroll_offset: 0,
@@ -655,7 +708,9 @@ impl App {
         if matches!(self.config.resume_behavior, ResumeBehavior::Never) {
             return;
         }
-        let Some(snap) = crate::session::load() else { return; };
+        let Some(snap) = crate::session::load() else {
+            return;
+        };
         match self.config.resume_behavior {
             ResumeBehavior::Always => self.apply_resume(snap),
             ResumeBehavior::Ask => {
@@ -686,16 +741,19 @@ impl App {
         let mut loaded_n = 0;
         if let Some(ref p) = snap.playing {
             self.resume_positions.insert(p.track.id, p.position);
-            self.engine.enqueue(crate::audio::engine::QueueEntry::from(p.track.clone()));
+            self.engine
+                .enqueue(crate::audio::engine::QueueEntry::from(p.track.clone()));
             loaded_n += 1;
         }
         if let Some(ref i) = snap.incoming {
             self.resume_positions.insert(i.track.id, i.position);
-            self.engine.enqueue(crate::audio::engine::QueueEntry::from(i.track.clone()));
+            self.engine
+                .enqueue(crate::audio::engine::QueueEntry::from(i.track.clone()));
             loaded_n += 1;
         }
         for t in snap.queue.into_iter() {
-            self.engine.enqueue(crate::audio::engine::QueueEntry::from(t));
+            self.engine
+                .enqueue(crate::audio::engine::QueueEntry::from(t));
             loaded_n += 1;
         }
         self.pending_resume_snapshot = None;
@@ -710,7 +768,11 @@ impl App {
     }
 
     pub(crate) fn breadcrumb(&self) -> String {
-        self.screen_stack.iter().map(|s| s.title()).collect::<Vec<_>>().join(" > ")
+        self.screen_stack
+            .iter()
+            .map(|s| s.title())
+            .collect::<Vec<_>>()
+            .join(" > ")
     }
 
     /// Apply a step to the currently-selected Mixer overlay control.
@@ -725,15 +787,33 @@ impl App {
         // argument to populate. Table the variants rather than spelling
         // out three near-identical match arms.
         let eq = match self.mixer_row {
-            MixerRow::EqLow => Some(("Low",
-                if is_a { info.deck_a_eq_low_db } else { info.deck_b_eq_low_db },
-                0usize)),
-            MixerRow::EqMid => Some(("Mid",
-                if is_a { info.deck_a_eq_mid_db } else { info.deck_b_eq_mid_db },
-                1usize)),
-            MixerRow::EqHigh => Some(("High",
-                if is_a { info.deck_a_eq_high_db } else { info.deck_b_eq_high_db },
-                2usize)),
+            MixerRow::EqLow => Some((
+                "Low",
+                if is_a {
+                    info.deck_a_eq_low_db
+                } else {
+                    info.deck_b_eq_low_db
+                },
+                0usize,
+            )),
+            MixerRow::EqMid => Some((
+                "Mid",
+                if is_a {
+                    info.deck_a_eq_mid_db
+                } else {
+                    info.deck_b_eq_mid_db
+                },
+                1usize,
+            )),
+            MixerRow::EqHigh => Some((
+                "High",
+                if is_a {
+                    info.deck_a_eq_high_db
+                } else {
+                    info.deck_b_eq_high_db
+                },
+                2usize,
+            )),
             _ => None,
         };
         if let Some((name, cur, band)) = eq {
@@ -744,19 +824,28 @@ impl App {
                 _ => (None, None, Some(v)),
             };
             self.engine.set_eq(is_a, lo, mid, hi);
-            self.toast.show(&format!("{name} {deck_lbl}: {v:+.0} dB"), 0.5);
+            self.toast
+                .show(&format!("{name} {deck_lbl}: {v:+.0} dB"), 0.5);
             return;
         }
 
         match self.mixer_row {
             MixerRow::Filter => {
-                let cur = if is_a { info.deck_a_filter_pos } else { info.deck_b_filter_pos };
+                let cur = if is_a {
+                    info.deck_a_filter_pos
+                } else {
+                    info.deck_b_filter_pos
+                };
                 let v = (cur + step * 0.05).clamp(-1.0, 1.0);
                 self.engine.set_filter(is_a, v);
                 self.toast.show(&format!("Filter {deck_lbl}: {v:+.2}"), 0.5);
             }
             MixerRow::Fader => {
-                let cur = if is_a { info.channel_fader_a } else { info.channel_fader_b };
+                let cur = if is_a {
+                    info.channel_fader_a
+                } else {
+                    info.channel_fader_b
+                };
                 let v = (cur + step * 0.05).clamp(0.0, 1.0);
                 self.engine.set_channel_fader(is_a, v);
                 self.toast.show(&format!("Fader {deck_lbl}: {v:.2}"), 0.5);
@@ -774,7 +863,8 @@ impl App {
             MixerRow::Filter => self.engine.set_filter(is_a, 0.0),
             MixerRow::Fader => self.engine.set_channel_fader(is_a, 1.0),
         }
-        self.toast.show(&format!("{} reset", self.mixer_row.label()), 0.5);
+        self.toast
+            .show(&format!("{} reset", self.mixer_row.label()), 0.5);
     }
 
     pub(crate) fn reset_all_mixer_controls(&mut self) {
@@ -800,15 +890,29 @@ impl App {
         }
         let size = frame.area();
         let info = &self.cached_info;
-        let np_height = if info.state == crate::audio::engine::EngineState::Crossfading && info.incoming_track.is_some() { 2 } else { 1 };
+        let np_height = if info.state == crate::audio::engine::EngineState::Crossfading
+            && info.incoming_track.is_some()
+        {
+            2
+        } else {
+            1
+        };
         // Pre-compute the hints string so we can size its chunk based
         // on whether it fits in one row. When it doesn't, allocate two
         // and let the Paragraph's word wrap split it.
         let hints = self.build_hints_string(info);
-        let hints_height: u16 = if hints.chars().count() > size.width as usize { 2 } else { 1 };
+        let hints_height: u16 = if hints.chars().count() > size.width as usize {
+            2
+        } else {
+            1
+        };
         let chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Min(3), Constraint::Length(np_height), Constraint::Length(hints_height)])
+            .constraints([
+                Constraint::Min(3),
+                Constraint::Length(np_height),
+                Constraint::Length(hints_height),
+            ])
             .split(size);
 
         // Build breadcrumb for block titles
@@ -832,7 +936,10 @@ impl App {
             ViewMode::PlaylistNameInput => " New Playlist Name ".to_string(),
             ViewMode::Settings => " Beatport > Settings ".to_string(),
             ViewMode::GenrePicker => " Settings > Default Genre ".to_string(),
-            ViewMode::FavoritesPicker => format!(" Settings > Favorite Genres ({} selected) ", self.config.favorite_genres.len()),
+            ViewMode::FavoritesPicker => format!(
+                " Settings > Favorite Genres ({} selected) ",
+                self.config.favorite_genres.len()
+            ),
             ViewMode::Queue => format!(" Queue{pos} "),
             ViewMode::History => " History ".to_string(),
             ViewMode::Search => format!(" {} > Search ", self.breadcrumb()),
@@ -846,25 +953,69 @@ impl App {
                 .collect();
             let browse_bc = self.breadcrumb();
             let browse_is_tracks = matches!(self.current_screen(), BrowseScreen::TrackList { .. });
-            let sel_section = if self.dash_focus == DashFocus::Controller { Some(self.dash_section) } else { None };
-            let dj_log: Vec<String> = self.claude_dj.as_ref().map(|dj| {
-                let Ok(dj) = dj.try_lock() else { return Vec::new() };
-                dj.log_entries().iter().rev().take(4).rev().map(|e| {
-                    let icon = match e.entry_type {
-                        crate::claude::dj::LogEntryType::Action => "ACT",
-                        crate::claude::dj::LogEntryType::Track => "TRK",
-                        crate::claude::dj::LogEntryType::Phase => "PHZ",
-                        crate::claude::dj::LogEntryType::Flow => "FLO",
-                        crate::claude::dj::LogEntryType::User => "USR",
-                        crate::claude::dj::LogEntryType::Error => "ERR",
-                        crate::claude::dj::LogEntryType::Info => "INF",
+            let sel_section = if self.dash_focus == DashFocus::Controller {
+                Some(self.dash_section)
+            } else {
+                None
+            };
+            let dj_log: Vec<String> = self
+                .claude_dj
+                .as_ref()
+                .map(|dj| {
+                    let Ok(dj) = dj.try_lock() else {
+                        return Vec::new();
                     };
-                    let msg = if e.message.len() > 80 { format!("{}…", &e.message[..79]) } else { e.message.clone() };
-                    format!("{icon} {msg}")
-                }).collect()
-            }).unwrap_or_default();
-            let dj_ask = if self.dj_asking { Some(self.dj_ask_buffer.as_str()) } else { None };
-            dashboard::render_dashboard(frame, chunks[0], info, self.waveform_mode, &browse_items, &browse_bc, self.dash_browse_sel, browse_is_tracks, self.dash_help, sel_section, self.download_in_flight, &dj_log, dj_ask, &mut self.click_targets, self.dash_focus, self.log_scroll_offset, self.waveform_zoom, self.dash_layout, self.dash_panel_section);
+                    dj.log_entries()
+                        .iter()
+                        .rev()
+                        .take(4)
+                        .rev()
+                        .map(|e| {
+                            let icon = match e.entry_type {
+                                crate::claude::dj::LogEntryType::Action => "ACT",
+                                crate::claude::dj::LogEntryType::Track => "TRK",
+                                crate::claude::dj::LogEntryType::Phase => "PHZ",
+                                crate::claude::dj::LogEntryType::Flow => "FLO",
+                                crate::claude::dj::LogEntryType::User => "USR",
+                                crate::claude::dj::LogEntryType::Error => "ERR",
+                                crate::claude::dj::LogEntryType::Info => "INF",
+                            };
+                            let msg = if e.message.len() > 80 {
+                                format!("{}…", &e.message[..79])
+                            } else {
+                                e.message.clone()
+                            };
+                            format!("{icon} {msg}")
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            let dj_ask = if self.dj_asking {
+                Some(self.dj_ask_buffer.as_str())
+            } else {
+                None
+            };
+            dashboard::render_dashboard(
+                frame,
+                chunks[0],
+                info,
+                self.waveform_mode,
+                &browse_items,
+                &browse_bc,
+                self.dash_browse_sel,
+                browse_is_tracks,
+                self.dash_help,
+                sel_section,
+                self.download_in_flight,
+                &dj_log,
+                dj_ask,
+                &mut self.click_targets,
+                self.dash_focus,
+                self.log_scroll_offset,
+                self.waveform_zoom,
+                self.dash_layout,
+                self.dash_panel_section,
+            );
             if self.dash_fav_picker {
                 self.render_fav_picker(frame, chunks[0]);
             }
@@ -886,134 +1037,218 @@ impl App {
             if chunks[0].width > back_w + 4 {
                 let back_x = chunks[0].x + chunks[0].width - back_w - 1;
                 let back_y = chunks[0].y;
-                use ratatui::widgets::Paragraph;
                 use ratatui::style::{Color as Clr, Style as Sty};
-                let back_para = Paragraph::new(back_label)
-                    .style(Sty::default().fg(Clr::Cyan));
-                frame.render_widget(back_para, ratatui::layout::Rect { x: back_x, y: back_y, width: back_w, height: 1 });
+                use ratatui::widgets::Paragraph;
+                let back_para = Paragraph::new(back_label).style(Sty::default().fg(Clr::Cyan));
+                frame.render_widget(
+                    back_para,
+                    ratatui::layout::Rect {
+                        x: back_x,
+                        y: back_y,
+                        width: back_w,
+                        height: 1,
+                    },
+                );
                 self.click_targets.push(
-                    ClickTarget::new(back_x, back_y, back_w, 1,
-                        ClickAction::SimulateKey(crossterm::event::KeyCode::Esc))
-                    .labeled("back_button"));
+                    ClickTarget::new(
+                        back_x,
+                        back_y,
+                        back_w,
+                        1,
+                        ClickAction::SimulateKey(crossterm::event::KeyCode::Esc),
+                    )
+                    .labeled("back_button"),
+                );
             }
 
             match self.view_mode {
-            ViewMode::Dashboard => unreachable!(),
-            ViewMode::Help => {
-                screens::render_help(frame, content_area, &self.help_filter, &mut self.help_scroll);
-            }
-            ViewMode::Mixer => {
-                render_mixer_overlay(frame, content_area, info,
-                    self.mixer_deck_is_a, self.mixer_row);
-            }
-            ViewMode::TransitionRules => {
-                if let Some(ref ed) = self.rules_editor {
-                    super::rules_editor::render(frame, content_area, ed);
+                ViewMode::Dashboard => unreachable!(),
+                ViewMode::Help => {
+                    screens::render_help(
+                        frame,
+                        content_area,
+                        &self.help_filter,
+                        &mut self.help_scroll,
+                    );
                 }
-            }
-            ViewMode::MidiLearn => {
-                // Pull bindings from the listener so the screen shows
-                // current state without bus latency. Locked briefly
-                // during render — listener thread blocks on us only
-                // long enough to clone the binding list (~µs).
-                let (captured, captured_value, bindings) = if let Some(midi) = &self.midi {
-                    if let Ok(state) = midi.lock() {
-                        let cap_val = state.last_event.as_ref().map(|(_, v)| *v);
-                        (
-                            self.midi_learn_captured.clone()
-                                .or_else(|| state.last_event.clone().map(|(e, _)| e)),
-                            cap_val,
-                            state.map.bindings.clone(),
-                        )
+                ViewMode::Mixer => {
+                    render_mixer_overlay(
+                        frame,
+                        content_area,
+                        info,
+                        self.mixer_deck_is_a,
+                        self.mixer_row,
+                    );
+                }
+                ViewMode::TransitionRules => {
+                    if let Some(ref ed) = self.rules_editor {
+                        super::rules_editor::render(frame, content_area, ed);
+                    }
+                }
+                ViewMode::MidiLearn => {
+                    // Pull bindings from the listener so the screen shows
+                    // current state without bus latency. Locked briefly
+                    // during render — listener thread blocks on us only
+                    // long enough to clone the binding list (~µs).
+                    let (captured, captured_value, bindings) = if let Some(midi) = &self.midi {
+                        if let Ok(state) = midi.lock() {
+                            let cap_val = state.last_event.as_ref().map(|(_, v)| *v);
+                            (
+                                self.midi_learn_captured
+                                    .clone()
+                                    .or_else(|| state.last_event.clone().map(|(e, _)| e)),
+                                cap_val,
+                                state.map.bindings.clone(),
+                            )
+                        } else {
+                            (None, None, vec![])
+                        }
                     } else {
                         (None, None, vec![])
-                    }
-                } else {
-                    (None, None, vec![])
-                };
-                super::midi_learn::render(
-                    frame, content_area,
-                    captured.as_ref(), captured_value,
-                    self.midi_learn_action_sel,
-                    &bindings,
-                );
-            }
-            ViewMode::PlaylistPicker => {
-                if let Some(ref picker) = self.playlist_picker {
-                    let mut items = vec!["+ Create New Playlist...".to_string()];
-                    items.extend(picker.playlists.iter().map(|p| p.name.clone()));
-                    screens::render_menu(frame, content_area, &items, picker.selected, 0);
+                    };
+                    super::midi_learn::render(
+                        frame,
+                        content_area,
+                        captured.as_ref(),
+                        captured_value,
+                        self.midi_learn_action_sel,
+                        &bindings,
+                    );
                 }
-            }
-            ViewMode::PlaylistNameInput => {
-                if let Some(ref picker) = self.playlist_picker {
-                    let input = Paragraph::new(Line::from(vec![
-                        Span::styled("Name: ", Style::default().fg(Color::Yellow)),
-                        Span::raw(&picker.new_name),
-                        Span::styled("█", Style::default().fg(Color::White)),
-                    ]));
-                    frame.render_widget(input, content_area);
-                }
-            }
-            ViewMode::Settings => {
-                super::settings::render_settings(frame, content_area, &self.config, self.selected);
-                // Click targets — only register rects for editable Row
-                // items (skip Section headers). `selected` is a row-index
-                // (sections don't count) so `ClickAction::SetSelected(N)`
-                // gets the right slot.
-                let items = super::settings::build_settings(&self.config);
-                let mut row_idx = 0usize;
-                for (line_idx, item) in items.iter().enumerate() {
-                    if let super::settings::SettingItem::Row(_) = item {
-                        let y = content_area.y + line_idx as u16;
-                        if y < content_area.y + content_area.height {
-                            self.click_targets.push(ClickTarget::new(
-                                content_area.x, y, content_area.width, 1,
-                                ClickAction::SetSelected(row_idx),
-                            ));
-                        }
-                        row_idx += 1;
+                ViewMode::PlaylistPicker => {
+                    if let Some(ref picker) = self.playlist_picker {
+                        let mut items = vec!["+ Create New Playlist...".to_string()];
+                        items.extend(picker.playlists.iter().map(|p| p.name.clone()));
+                        screens::render_menu(frame, content_area, &items, picker.selected, 0);
                     }
                 }
-            }
-            ViewMode::GenrePicker | ViewMode::FavoritesPicker => {
-                if let Some(ref picker) = self.genre_picker {
-                    let is_favs = matches!(self.view_mode, ViewMode::FavoritesPicker);
-                    let items: Vec<String> = picker.genres.iter().map(|g| {
-                        if is_favs {
-                            let star = if self.config.favorite_genres.contains(&g.name) { "★" } else { "·" };
-                            format!("{star} {}", g.name)
-                        } else {
-                            g.name.clone()
+                ViewMode::PlaylistNameInput => {
+                    if let Some(ref picker) = self.playlist_picker {
+                        let input = Paragraph::new(Line::from(vec![
+                            Span::styled("Name: ", Style::default().fg(Color::Yellow)),
+                            Span::raw(&picker.new_name),
+                            Span::styled("█", Style::default().fg(Color::White)),
+                        ]));
+                        frame.render_widget(input, content_area);
+                    }
+                }
+                ViewMode::Settings => {
+                    super::settings::render_settings(
+                        frame,
+                        content_area,
+                        &self.config,
+                        self.selected,
+                    );
+                    // Click targets — only register rects for editable Row
+                    // items (skip Section headers). `selected` is a row-index
+                    // (sections don't count) so `ClickAction::SetSelected(N)`
+                    // gets the right slot.
+                    let items = super::settings::build_settings(&self.config);
+                    let mut row_idx = 0usize;
+                    for (line_idx, item) in items.iter().enumerate() {
+                        if let super::settings::SettingItem::Row(_) = item {
+                            let y = content_area.y + line_idx as u16;
+                            if y < content_area.y + content_area.height {
+                                self.click_targets.push(ClickTarget::new(
+                                    content_area.x,
+                                    y,
+                                    content_area.width,
+                                    1,
+                                    ClickAction::SetSelected(row_idx),
+                                ));
+                            }
+                            row_idx += 1;
                         }
-                    }).collect();
-                    screens::render_menu(frame, content_area, &items, picker.selected, picker.scroll_offset);
+                    }
+                }
+                ViewMode::GenrePicker | ViewMode::FavoritesPicker => {
+                    if let Some(ref picker) = self.genre_picker {
+                        let is_favs = matches!(self.view_mode, ViewMode::FavoritesPicker);
+                        let items: Vec<String> = picker
+                            .genres
+                            .iter()
+                            .map(|g| {
+                                if is_favs {
+                                    let star = if self.config.favorite_genres.contains(&g.name) {
+                                        "★"
+                                    } else {
+                                        "·"
+                                    };
+                                    format!("{star} {}", g.name)
+                                } else {
+                                    g.name.clone()
+                                }
+                            })
+                            .collect();
+                        screens::render_menu(
+                            frame,
+                            content_area,
+                            &items,
+                            picker.selected,
+                            picker.scroll_offset,
+                        );
+                    }
+                }
+                ViewMode::Queue => {
+                    let refs: Vec<&BeatportTrack> =
+                        info.queue.iter().map(|e| e.track.as_ref()).collect();
+                    screens::render_track_list_refs(
+                        frame,
+                        content_area,
+                        &refs,
+                        self.selected,
+                        self.scroll_offset,
+                        -1,
+                        true,
+                    );
+                    Self::push_list_row_targets(
+                        &mut self.click_targets,
+                        content_area,
+                        refs.len(),
+                        self.scroll_offset,
+                    );
+                }
+                ViewMode::History => {
+                    let refs: Vec<&BeatportTrack> =
+                        info.history.iter().map(|e| e.track.as_ref()).collect();
+                    screens::render_track_list_refs(
+                        frame,
+                        content_area,
+                        &refs,
+                        self.selected,
+                        self.scroll_offset,
+                        -1,
+                        true,
+                    );
+                    Self::push_list_row_targets(
+                        &mut self.click_targets,
+                        content_area,
+                        refs.len(),
+                        self.scroll_offset,
+                    );
+                }
+                ViewMode::Search => {
+                    self.render_search(frame, content_area);
+                }
+                ViewMode::Browse => {
+                    self.render_browse(frame, content_area);
+                    let count = self.current_screen().item_count();
+                    Self::push_list_row_targets(
+                        &mut self.click_targets,
+                        content_area,
+                        count,
+                        self.scroll_offset,
+                    );
+                }
+                ViewMode::ClaudeDj => {
+                    super::claude_screen::render_claude_screen(
+                        frame,
+                        content_area,
+                        self.claude_dj.as_ref(),
+                        self.scroll_offset,
+                    );
                 }
             }
-            ViewMode::Queue => {
-                let refs: Vec<&BeatportTrack> = info.queue.iter().map(|e| e.track.as_ref()).collect();
-                screens::render_track_list_refs(frame, content_area, &refs, self.selected, self.scroll_offset, -1, true);
-                Self::push_list_row_targets(&mut self.click_targets, content_area, refs.len(), self.scroll_offset);
-            }
-            ViewMode::History => {
-                let refs: Vec<&BeatportTrack> = info.history.iter().map(|e| e.track.as_ref()).collect();
-                screens::render_track_list_refs(frame, content_area, &refs, self.selected, self.scroll_offset, -1, true);
-                Self::push_list_row_targets(&mut self.click_targets, content_area, refs.len(), self.scroll_offset);
-            }
-            ViewMode::Search => {
-                self.render_search(frame, content_area);
-            }
-            ViewMode::Browse => {
-                self.render_browse(frame, content_area);
-                let count = self.current_screen().item_count();
-                Self::push_list_row_targets(&mut self.click_targets, content_area, count, self.scroll_offset);
-            }
-            ViewMode::ClaudeDj => {
-                super::claude_screen::render_claude_screen(
-                    frame, content_area, self.claude_dj.as_ref(), self.scroll_offset,
-                );
-            }
-        }
         } // end else (non-dashboard)
 
         // Now playing bar (+ incoming line during crossfade)
@@ -1024,9 +1259,18 @@ impl App {
                 .constraints([Constraint::Length(1), Constraint::Length(1)])
                 .split(chunks[1]);
             // Line 1: playing track
-            let track_name = info.playing_track.as_ref().map(|t| format!("{} - {}", t.artist_name(), t.full_title()));
-            screens::render_now_playing(frame, np_chunks[0], track_name.as_deref(), info.playing_bpm,
-                info.playing_duration - info.playing_time, 0.0);
+            let track_name = info
+                .playing_track
+                .as_ref()
+                .map(|t| format!("{} - {}", t.artist_name(), t.full_title()));
+            screens::render_now_playing(
+                frame,
+                np_chunks[0],
+                track_name.as_deref(),
+                info.playing_bpm,
+                info.playing_duration - info.playing_time,
+                0.0,
+            );
             // Line 2: incoming track (yellow)
             if let Some(ref inc) = info.incoming_track {
                 let inc_name = format!("{} - {}", inc.artist_name(), inc.full_title());
@@ -1043,10 +1287,23 @@ impl App {
                 frame.render_widget(widget, np_chunks[1]);
             }
         } else {
-            let track_name = info.playing_track.as_ref().map(|t| format!("{} - {}", t.artist_name(), t.full_title()));
-            let progress = if info.playing_duration > 0.0 { info.playing_time / info.playing_duration } else { 0.0 };
-            screens::render_now_playing(frame, chunks[1], track_name.as_deref(), info.playing_bpm,
-                info.playing_duration - info.playing_time, progress);
+            let track_name = info
+                .playing_track
+                .as_ref()
+                .map(|t| format!("{} - {}", t.artist_name(), t.full_title()));
+            let progress = if info.playing_duration > 0.0 {
+                info.playing_time / info.playing_duration
+            } else {
+                0.0
+            };
+            screens::render_now_playing(
+                frame,
+                chunks[1],
+                track_name.as_deref(),
+                info.playing_bpm,
+                info.playing_duration - info.playing_time,
+                progress,
+            );
         }
 
         // Toast — float above the bottom strip (now-playing + legend).
@@ -1064,7 +1321,8 @@ impl App {
             let area = Rect {
                 x: size.width.saturating_sub(w) / 2,
                 y: toast_y,
-                width: w, height: toast_h,
+                width: w,
+                height: toast_h,
             };
             let tw = Paragraph::new(format!(" {msg} "))
                 .style(Style::default().fg(Color::Black).bg(Color::Yellow))
@@ -1085,10 +1343,15 @@ impl App {
         // visible until Enter/Esc. The cursor is just a trailing block.
         if let Some(buf) = &self.command_prompt {
             let prompt_y = size.height.saturating_sub(1);
-            let area = Rect { x: 0, y: prompt_y, width: size.width, height: 1 };
+            let area = Rect {
+                x: 0,
+                y: prompt_y,
+                width: size.width,
+                height: 1,
+            };
             let display = format!(":{buf}█");
-            let widget = Paragraph::new(display)
-                .style(Style::default().fg(Color::Black).bg(Color::Yellow));
+            let widget =
+                Paragraph::new(display).style(Style::default().fg(Color::Black).bg(Color::Yellow));
             frame.render_widget(widget, area);
         }
     }
@@ -1097,8 +1360,16 @@ impl App {
     /// Pulled out of render() so the layout can pre-size the hints
     /// chunk based on the string's length.
     fn build_hints_string(&self, info: &NowPlayingInfo) -> String {
-        let esc_label = if self.screen_stack.len() <= 1 { "[Esc] Quit" } else { "[Esc] Back" };
-        let play_pause = if info.playing_track.is_some() { "[p] Pause" } else { "[p] Play" };
+        let esc_label = if self.screen_stack.len() <= 1 {
+            "[Esc] Quit"
+        } else {
+            "[Esc] Back"
+        };
+        let play_pause = if info.playing_track.is_some() {
+            "[p] Pause"
+        } else {
+            "[p] Play"
+        };
         match self.view_mode {
             ViewMode::PlaylistPicker => "[Enter] Select  [Esc] Back".into(),
             ViewMode::PlaylistNameInput => "[Type] Name  [Enter] Create  [Esc] Back".into(),
@@ -1106,32 +1377,49 @@ impl App {
             ViewMode::FavoritesPicker => format!("[Enter] Toggle ★  {esc_label}"),
             ViewMode::Settings => format!("[Enter] Change  [,] Close  {esc_label}"),
             ViewMode::ClaudeDj => format!("[C] Toggle  [/] Ask  {esc_label}"),
-            ViewMode::Dashboard => format!("[?] Help  [Tab] Focus  {play_pause}  [n] Skip  [t] Teleport  [T] Rewind  [w] Waveform  [c] DJ Screen  [C] Toggle DJ  [/] Ask DJ  [d] Close  {esc_label}"),
-            ViewMode::Search => "[Type] Search  [↑↓] Navigate  [Space] Preview  [Enter] Queue  [Esc] Back".into(),
-            ViewMode::Queue => format!("[←→] Columns  [f] Fav  [o] Web  {play_pause}  [n] Skip  [X] Clear  [d] Dashboard  [q] Close  {esc_label}"),
+            ViewMode::Dashboard => format!(
+                "[?] Help  [Tab] Focus  {play_pause}  [n] Skip  [t] Teleport  [T] Rewind  [w] Waveform  [c] DJ Screen  [C] Toggle DJ  [/] Ask DJ  [d] Close  {esc_label}"
+            ),
+            ViewMode::Search => {
+                "[Type] Search  [↑↓] Navigate  [Space] Preview  [Enter] Queue  [Esc] Back".into()
+            }
+            ViewMode::Queue => format!(
+                "[←→] Columns  [f] Fav  [o] Web  {play_pause}  [n] Skip  [X] Clear  [d] Dashboard  [q] Close  {esc_label}"
+            ),
             ViewMode::History => format!("[h] Close  {esc_label}"),
             ViewMode::Help => esc_label.to_string(),
-            ViewMode::Mixer => "[Tab] Deck  [↑↓] Row  [←→] Adjust  [r] Reset  [R] Reset All  [Esc] Close".into(),
-            ViewMode::TransitionRules => "[↑↓] Nav  [Enter] Edit  [i] Insert  [D] Delete  [{/}] Reorder  [Esc] Save+Close".into(),
-            ViewMode::MidiLearn => "[Touch a control]  [↑↓] Pick action  [Enter] Bind  [U] Unbind  [Esc] Close".into(),
-            ViewMode::Browse => {
-                match self.current_screen() {
-                    BrowseScreen::TrackList { .. } if self.selected_column >= -1 => {
-                        match self.selected_column {
-                            -1 => "[Enter] Release  [o] Open  [←] Back  [→] Next Column".to_string(),
-                            0 => "[Enter] Artist  [o] Open  [←] Back  [→] Next Column".to_string(),
-                            1 => "[Enter] Remixer  [o] Open  [←] Back  [→] Next Column".to_string(),
-                            2 => "[Enter] Label  [o] Open  [←] Back  [→] Next Column".to_string(),
-                            3 => "[Enter] Genre  [o] Open  [←] Back  [→] Next Column".to_string(),
-                            4 => "[Enter] Year  [o] Open  [←] Back".to_string(),
-                            _ => "[←→] Columns".to_string(),
-                        }
-                    }
-                    BrowseScreen::TrackList { .. } => format!("[Space] Preview  [Enter] Queue  [←→] Columns  [a] All  [f] Fav  [o] Web  [+] Playlist  [d] Dashboard  [q] Queue  [/] Search  {esc_label}"),
-                    BrowseScreen::ArtistList { .. } | BrowseScreen::LabelList { .. } => format!("[Enter] Select  [o] Web  [d] Dashboard  [q] Queue  [/] Search  {esc_label}"),
-                    _ => format!("[Enter] Select  [o] Web  [q] Queue  [d] Dashboard  [,] Settings  [/] Search  {esc_label}"),
-                }
+            ViewMode::Mixer => {
+                "[Tab] Deck  [↑↓] Row  [←→] Adjust  [r] Reset  [R] Reset All  [Esc] Close".into()
             }
+            ViewMode::TransitionRules => {
+                "[↑↓] Nav  [Enter] Edit  [i] Insert  [D] Delete  [{/}] Reorder  [Esc] Save+Close"
+                    .into()
+            }
+            ViewMode::MidiLearn => {
+                "[Touch a control]  [↑↓] Pick action  [Enter] Bind  [U] Unbind  [Esc] Close".into()
+            }
+            ViewMode::Browse => match self.current_screen() {
+                BrowseScreen::TrackList { .. } if self.selected_column >= -1 => {
+                    match self.selected_column {
+                        -1 => "[Enter] Release  [o] Open  [←] Back  [→] Next Column".to_string(),
+                        0 => "[Enter] Artist  [o] Open  [←] Back  [→] Next Column".to_string(),
+                        1 => "[Enter] Remixer  [o] Open  [←] Back  [→] Next Column".to_string(),
+                        2 => "[Enter] Label  [o] Open  [←] Back  [→] Next Column".to_string(),
+                        3 => "[Enter] Genre  [o] Open  [←] Back  [→] Next Column".to_string(),
+                        4 => "[Enter] Year  [o] Open  [←] Back".to_string(),
+                        _ => "[←→] Columns".to_string(),
+                    }
+                }
+                BrowseScreen::TrackList { .. } => format!(
+                    "[Space] Preview  [Enter] Queue  [←→] Columns  [a] All  [f] Fav  [o] Web  [+] Playlist  [d] Dashboard  [q] Queue  [/] Search  {esc_label}"
+                ),
+                BrowseScreen::ArtistList { .. } | BrowseScreen::LabelList { .. } => format!(
+                    "[Enter] Select  [o] Web  [d] Dashboard  [q] Queue  [/] Search  {esc_label}"
+                ),
+                _ => format!(
+                    "[Enter] Select  [o] Web  [q] Queue  [d] Dashboard  [,] Settings  [/] Search  {esc_label}"
+                ),
+            },
         }
     }
 
@@ -1142,41 +1430,67 @@ impl App {
         use ratatui::layout::Alignment;
         use ratatui::style::Modifier;
         use ratatui::widgets::Clear;
-        let line_for = |t: &Option<std::sync::Arc<crate::beatport::models::BeatportTrack>>| -> String {
-            match t {
-                Some(tr) => format!("{} - {}", tr.artist_name(), tr.full_title()),
-                None => "(empty)".into(),
-            }
-        };
+        let line_for =
+            |t: &Option<std::sync::Arc<crate::beatport::models::BeatportTrack>>| -> String {
+                match t {
+                    Some(tr) => format!("{} - {}", tr.artist_name(), tr.full_title()),
+                    None => "(empty)".into(),
+                }
+            };
         let a = line_for(&self.cached_info.deck_a_track);
         let b = line_for(&self.cached_info.deck_b_track);
 
         let lines = vec![
-            Line::from(Span::styled(" Favorite which deck? ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))),
+            Line::from(Span::styled(
+                " Favorite which deck? ",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )),
             Line::from(""),
             Line::from(vec![
-                Span::styled("  [a] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "  [a] ",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw(a),
             ]),
             Line::from(vec![
-                Span::styled("  [b] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "  [b] ",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw(b),
             ]),
             Line::from(""),
-            Line::from(Span::styled("  Esc to cancel", Style::default().fg(Color::DarkGray))),
+            Line::from(Span::styled(
+                "  Esc to cancel",
+                Style::default().fg(Color::DarkGray),
+            )),
         ];
 
         let w = 70u16.min(area.width.saturating_sub(4));
         let h = (lines.len() as u16) + 2;
         let x = area.x + area.width.saturating_sub(w) / 2;
         let y = area.y + area.height.saturating_sub(h) / 2;
-        let modal = Rect { x, y, width: w, height: h };
+        let modal = Rect {
+            x,
+            y,
+            width: w,
+            height: h,
+        };
 
         frame.render_widget(Clear, modal);
         let block = Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Color::Cyan));
-        let para = Paragraph::new(lines).block(block).alignment(Alignment::Left);
+        let para = Paragraph::new(lines)
+            .block(block)
+            .alignment(Alignment::Left);
         frame.render_widget(para, modal);
     }
 
@@ -1200,7 +1514,13 @@ impl App {
             // Render filtered items
             let indices = self.filtered_indices();
             let items: Vec<String> = indices.iter().map(|&i| screen.item_label(i)).collect();
-            screens::render_menu(frame, content_area, &items, self.selected, self.scroll_offset);
+            screens::render_menu(
+                frame,
+                content_area,
+                &items,
+                self.selected,
+                self.scroll_offset,
+            );
 
             // Filter input line
             if let Some(fa) = filter_area {
@@ -1215,24 +1535,47 @@ impl App {
         } else {
             match screen {
                 BrowseScreen::TrackList { tracks, .. } => {
-                    screens::render_track_list(frame, content_area, tracks, self.selected, self.scroll_offset, self.selected_column, self.config.compact_view);
+                    screens::render_track_list(
+                        frame,
+                        content_area,
+                        tracks,
+                        self.selected,
+                        self.scroll_offset,
+                        self.selected_column,
+                        self.config.compact_view,
+                    );
                 }
                 BrowseScreen::GenreList { genres, .. } => {
                     let favs = &self.config.favorite_genres;
-                    let items: Vec<String> = genres.iter().map(|g| {
-                        if favs.iter().any(|f| f.eq_ignore_ascii_case(&g.name)) {
-                            format!("{} ★", g.name)
-                        } else {
-                            g.name.clone()
-                        }
-                    }).collect();
-                    screens::render_menu(frame, content_area, &items, self.selected, self.scroll_offset);
+                    let items: Vec<String> = genres
+                        .iter()
+                        .map(|g| {
+                            if favs.iter().any(|f| f.eq_ignore_ascii_case(&g.name)) {
+                                format!("{} ★", g.name)
+                            } else {
+                                g.name.clone()
+                            }
+                        })
+                        .collect();
+                    screens::render_menu(
+                        frame,
+                        content_area,
+                        &items,
+                        self.selected,
+                        self.scroll_offset,
+                    );
                 }
                 _ => {
                     let items: Vec<String> = (0..screen.item_count())
                         .map(|i| screen.item_label(i))
                         .collect();
-                    screens::render_menu(frame, content_area, &items, self.selected, self.scroll_offset);
+                    screens::render_menu(
+                        frame,
+                        content_area,
+                        &items,
+                        self.selected,
+                        self.scroll_offset,
+                    );
                 }
             }
         }
@@ -1252,7 +1595,15 @@ impl App {
         frame.render_widget(input, chunks[0]);
 
         if !self.search_results.is_empty() {
-            screens::render_track_list(frame, chunks[1], &self.search_results, self.selected, self.scroll_offset, -1, self.config.compact_view);
+            screens::render_track_list(
+                frame,
+                chunks[1],
+                &self.search_results,
+                self.selected,
+                self.scroll_offset,
+                -1,
+                self.config.compact_view,
+            );
         }
     }
 
@@ -1260,20 +1611,29 @@ impl App {
     /// row becomes clickable. Takes `targets` by &mut so it doesn't
     /// require a fresh &mut self reborrow when the caller already has
     /// `&self.cached_info` borrowed.
-    fn push_list_row_targets(targets: &mut Vec<ClickTarget>, area: ratatui::layout::Rect, count: usize, scroll_offset: usize) {
+    fn push_list_row_targets(
+        targets: &mut Vec<ClickTarget>,
+        area: ratatui::layout::Rect,
+        count: usize,
+        scroll_offset: usize,
+    ) {
         let visible = (area.height as usize).min(count.saturating_sub(scroll_offset));
         for vis_row in 0..visible {
             let abs_row = scroll_offset + vis_row;
             targets.push(ClickTarget::new(
-                area.x, area.y + vis_row as u16, area.width, 1,
+                area.x,
+                area.y + vis_row as u16,
+                area.width,
+                1,
                 ClickAction::SetSelected(abs_row),
             ));
         }
     }
 
-
     pub(crate) fn load_more(&mut self, action: &MenuAction) {
-        let Some(api) = self.require_api() else { return; };
+        let Some(api) = self.require_api() else {
+            return;
+        };
         self.current_page += 1;
         let page = self.current_page;
         let tx = self.action_tx.clone();
@@ -1283,31 +1643,48 @@ impl App {
         tokio::spawn(async move {
             let mut api = api.lock().await;
             match catalog::execute_action_page(&action, &mut api, page).await {
-                Ok(Some(screen)) => {
-                    match screen {
-                        BrowseScreen::TrackList { tracks, .. } => {
-                            if tracks.is_empty() { tx.send(AppAction::Toast("No more".into())).ok(); }
-                            else { tx.send(AppAction::AppendTracks(tracks)).ok(); }
+                Ok(Some(screen)) => match screen {
+                    BrowseScreen::TrackList { tracks, .. } => {
+                        if tracks.is_empty() {
+                            tx.send(AppAction::Toast("No more".into())).ok();
+                        } else {
+                            tx.send(AppAction::AppendTracks(tracks)).ok();
                         }
-                        BrowseScreen::ChartList { charts, .. } => {
-                            if charts.is_empty() { tx.send(AppAction::Toast("No more".into())).ok(); }
-                            else { tx.send(AppAction::AppendCharts(charts)).ok(); }
-                        }
-                        BrowseScreen::ReleaseList { releases, .. } => {
-                            if releases.is_empty() { tx.send(AppAction::Toast("No more".into())).ok(); }
-                            else { tx.send(AppAction::AppendReleases(releases)).ok(); }
-                        }
-                        _ => { tx.send(AppAction::Toast("Load More not supported".into())).ok(); }
                     }
+                    BrowseScreen::ChartList { charts, .. } => {
+                        if charts.is_empty() {
+                            tx.send(AppAction::Toast("No more".into())).ok();
+                        } else {
+                            tx.send(AppAction::AppendCharts(charts)).ok();
+                        }
+                    }
+                    BrowseScreen::ReleaseList { releases, .. } => {
+                        if releases.is_empty() {
+                            tx.send(AppAction::Toast("No more".into())).ok();
+                        } else {
+                            tx.send(AppAction::AppendReleases(releases)).ok();
+                        }
+                    }
+                    _ => {
+                        tx.send(AppAction::Toast("Load More not supported".into()))
+                            .ok();
+                    }
+                },
+                Ok(None) => {
+                    tx.send(AppAction::Toast("Load More not supported".into()))
+                        .ok();
                 }
-                Ok(None) => { tx.send(AppAction::Toast("Load More not supported".into())).ok(); }
-                Err(e) => { tx.send(AppAction::Toast(format!("Error: {e}"))).ok(); }
+                Err(e) => {
+                    tx.send(AppAction::Toast(format!("Error: {e}"))).ok();
+                }
             }
         });
     }
 
     pub(crate) fn open_playlist_picker(&mut self, track_id: i64) {
-        let Some(api) = self.require_api() else { return; };
+        let Some(api) = self.require_api() else {
+            return;
+        };
         let tx = self.action_tx.clone();
         self.toast.show("Loading playlists...", 2.0);
 
@@ -1315,15 +1692,28 @@ impl App {
             let mut api = api.lock().await;
             match api.my_playlists().await {
                 Ok(playlists) => {
-                    tx.send(AppAction::ShowPlaylistPicker { track_id, playlists }).ok();
+                    tx.send(AppAction::ShowPlaylistPicker {
+                        track_id,
+                        playlists,
+                    })
+                    .ok();
                 }
-                Err(e) => { tx.send(AppAction::Toast(format!("Error: {e}"))).ok(); }
+                Err(e) => {
+                    tx.send(AppAction::Toast(format!("Error: {e}"))).ok();
+                }
             }
         });
     }
 
-    pub(crate) fn add_track_to_playlist(&mut self, playlist_id: i64, track_id: i64, playlist_name: &str) {
-        let Some(api) = self.api.clone() else { return; };
+    pub(crate) fn add_track_to_playlist(
+        &mut self,
+        playlist_id: i64,
+        track_id: i64,
+        playlist_name: &str,
+    ) {
+        let Some(api) = self.api.clone() else {
+            return;
+        };
         let tx = self.action_tx.clone();
         let pname = playlist_name.to_string();
         self.playlist_picker = None;
@@ -1332,14 +1722,20 @@ impl App {
         tokio::spawn(async move {
             let mut api = api.lock().await;
             match api.add_to_playlist(playlist_id, &[track_id]).await {
-                Ok(()) => { tx.send(AppAction::Toast(format!("Added to {pname}"))).ok(); }
-                Err(e) => { tx.send(AppAction::Toast(format!("Error: {e}"))).ok(); }
+                Ok(()) => {
+                    tx.send(AppAction::Toast(format!("Added to {pname}"))).ok();
+                }
+                Err(e) => {
+                    tx.send(AppAction::Toast(format!("Error: {e}"))).ok();
+                }
             }
         });
     }
 
     pub(crate) fn create_and_add_to_playlist(&mut self, name: String, track_id: i64) {
-        let Some(api) = self.api.clone() else { return; };
+        let Some(api) = self.api.clone() else {
+            return;
+        };
         let tx = self.action_tx.clone();
         let pname = name.clone();
         self.playlist_picker = None;
@@ -1348,19 +1744,32 @@ impl App {
         tokio::spawn(async move {
             let mut api = api.lock().await;
             match api.create_playlist(&name).await {
-                Ok(pid) => {
-                    match api.add_to_playlist(pid, &[track_id]).await {
-                        Ok(()) => { tx.send(AppAction::Toast(format!("Created '{pname}' and added track"))).ok(); }
-                        Err(e) => { tx.send(AppAction::Toast(format!("Created playlist but add failed: {e}"))).ok(); }
+                Ok(pid) => match api.add_to_playlist(pid, &[track_id]).await {
+                    Ok(()) => {
+                        tx.send(AppAction::Toast(format!(
+                            "Created '{pname}' and added track"
+                        )))
+                        .ok();
                     }
+                    Err(e) => {
+                        tx.send(AppAction::Toast(format!(
+                            "Created playlist but add failed: {e}"
+                        )))
+                        .ok();
+                    }
+                },
+                Err(e) => {
+                    tx.send(AppAction::Toast(format!("Create playlist failed: {e}")))
+                        .ok();
                 }
-                Err(e) => { tx.send(AppAction::Toast(format!("Create playlist failed: {e}"))).ok(); }
             }
         });
     }
 
     pub(crate) fn open_genre_picker(&mut self, favorites: bool) {
-        let Some(api) = self.require_api() else { return; };
+        let Some(api) = self.require_api() else {
+            return;
+        };
         let tx = self.action_tx.clone();
         self.toast.show("Loading genres...", 2.0);
 
@@ -1368,14 +1777,15 @@ impl App {
             let mut api = api.lock().await;
             match api.genres().await {
                 Ok(genres) => {
-                    tx.send(AppAction::ShowGenrePicker { favorites, genres }).ok();
+                    tx.send(AppAction::ShowGenrePicker { favorites, genres })
+                        .ok();
                 }
-                Err(e) => { tx.send(AppAction::Toast(format!("Error: {e}"))).ok(); }
+                Err(e) => {
+                    tx.send(AppAction::Toast(format!("Error: {e}"))).ok();
+                }
             }
         });
     }
-
-
 
     /// Build context string for Claude DJ.
     /// Apply a settings row change and perform any engine sync or side-effect.
@@ -1392,7 +1802,10 @@ impl App {
     pub(crate) fn require_api(&mut self) -> Option<Arc<TokioMutex<BeatportAPI>>> {
         match self.api.clone() {
             Some(a) => Some(a),
-            None => { self.toast.show("Not authenticated", 2.0); None }
+            None => {
+                self.toast.show("Not authenticated", 2.0);
+                None
+            }
         }
     }
 
@@ -1404,20 +1817,27 @@ impl App {
     /// Mirror this list with the engine sync calls scattered through
     /// `apply_and_sync_setting`'s match arms.
     pub(crate) fn resync_all_engine_settings(&mut self) {
-        self.engine.set_enabled_transitions(self.config.enabled_transitions.clone());
-        self.engine.set_pitch_stretch_engine(self.config.pitch_stretch_engine);
-        self.engine.set_train_wreck_mode(self.config.train_wreck_mode);
+        self.engine
+            .set_enabled_transitions(self.config.enabled_transitions.clone());
+        self.engine
+            .set_pitch_stretch_engine(self.config.pitch_stretch_engine);
+        self.engine
+            .set_train_wreck_mode(self.config.train_wreck_mode);
         self.engine.set_crossfade_bars(self.config.crossfade_bars);
-        self.engine.set_crossfade_bars_auto(self.config.crossfade_bars_auto);
-        self.engine.set_quantize(self.config.quantize_on, self.config.quantize_beats);
+        self.engine
+            .set_crossfade_bars_auto(self.config.crossfade_bars_auto);
+        self.engine
+            .set_quantize(self.config.quantize_on, self.config.quantize_beats);
         self.engine.set_jump_bars(self.config.jump_bars);
         self.engine.set_limiter_mode(self.config.master_limiter);
         let new = self.config.claude_dj.clone();
         if let Some(dj) = &self.claude_dj
-            && let Ok(mut dj) = dj.try_lock() {
-                dj.apply_settings(new.clone());
-            }
-        self.engine.apply_claude_dj_settings(&new, self.config.claude_dj_enabled);
+            && let Ok(mut dj) = dj.try_lock()
+        {
+            dj.apply_settings(new.clone());
+        }
+        self.engine
+            .apply_claude_dj_settings(&new, self.config.claude_dj_enabled);
         self.config.save();
     }
 
@@ -1508,7 +1928,8 @@ impl App {
     /// `cargo build --release --features rubberband`, then trigger restart.
     /// All non-blocking; progress via toast.
     pub(crate) fn spawn_install_rubberband(&mut self) {
-        self.toast.show("Installing rubberband — this may take a minute…", 8.0);
+        self.toast
+            .show("Installing rubberband — this may take a minute…", 8.0);
         let tx = self.action_tx.clone();
         tokio::spawn(async move {
             crate::platform::install_rubberband(move |msg| {
@@ -1517,8 +1938,6 @@ impl App {
         });
     }
 
-
-
     /// Get filtered indices for the current screen.
     pub(crate) fn filtered_indices(&self) -> Vec<usize> {
         if self.filter_text.is_empty() {
@@ -1526,7 +1945,12 @@ impl App {
         }
         let filter = self.filter_text.to_lowercase();
         (0..self.current_screen().item_count())
-            .filter(|&i| self.current_screen().item_label(i).to_lowercase().contains(&filter))
+            .filter(|&i| {
+                self.current_screen()
+                    .item_label(i)
+                    .to_lowercase()
+                    .contains(&filter)
+            })
             .collect()
     }
 
@@ -1541,16 +1965,33 @@ impl App {
                     match self.selected_column {
                         0 => {
                             // Artist
-                            track.artists.first().map(|a| format!("https://www.beatport.com/artist/{}/{}", a.name.to_lowercase().replace(' ', "-"), a.id))
+                            track.artists.first().map(|a| {
+                                format!(
+                                    "https://www.beatport.com/artist/{}/{}",
+                                    a.name.to_lowercase().replace(' ', "-"),
+                                    a.id
+                                )
+                            })
                         }
                         1 => {
                             // Remixer
-                            track.remixers.first().map(|r| format!("https://www.beatport.com/artist/{}/{}", r.name.to_lowercase().replace(' ', "-"), r.id))
+                            track.remixers.first().map(|r| {
+                                format!(
+                                    "https://www.beatport.com/artist/{}/{}",
+                                    r.name.to_lowercase().replace(' ', "-"),
+                                    r.id
+                                )
+                            })
                         }
                         2 => {
                             // Label
                             track.label_id.map(|lid| {
-                                let slug = track.label_name.as_deref().unwrap_or("label").to_lowercase().replace(' ', "-");
+                                let slug = track
+                                    .label_name
+                                    .as_deref()
+                                    .unwrap_or("label")
+                                    .to_lowercase()
+                                    .replace(' ', "-");
                                 format!("https://www.beatport.com/label/{slug}/{lid}")
                             })
                         }
@@ -1563,33 +2004,33 @@ impl App {
                         }
                         4 => {
                             // Release
-                            track.release_id.map(|rid| format!("https://www.beatport.com/release/r/{rid}"))
+                            track
+                                .release_id
+                                .map(|rid| format!("https://www.beatport.com/release/r/{rid}"))
                         }
                         _ => {
                             // Title or whole row → open track
                             Some(format!("https://www.beatport.com/track/t/{}", track.id))
                         }
                     }
-                } else { None }
+                } else {
+                    None
+                }
             }
-            BrowseScreen::ArtistList { artists, .. } => {
-                artists.get(self.selected).map(|a| {
-                    let slug = a.name.to_lowercase().replace(' ', "-");
-                    format!("https://www.beatport.com/artist/{slug}/{}", a.id)
-                })
-            }
-            BrowseScreen::LabelList { labels, .. } => {
-                labels.get(self.selected).map(|l| {
-                    let slug = l.name.to_lowercase().replace(' ', "-");
-                    format!("https://www.beatport.com/label/{slug}/{}", l.id)
-                })
-            }
-            BrowseScreen::ReleaseList { releases, .. } => {
-                releases.get(self.selected).map(|r| format!("https://www.beatport.com/release/r/{}", r.id))
-            }
-            BrowseScreen::GenreList { genres, .. } => {
-                genres.get(self.selected).map(|g| format!("https://www.beatport.com/genre/{}/{}", g.slug, g.id))
-            }
+            BrowseScreen::ArtistList { artists, .. } => artists.get(self.selected).map(|a| {
+                let slug = a.name.to_lowercase().replace(' ', "-");
+                format!("https://www.beatport.com/artist/{slug}/{}", a.id)
+            }),
+            BrowseScreen::LabelList { labels, .. } => labels.get(self.selected).map(|l| {
+                let slug = l.name.to_lowercase().replace(' ', "-");
+                format!("https://www.beatport.com/label/{slug}/{}", l.id)
+            }),
+            BrowseScreen::ReleaseList { releases, .. } => releases
+                .get(self.selected)
+                .map(|r| format!("https://www.beatport.com/release/r/{}", r.id)),
+            BrowseScreen::GenreList { genres, .. } => genres
+                .get(self.selected)
+                .map(|g| format!("https://www.beatport.com/genre/{}/{}", g.slug, g.id)),
             _ => None,
         };
 
@@ -1601,7 +2042,10 @@ impl App {
                 "Arc" => "Arc",
                 _ => "Google Chrome",
             };
-            match std::process::Command::new("open").args(["-a", app, &url]).spawn() {
+            match std::process::Command::new("open")
+                .args(["-a", app, &url])
+                .spawn()
+            {
                 Ok(_) => self.toast.show(&format!("Opening in {app}"), 1.5),
                 Err(e) => self.toast.show(&format!("Failed to open: {e}"), 2.0),
             }
@@ -1627,14 +2071,20 @@ impl App {
     pub(crate) fn browse_path(&mut self, segments: &[&str]) -> bool {
         // Reset to the root screen — clears parent-cursor history too,
         // since we're about to drill in fresh from a CLI/IPC path.
-        while self.screen_stack.len() > 1 { self.screen_stack.pop(); }
+        while self.screen_stack.len() > 1 {
+            self.screen_stack.pop();
+        }
         self.screen_stack_back.clear();
         self.selected = 0;
         self.view_mode = ViewMode::Browse;
         let mut iter = segments.iter();
-        let Some(first) = iter.next() else { return true; };
+        let Some(first) = iter.next() else {
+            return true;
+        };
         let before = self.screen_stack.len();
-        if !self.browse_path_select(first) { return false; }
+        if !self.browse_path_select(first) {
+            return false;
+        }
         let remaining: Vec<String> = iter.map(|s| s.to_string()).collect();
         if remaining.is_empty() {
             self.browse_path_state = None;
@@ -1655,12 +2105,16 @@ impl App {
     pub(crate) fn browse_path_select(&mut self, segment: &str) -> bool {
         let lower = segment.to_lowercase();
         let count = self.current_screen().item_count();
-        let exact = (0..count).find(|&i| {
-            self.current_screen().item_label(i).to_lowercase() == lower
+        let exact =
+            (0..count).find(|&i| self.current_screen().item_label(i).to_lowercase() == lower);
+        let found = exact.or_else(|| {
+            (0..count).find(|&i| {
+                self.current_screen()
+                    .item_label(i)
+                    .to_lowercase()
+                    .contains(&lower)
+            })
         });
-        let found = exact.or_else(|| (0..count).find(|&i| {
-            self.current_screen().item_label(i).to_lowercase().contains(&lower)
-        }));
         match found {
             Some(idx) => {
                 self.selected = idx;
@@ -1680,7 +2134,9 @@ impl App {
     /// via an async `AppAction::PushScreen`) before firing the next
     /// segment. Times out after ~3s so a failed load doesn't hang state.
     pub(crate) fn browse_path_tick(&mut self) {
-        let Some(mut state) = self.browse_path_state.take() else { return; };
+        let Some(mut state) = self.browse_path_state.take() else {
+            return;
+        };
         let depth = self.screen_stack.len();
         if depth <= state.before_depth {
             state.waited += 1;
@@ -1718,7 +2174,8 @@ impl App {
                 !self.config.engine_dj_db.is_empty(),
                 !self.config.serato_db.is_empty(),
             ),
-            list, detail,
+            list,
+            detail,
         ];
         self.selected = 0;
         self.scroll_offset = 0;
@@ -1727,21 +2184,30 @@ impl App {
 
     pub(crate) fn navigate_to_genre(&mut self, genre_id: i64, name: &str) {
         self.navigate_to_detail(
-            BrowseScreen::GenreList { title: "Genres".into(), genres: Vec::new() },
+            BrowseScreen::GenreList {
+                title: "Genres".into(),
+                genres: Vec::new(),
+            },
             catalog::genre_detail_screen(genre_id, name),
         );
     }
 
     pub(crate) fn navigate_to_artist(&mut self, artist_id: i64, name: &str) {
         self.navigate_to_detail(
-            BrowseScreen::ArtistList { title: "Artists".into(), artists: Vec::new() },
+            BrowseScreen::ArtistList {
+                title: "Artists".into(),
+                artists: Vec::new(),
+            },
             catalog::artist_detail_screen(artist_id, name),
         );
     }
 
     pub(crate) fn navigate_to_label(&mut self, label_id: i64, name: &str) {
         self.navigate_to_detail(
-            BrowseScreen::LabelList { title: "Labels".into(), labels: Vec::new() },
+            BrowseScreen::LabelList {
+                title: "Labels".into(),
+                labels: Vec::new(),
+            },
             catalog::label_detail_screen(label_id, name),
         );
     }
@@ -1768,7 +2234,9 @@ impl App {
     /// cursor positions that were active before the drill-in.
     /// Returns true if a screen was popped.
     pub(crate) fn pop_screen(&mut self) -> bool {
-        if self.screen_stack.len() <= 1 { return false; }
+        if self.screen_stack.len() <= 1 {
+            return false;
+        }
         self.screen_stack.pop();
         if let Some((sel, scroll, col, dash_sel)) = self.screen_stack_back.pop() {
             self.selected = sel;
@@ -1791,7 +2259,10 @@ impl App {
         if matches!(action, MenuAction::PushFavorites) {
             let tracks = self.favorites.all_tracks();
             let count = tracks.len();
-            let screen = BrowseScreen::TrackList { title: format!("Favorites ({count})"), tracks };
+            let screen = BrowseScreen::TrackList {
+                title: format!("Favorites ({count})"),
+                tracks,
+            };
             self.push_screen(screen);
             return;
         }
@@ -1831,7 +2302,8 @@ impl App {
                     self.push_screen(screen);
                 }
                 Err(e) => {
-                    self.toast.show(&format!("Rekordbox import failed: {e}"), 3.0);
+                    self.toast
+                        .show(&format!("Rekordbox import failed: {e}"), 3.0);
                 }
             }
             return;
@@ -1849,7 +2321,9 @@ impl App {
                         tracks,
                     });
                 }
-                Err(e) => self.toast.show(&format!("Engine DJ import failed: {e}"), 3.0),
+                Err(e) => self
+                    .toast
+                    .show(&format!("Engine DJ import failed: {e}"), 3.0),
             }
             return;
         }
@@ -1877,7 +2351,8 @@ impl App {
         // right importer based on what's at that mount.
         if let MenuAction::PushUsbStick(mount) = &action {
             // Find which kind it is in the current detected list.
-            let kind = crate::usb_libraries::detected_sticks().into_iter()
+            let kind = crate::usb_libraries::detected_sticks()
+                .into_iter()
                 .find(|s| &s.mount == mount)
                 .map(|s| s.kind);
             let result = match kind {
@@ -1888,7 +2363,9 @@ impl App {
                         mount.join("Engine Library/m.db"),
                         mount.join("m.db"),
                     ];
-                    candidates.iter().find(|p| p.exists())
+                    candidates
+                        .iter()
+                        .find(|p| p.exists())
                         .ok_or_else(|| anyhow::anyhow!("no Engine DB at {}", mount.display()))
                         .and_then(|p| crate::library_import::import_engine_db(p))
                 }
@@ -1900,14 +2377,15 @@ impl App {
                         Err(anyhow::anyhow!("no export.pdb at {}", pdb.display()))
                     }
                 }
-                None => Err(anyhow::anyhow!("Stick {} no longer detected", mount.display())),
+                None => Err(anyhow::anyhow!(
+                    "Stick {} no longer detected",
+                    mount.display()
+                )),
             };
             match result {
                 Ok(tracks) => {
                     let count = tracks.len();
-                    let label = mount.file_name()
-                        .and_then(|n| n.to_str())
-                        .unwrap_or("USB");
+                    let label = mount.file_name().and_then(|n| n.to_str()).unwrap_or("USB");
                     self.push_screen(BrowseScreen::TrackList {
                         title: format!("USB: {label} ({count})"),
                         tracks,
@@ -1921,12 +2399,20 @@ impl App {
         let static_screen = match &action {
             MenuAction::PushDiscover => Some(catalog::discover_screen()),
             MenuAction::PushTrending => Some(catalog::trending_screen()),
-            MenuAction::PushGenreTrending(id, name) => Some(catalog::genre_trending_screen(*id, name)),
+            MenuAction::PushGenreTrending(id, name) => {
+                Some(catalog::genre_trending_screen(*id, name))
+            }
             MenuAction::PushDecades => Some(catalog::decades_screen(None)),
             MenuAction::PushGenreDecades(gid) => Some(catalog::decades_screen(Some(*gid))),
-            MenuAction::PushDecade(range, name, gid) => Some(catalog::decade_detail_screen(name, range, *gid)),
-            MenuAction::PushDecadeYears(name, range, gid) => Some(catalog::decade_years_screen(name, range, *gid)),
-            MenuAction::PushYear(name, range, gid) => Some(catalog::year_detail_screen(name, range, *gid)),
+            MenuAction::PushDecade(range, name, gid) => {
+                Some(catalog::decade_detail_screen(name, range, *gid))
+            }
+            MenuAction::PushDecadeYears(name, range, gid) => {
+                Some(catalog::decade_years_screen(name, range, *gid))
+            }
+            MenuAction::PushYear(name, range, gid) => {
+                Some(catalog::year_detail_screen(name, range, *gid))
+            }
             MenuAction::PushMyBeatport => Some(catalog::my_beatport_screen()),
             MenuAction::PushMyLibrary => Some(catalog::my_library_screen()),
             _ => None,
@@ -1938,7 +2424,9 @@ impl App {
         }
 
         // Needs API call — spawn async
-        let Some(api) = self.require_api() else { return; };
+        let Some(api) = self.require_api() else {
+            return;
+        };
 
         // Store action for Load More pagination
         self.last_load_action = Some(action.clone());
@@ -1950,15 +2438,21 @@ impl App {
         tokio::spawn(async move {
             let mut api = api.lock().await;
             match catalog::execute_action(&action, &mut api).await {
-                Ok(Some(screen)) => { tx.send(AppAction::PushScreen(screen)).ok(); }
+                Ok(Some(screen)) => {
+                    tx.send(AppAction::PushScreen(screen)).ok();
+                }
                 Ok(None) => {}
-                Err(e) => { tx.send(AppAction::Toast(format!("Error: {e}"))).ok(); }
+                Err(e) => {
+                    tx.send(AppAction::Toast(format!("Error: {e}"))).ok();
+                }
             }
         });
     }
 
     pub(crate) fn trigger_search(&mut self) {
-        let Some(api) = self.require_api() else { return; };
+        let Some(api) = self.require_api() else {
+            return;
+        };
         let query = self.search_query.clone();
         let tx = self.action_tx.clone();
         self.toast.show(&format!("Searching: {query}"), 1.0);
@@ -1967,16 +2461,24 @@ impl App {
             let mut api = api.lock().await;
             match api.search(&query).await {
                 Ok(tracks) => {
-                    let screen = BrowseScreen::TrackList { title: format!("Search: {query}"), tracks };
+                    let screen = BrowseScreen::TrackList {
+                        title: format!("Search: {query}"),
+                        tracks,
+                    };
                     tx.send(AppAction::PushScreen(screen)).ok();
                 }
-                Err(e) => { tx.send(AppAction::Toast(format!("Search failed: {e}"))).ok(); }
+                Err(e) => {
+                    tx.send(AppAction::Toast(format!("Search failed: {e}")))
+                        .ok();
+                }
             }
         });
     }
 
     pub(crate) fn download_for_preview(&mut self, track: BeatportTrack) {
-        let Some(api) = self.require_api() else { return; };
+        let Some(api) = self.require_api() else {
+            return;
+        };
         let name = format!("{} - {}", track.artist_name(), track.full_title());
         self.toast.show(&format!("Loading preview: {name}"), 2.0);
         super::download::download_for_preview(
@@ -1994,15 +2496,29 @@ impl App {
         );
     }
 
-    pub(crate) fn download_and_play(&mut self, track: std::sync::Arc<BeatportTrack>, as_incoming: bool) {
+    pub(crate) fn download_and_play(
+        &mut self,
+        track: std::sync::Arc<BeatportTrack>,
+        as_incoming: bool,
+    ) {
         if self.download_in_flight {
-            tracing::info!("Download BLOCKED — already in flight: {} - {}", track.artist_name(), track.full_title());
-            self.engine.enqueue(crate::audio::engine::QueueEntry { track });
+            tracing::info!(
+                "Download BLOCKED — already in flight: {} - {}",
+                track.artist_name(),
+                track.full_title()
+            );
+            self.engine
+                .enqueue(crate::audio::engine::QueueEntry { track });
             return;
         }
-        let track: BeatportTrack = std::sync::Arc::try_unwrap(track).unwrap_or_else(|a| (*a).clone());
+        let track: BeatportTrack =
+            std::sync::Arc::try_unwrap(track).unwrap_or_else(|a| (*a).clone());
         self.download_in_flight = true;
-        tracing::info!("Download START: {} - {} (as_incoming={as_incoming})", track.artist_name(), track.full_title());
+        tracing::info!(
+            "Download START: {} - {} (as_incoming={as_incoming})",
+            track.artist_name(),
+            track.full_title()
+        );
 
         let Some(api) = self.api.clone() else {
             self.download_in_flight = false;
@@ -2028,17 +2544,29 @@ impl App {
     pub async fn handle_action(&mut self, action: AppAction) {
         match action {
             AppAction::Toast(msg) => self.toast.show(&msg, 2.0),
-            AppAction::ShowPlaylistPicker { track_id, playlists } => {
+            AppAction::ShowPlaylistPicker {
+                track_id,
+                playlists,
+            } => {
                 self.playlist_picker = Some(PlaylistPickerState {
-                    playlists, track_id, selected: 0, new_name: String::new(),
+                    playlists,
+                    track_id,
+                    selected: 0,
+                    new_name: String::new(),
                 });
                 self.view_mode = ViewMode::PlaylistPicker;
             }
             AppAction::ShowGenrePicker { favorites, genres } => {
                 self.genre_picker = Some(GenrePickerState {
-                    genres, selected: 0, scroll_offset: 0,
+                    genres,
+                    selected: 0,
+                    scroll_offset: 0,
                 });
-                self.view_mode = if favorites { ViewMode::FavoritesPicker } else { ViewMode::GenrePicker };
+                self.view_mode = if favorites {
+                    ViewMode::FavoritesPicker
+                } else {
+                    ViewMode::GenrePicker
+                };
             }
             AppAction::PushScreen(mut screen) => {
                 // Sort favorite genres to top
@@ -2066,24 +2594,37 @@ impl App {
                 let count = new_tracks.len();
                 if let Some(BrowseScreen::TrackList { tracks, .. }) = self.screen_stack.last_mut() {
                     tracks.extend(new_tracks);
-                    self.toast.show(&format!("+{count} tracks ({} total)", tracks.len()), 1.0);
+                    self.toast
+                        .show(&format!("+{count} tracks ({} total)", tracks.len()), 1.0);
                 }
             }
             AppAction::AppendCharts(new_charts) => {
                 let count = new_charts.len();
                 if let Some(BrowseScreen::ChartList { charts, .. }) = self.screen_stack.last_mut() {
                     charts.extend(new_charts);
-                    self.toast.show(&format!("+{count} charts ({} total)", charts.len()), 1.0);
+                    self.toast
+                        .show(&format!("+{count} charts ({} total)", charts.len()), 1.0);
                 }
             }
             AppAction::AppendReleases(new_releases) => {
                 let count = new_releases.len();
-                if let Some(BrowseScreen::ReleaseList { releases, .. }) = self.screen_stack.last_mut() {
+                if let Some(BrowseScreen::ReleaseList { releases, .. }) =
+                    self.screen_stack.last_mut()
+                {
                     releases.extend(new_releases);
-                    self.toast.show(&format!("+{count} releases ({} total)", releases.len()), 1.0);
+                    self.toast.show(
+                        &format!("+{count} releases ({} total)", releases.len()),
+                        1.0,
+                    );
                 }
             }
-            AppAction::TrackDecoded { track, samples, sample_rate, analysis, as_incoming } => {
+            AppAction::TrackDecoded {
+                track,
+                samples,
+                sample_rate,
+                analysis,
+                as_incoming,
+            } => {
                 self.download_in_flight = false;
                 let name = format!("{} - {}", track.artist_name(), track.full_title());
                 // Session resume overrides the normal start_time with the
@@ -2110,15 +2651,25 @@ impl App {
                     } else {
                         raw
                     };
-                    tracing::info!("Resume: seeking {name} to {pos:.1}s (raw saved = {raw:.1}s, duration {total:.1}s)");
+                    tracing::info!(
+                        "Resume: seeking {name} to {pos:.1}s (raw saved = {raw:.1}s, duration {total:.1}s)"
+                    );
                     pos
                 } else if as_incoming {
                     let playing_bpm = self.cached_info.playing_bpm.unwrap_or(128.0);
                     let incoming_bpm = analysis.beat_grid.bpm;
-                    let playing_key = self.cached_info.playing_track.as_ref().and_then(|t| t.key.clone());
+                    let playing_key = self
+                        .cached_info
+                        .playing_track
+                        .as_ref()
+                        .and_then(|t| t.key.clone());
                     let incoming_key = track.key.clone();
                     let transition = crate::audio::transition::TransitionType::choose(
-                        playing_bpm, incoming_bpm, playing_key.as_deref(), incoming_key.as_deref());
+                        playing_bpm,
+                        incoming_bpm,
+                        playing_key.as_deref(),
+                        incoming_key.as_deref(),
+                    );
                     if transition == crate::audio::transition::TransitionType::EchoOut {
                         analysis.first_audio
                     } else {
@@ -2128,10 +2679,12 @@ impl App {
                     analysis.first_audio
                 };
                 if as_incoming {
-                    self.engine.load_incoming(samples, sample_rate, analysis, track, start_time);
+                    self.engine
+                        .load_incoming(samples, sample_rate, analysis, track, start_time);
                     self.toast.show(&format!("Loaded: {name}"), 1.5);
                 } else {
-                    self.engine.play_track(samples, sample_rate, analysis, track, start_time);
+                    self.engine
+                        .play_track(samples, sample_rate, analysis, track, start_time);
                     self.toast.show(&format!("Playing: {name}"), 2.0);
                     // Auto-switch to the dashboard on the first-play
                     // transition. Once audio starts you usually want to
@@ -2140,17 +2693,31 @@ impl App {
                     // subsequent tracks (they arrive via crossfade, which
                     // is triggered from any view without needing a
                     // mode change).
-                    if matches!(self.view_mode, ViewMode::Browse | ViewMode::Queue | ViewMode::History | ViewMode::Settings | ViewMode::Search) {
+                    if matches!(
+                        self.view_mode,
+                        ViewMode::Browse
+                            | ViewMode::Queue
+                            | ViewMode::History
+                            | ViewMode::Settings
+                            | ViewMode::Search
+                    ) {
                         self.view_mode = ViewMode::Dashboard;
                         self.dash_focus = DashFocus::Controller;
                     }
                 }
             }
-            AppAction::PreviewReady { samples, sample_rate, analysis } => {
+            AppAction::PreviewReady {
+                samples,
+                sample_rate,
+                analysis,
+            } => {
                 let bpm = analysis.beat_grid.bpm;
                 let first_beat = analysis.beat_grid.first_beat_time;
                 self.engine.preview_track(samples, sample_rate, analysis);
-                self.toast.show(&format!("Preview: {bpm:.0} BPM, beat at {first_beat:.3}s"), 3.0);
+                self.toast.show(
+                    &format!("Preview: {bpm:.0} BPM, beat at {first_beat:.3}s"),
+                    3.0,
+                );
             }
             AppAction::DjToolCalls(tools) => {
                 // Execute each tool and collect results
@@ -2168,7 +2735,12 @@ impl App {
             AppAction::DjContinue(results) => {
                 self.continue_dj(results);
             }
-            AppAction::AlignmentResult { nudge_ms, is_aligned, rate_correction, details } => {
+            AppAction::AlignmentResult {
+                nudge_ms,
+                is_aligned,
+                rate_correction,
+                details,
+            } => {
                 if !is_aligned && nudge_ms.abs() > 2.0 {
                     // Positive nudge_ms = incoming is early = nudge backward
                     let dir = if nudge_ms > 0.0 { -1 } else { 1 };
@@ -2176,14 +2748,21 @@ impl App {
                     for _ in 0..nudge_count.min(5) {
                         self.engine.nudge(dir);
                     }
-                    self.toast.show(&format!("Mix: aligned ({nudge_ms:+.1}ms nudge applied)"), 2.0);
+                    self.toast.show(
+                        &format!("Mix: aligned ({nudge_ms:+.1}ms nudge applied)"),
+                        2.0,
+                    );
                 } else {
-                    self.toast.show(&format!("Mix: already aligned ({nudge_ms:+.1}ms)"), 2.0);
+                    self.toast
+                        .show(&format!("Mix: already aligned ({nudge_ms:+.1}ms)"), 2.0);
                 }
                 if let Some(rc) = rate_correction
-                    && (rc - 1.0).abs() > 0.001 {
-                        tracing::info!("AI rate correction suggested: {rc:.4} (not auto-applied, PLL manages)");
-                    }
+                    && (rc - 1.0).abs() > 0.001
+                {
+                    tracing::info!(
+                        "AI rate correction suggested: {rc:.4} (not auto-applied, PLL manages)"
+                    );
+                }
                 tracing::info!("AI alignment: {details}");
             }
             AppAction::DownloadFailed(msg) => {
@@ -2203,7 +2782,10 @@ impl App {
                 let count = screen.item_count();
                 // Find matching item (case-insensitive)
                 let found = (0..count).find(|&i| {
-                    screen.item_label(i).to_lowercase().contains(&segment.to_lowercase())
+                    screen
+                        .item_label(i)
+                        .to_lowercase()
+                        .contains(&segment.to_lowercase())
                 });
                 if let Some(idx) = found {
                     self.selected = idx;
@@ -2221,15 +2803,14 @@ impl App {
 
         // --play — queue a genre chart
         if cli.play {
-            let genre = cli.genre.as_deref()
-                .unwrap_or_else(|| {
-                    if !self.config.favorite_genres.is_empty() {
-                        // Pick random favorite
-                        &self.config.favorite_genres[0]
-                    } else {
-                        &self.config.default_genre
-                    }
-                });
+            let genre = cli.genre.as_deref().unwrap_or_else(|| {
+                if !self.config.favorite_genres.is_empty() {
+                    // Pick random favorite
+                    &self.config.favorite_genres[0]
+                } else {
+                    &self.config.default_genre
+                }
+            });
             self.toast.show(&format!("Loading {genre} charts..."), 3.0);
 
             if let Some(api) = self.api.clone() {
@@ -2239,21 +2820,29 @@ impl App {
                     let mut api = api.lock().await;
                     match api.genres().await {
                         Ok(genres) => {
-                            if let Some(g) = genres.iter().find(|g| g.name.eq_ignore_ascii_case(&genre)) {
+                            if let Some(g) =
+                                genres.iter().find(|g| g.name.eq_ignore_ascii_case(&genre))
+                            {
                                 match api.genre_top_100(g.id).await {
                                     Ok(tracks) => {
                                         let title = format!("{} Top 100", g.name);
                                         tx.send(AppAction::PushScreen(
-                                            catalog::BrowseScreen::TrackList { title, tracks }
-                                        )).ok();
+                                            catalog::BrowseScreen::TrackList { title, tracks },
+                                        ))
+                                        .ok();
                                     }
-                                    Err(e) => { tx.send(AppAction::Toast(format!("Error: {e}"))).ok(); }
+                                    Err(e) => {
+                                        tx.send(AppAction::Toast(format!("Error: {e}"))).ok();
+                                    }
                                 }
                             } else {
-                                tx.send(AppAction::Toast(format!("Genre '{genre}' not found"))).ok();
+                                tx.send(AppAction::Toast(format!("Genre '{genre}' not found")))
+                                    .ok();
                             }
                         }
-                        Err(e) => { tx.send(AppAction::Toast(format!("Error: {e}"))).ok(); }
+                        Err(e) => {
+                            tx.send(AppAction::Toast(format!("Error: {e}"))).ok();
+                        }
                     }
                 });
             }
@@ -2290,8 +2879,11 @@ impl App {
                         if let Some((event, _value)) = state.last_event.as_ref() {
                             pm.captured = Some(event.clone());
                             self.toast.show(
-                                &format!("Captured: {} → {}\nPress Y to save, Esc to cancel",
-                                    event.label(), pm.action.label()),
+                                &format!(
+                                    "Captured: {} → {}\nPress Y to save, Esc to cancel",
+                                    event.label(),
+                                    pm.action.label()
+                                ),
                                 10.0,
                             );
                         }
@@ -2314,21 +2906,31 @@ impl App {
                     self.toast.show("Playback ended", 2.0);
                 }
                 EngineEvent::CrossfadeComplete { track, bpm } => {
-                    tracing::info!("Finished: {} - {} ({bpm:.0} BPM)", track.artist_name(), track.full_title());
+                    tracing::info!(
+                        "Finished: {} - {} ({bpm:.0} BPM)",
+                        track.artist_name(),
+                        track.full_title()
+                    );
                     // Snapshot the finished mix for training feedback.
                     // `track` is the one that just finished (outgoing);
                     // the new playing track is whatever the engine
                     // swapped to. Read it fresh since cached_info hasn't
                     // refreshed for this tick yet.
                     let new_playing = self.engine.now_playing();
-                    let incoming_title = new_playing.playing_track.as_ref()
+                    let incoming_title = new_playing
+                        .playing_track
+                        .as_ref()
                         .map(|t| format!("{} - {}", t.artist_name(), t.full_title()))
                         .unwrap_or_else(|| "?".into());
-                    let outgoing_title = format!("{} - {}", track.artist_name(), track.full_title());
+                    let outgoing_title =
+                        format!("{} - {}", track.artist_name(), track.full_title());
                     let inc_bpm = new_playing.playing_bpm.unwrap_or(0.0);
                     let key_pair = match (
                         track.key.as_deref(),
-                        new_playing.playing_track.as_ref().and_then(|t| t.key.as_deref()),
+                        new_playing
+                            .playing_track
+                            .as_ref()
+                            .and_then(|t| t.key.as_deref()),
                     ) {
                         (Some(a), Some(b)) => Some(format!("{a}→{b}")),
                         _ => None,
@@ -2356,10 +2958,8 @@ impl App {
                     self.toast.show(&msg, 4.0);
                 }
                 EngineEvent::AutoMixPaused => {
-                    self.toast.show(
-                        "Auto-mix paused — resumes after this track or :auto",
-                        2.5,
-                    );
+                    self.toast
+                        .show("Auto-mix paused — resumes after this track or :auto", 2.5);
                 }
             }
         }
@@ -2383,8 +2983,13 @@ impl App {
         while self.mix_entries.len() < self.cached_info.history.len() {
             let idx = self.mix_entries.len();
             let mix = if self.cached_info.history[idx].mix_score.is_some() {
-                self.pending_mix_entries.pop_front()
-                    .map(|entry| HistoryMix { entry, rated: None, rated_at: None })
+                self.pending_mix_entries
+                    .pop_front()
+                    .map(|entry| HistoryMix {
+                        entry,
+                        rated: None,
+                        rated_at: None,
+                    })
             } else {
                 None
             };
@@ -2406,17 +3011,28 @@ impl App {
                 DashFocus::Browse => "Browse",
                 DashFocus::Log => "Log",
             };
-            self.status_writer.maybe_write(&self.cached_info, &screen_title, &screen_items, self.toast.peek(), Some(self.dash_section.label()), Some(dash_focus_label));
+            self.status_writer.maybe_write(
+                &self.cached_info,
+                &screen_title,
+                &screen_items,
+                self.toast.peek(),
+                Some(self.dash_section.label()),
+                Some(dash_focus_label),
+            );
         }
         // Quick status: blocking fs::write every 250ms instead of every tick.
         // Good enough for external scripts polling quick.txt; avoids 60Hz
         // disk I/O on the event loop.
         if self.last_quick_status.elapsed() >= std::time::Duration::from_millis(250) {
             let view_name = match self.view_mode {
-                ViewMode::Browse => "browse", ViewMode::Dashboard => "dashboard",
-                ViewMode::Queue => "queue", ViewMode::History => "history",
-                ViewMode::Settings => "settings", ViewMode::Help => "help",
-                ViewMode::Search => "search", _ => "other",
+                ViewMode::Browse => "browse",
+                ViewMode::Dashboard => "dashboard",
+                ViewMode::Queue => "queue",
+                ViewMode::History => "history",
+                ViewMode::Settings => "settings",
+                ViewMode::Help => "help",
+                ViewMode::Search => "search",
+                _ => "other",
             };
             crate::ipc::write_quick_status(&self.cached_info, view_name);
             self.last_quick_status = std::time::Instant::now();
@@ -2430,9 +3046,10 @@ impl App {
             && self.last_session_save.elapsed() >= std::time::Duration::from_secs(5)
         {
             if let Some(snap) = self.engine.session_snapshot()
-                && let Err(e) = crate::session::save(&snap) {
-                    tracing::warn!("Session save failed: {e}");
-                }
+                && let Err(e) = crate::session::save(&snap)
+            {
+                tracing::warn!("Session save failed: {e}");
+            }
             self.last_session_save = std::time::Instant::now();
         }
 
@@ -2446,7 +3063,9 @@ impl App {
             // in flight — overlapping conversations cancel-and-restart
             // each other, exhausting the Anthropic input-token rate
             // limit (50k tokens/min on Haiku).
-            let dj_busy = self.claude_dj.as_ref()
+            let dj_busy = self
+                .claude_dj
+                .as_ref()
                 .and_then(|d| d.try_lock().ok().map(|d| d.is_busy()))
                 .unwrap_or(false);
             if dj_enabled && can_call && !dj_busy {
@@ -2520,13 +3139,19 @@ impl App {
                 // Runs in manual OR assist mode; auto mode has the
                 // rate-correction controller doing this itself.
                 else if state == crate::audio::engine::EngineState::Crossfading
-                    && matches!(self.config.claude_dj.mode,
-                        crate::config::ClaudeDjMode::Manual | crate::config::ClaudeDjMode::Assist)
+                    && matches!(
+                        self.config.claude_dj.mode,
+                        crate::config::ClaudeDjMode::Manual | crate::config::ClaudeDjMode::Assist
+                    )
                     && {
                         let p = self.cached_info.crossfade_progress;
-                        let idx = if (0.30..0.70).contains(&p) && !self.mix_checkpoints_fired[0] { Some(0) }
-                                  else if (0.70..0.95).contains(&p) && !self.mix_checkpoints_fired[1] { Some(1) }
-                                  else { None };
+                        let idx = if (0.30..0.70).contains(&p) && !self.mix_checkpoints_fired[0] {
+                            Some(0)
+                        } else if (0.70..0.95).contains(&p) && !self.mix_checkpoints_fired[1] {
+                            Some(1)
+                        } else {
+                            None
+                        };
                         idx.is_some()
                     }
                 {
@@ -2542,8 +3167,7 @@ impl App {
                         (p * 100.0) as i32,
                         self.cached_info.phase_offset_ms,
                     ));
-                }
-                else if state == crate::audio::engine::EngineState::Crossfading
+                } else if state == crate::audio::engine::EngineState::Crossfading
                     && self.config.claude_dj.mode == crate::config::ClaudeDjMode::Manual
                     && self.cached_info.crossfade_progress < 0.9
                     && self.last_crossfade_trigger.elapsed() >= std::time::Duration::from_secs(10)
@@ -2585,7 +3209,8 @@ impl App {
                             // immutable borrow across the loop body.
                             #[allow(clippy::unnecessary_to_owned)]
                             for t in tracks.to_vec() {
-                                self.engine.enqueue(crate::audio::engine::QueueEntry::from(t));
+                                self.engine
+                                    .enqueue(crate::audio::engine::QueueEntry::from(t));
                             }
                         }
                         self.toast.show("test_mix: queued, loading decks…", 1.0);
@@ -2610,13 +3235,15 @@ impl App {
                         self.toast.show("test_mix: decks never loaded", 2.0);
                         self.test_mix_state = None;
                     } else {
-                        self.test_mix_state = Some(TestMixState::WaitForBothLoaded { ticks: ticks + 1 });
+                        self.test_mix_state =
+                            Some(TestMixState::WaitForBothLoaded { ticks: ticks + 1 });
                     }
                 }
                 TestMixState::Teleport => {
                     self.view_mode = ViewMode::Dashboard;
                     self.engine.teleport(&self.config);
-                    self.toast.show("test_mix: teleported — crossfade imminent", 2.0);
+                    self.toast
+                        .show("test_mix: teleported — crossfade imminent", 2.0);
                     self.test_mix_state = None;
                 }
             }
@@ -2629,7 +3256,11 @@ impl App {
             match self.view_mode {
                 ViewMode::Dashboard => {
                     // Render dashboard as text for screen dump
-                    let dash_lines = crate::tui::dashboard::render_dashboard_text(&self.cached_info, self.waveform_mode, 120);
+                    let dash_lines = crate::tui::dashboard::render_dashboard_text(
+                        &self.cached_info,
+                        self.waveform_mode,
+                        120,
+                    );
                     crate::ipc::write_screen_lines("Dashboard", &dash_lines);
                 }
                 _ => {
@@ -2646,7 +3277,6 @@ impl App {
             self.last_screen_dump = std::time::Instant::now();
         }
     }
-
 }
 
 fn render_mixer_overlay(
@@ -2656,32 +3286,92 @@ fn render_mixer_overlay(
     deck_is_a: bool,
     row: MixerRow,
 ) {
-    use ratatui::widgets::Paragraph;
     use ratatui::style::Modifier;
+    use ratatui::widgets::Paragraph;
 
-    let rows = [MixerRow::EqLow, MixerRow::EqMid, MixerRow::EqHigh, MixerRow::Filter, MixerRow::Fader];
+    let rows = [
+        MixerRow::EqLow,
+        MixerRow::EqMid,
+        MixerRow::EqHigh,
+        MixerRow::Filter,
+        MixerRow::Fader,
+    ];
 
     let format_value = |r: MixerRow, is_a: bool| -> String {
         match r {
-            MixerRow::EqLow => format!("{:+.0} dB", if is_a { info.deck_a_eq_low_db } else { info.deck_b_eq_low_db }),
-            MixerRow::EqMid => format!("{:+.0} dB", if is_a { info.deck_a_eq_mid_db } else { info.deck_b_eq_mid_db }),
-            MixerRow::EqHigh => format!("{:+.0} dB", if is_a { info.deck_a_eq_high_db } else { info.deck_b_eq_high_db }),
-            MixerRow::Filter => format!("{:+.2}", if is_a { info.deck_a_filter_pos } else { info.deck_b_filter_pos }),
-            MixerRow::Fader => format!("{:.2}", if is_a { info.channel_fader_a } else { info.channel_fader_b }),
+            MixerRow::EqLow => format!(
+                "{:+.0} dB",
+                if is_a {
+                    info.deck_a_eq_low_db
+                } else {
+                    info.deck_b_eq_low_db
+                }
+            ),
+            MixerRow::EqMid => format!(
+                "{:+.0} dB",
+                if is_a {
+                    info.deck_a_eq_mid_db
+                } else {
+                    info.deck_b_eq_mid_db
+                }
+            ),
+            MixerRow::EqHigh => format!(
+                "{:+.0} dB",
+                if is_a {
+                    info.deck_a_eq_high_db
+                } else {
+                    info.deck_b_eq_high_db
+                }
+            ),
+            MixerRow::Filter => format!(
+                "{:+.2}",
+                if is_a {
+                    info.deck_a_filter_pos
+                } else {
+                    info.deck_b_filter_pos
+                }
+            ),
+            MixerRow::Fader => format!(
+                "{:.2}",
+                if is_a {
+                    info.channel_fader_a
+                } else {
+                    info.channel_fader_b
+                }
+            ),
         }
     };
 
-    let sel_style = Style::default().fg(Color::Black).bg(Color::Yellow).add_modifier(Modifier::BOLD);
-    let active_col_style = Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD);
+    let sel_style = Style::default()
+        .fg(Color::Black)
+        .bg(Color::Yellow)
+        .add_modifier(Modifier::BOLD);
+    let active_col_style = Style::default()
+        .fg(Color::Yellow)
+        .add_modifier(Modifier::BOLD);
     let inactive_col_style = Style::default().fg(Color::DarkGray);
 
     let mut lines: Vec<Line> = Vec::new();
     lines.push(Line::from(""));
     lines.push(Line::from(vec![
         Span::raw("          "),
-        Span::styled("  Deck A  ", if deck_is_a { active_col_style } else { inactive_col_style }),
+        Span::styled(
+            "  Deck A  ",
+            if deck_is_a {
+                active_col_style
+            } else {
+                inactive_col_style
+            },
+        ),
         Span::raw("    "),
-        Span::styled("  Deck B  ", if !deck_is_a { active_col_style } else { inactive_col_style }),
+        Span::styled(
+            "  Deck B  ",
+            if !deck_is_a {
+                active_col_style
+            } else {
+                inactive_col_style
+            },
+        ),
     ]));
     lines.push(Line::from(""));
 
@@ -2690,10 +3380,16 @@ fn render_mixer_overlay(
         let val_a = format_value(r, true);
         let val_b = format_value(r, false);
         let (style_a, style_b) = if r == row {
-            if deck_is_a { (sel_style, Style::default().fg(Color::Gray)) }
-            else { (Style::default().fg(Color::Gray), sel_style) }
+            if deck_is_a {
+                (sel_style, Style::default().fg(Color::Gray))
+            } else {
+                (Style::default().fg(Color::Gray), sel_style)
+            }
         } else {
-            (Style::default().fg(Color::Gray), Style::default().fg(Color::Gray))
+            (
+                Style::default().fg(Color::Gray),
+                Style::default().fg(Color::Gray),
+            )
         };
         lines.push(Line::from(vec![
             Span::styled(label, Style::default().fg(Color::White)),
@@ -2705,7 +3401,10 @@ fn render_mixer_overlay(
 
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
-        format!("  Transition: {}    Crossfader: {:+.2}", info.transition_type_name, info.crossfader_pos),
+        format!(
+            "  Transition: {}    Crossfader: {:+.2}",
+            info.transition_type_name, info.crossfader_pos
+        ),
         Style::default().fg(Color::DarkGray),
     )));
     lines.push(Line::from(""));
@@ -2726,8 +3425,13 @@ mod click_tests {
 
     #[test]
     fn click_target_contains_inclusive_left_top_exclusive_right_bottom() {
-        let t = ClickTarget::new(10, 5, 4, 2,
-            ClickAction::SimulateKey(crossterm::event::KeyCode::Esc));
+        let t = ClickTarget::new(
+            10,
+            5,
+            4,
+            2,
+            ClickAction::SimulateKey(crossterm::event::KeyCode::Esc),
+        );
         // Inside.
         assert!(t.contains(10, 5));
         assert!(t.contains(13, 6));
@@ -2749,11 +3453,11 @@ mod click_tests {
             rel * 2.0 - 1.0
         };
         assert_eq!(map(10, 10, 30), -1.0, "left edge → −1");
-        assert_eq!(map(20, 10, 30),  0.0, "midpoint → 0");
-        assert_eq!(map(30, 10, 30),  1.0, "right edge → +1");
+        assert_eq!(map(20, 10, 30), 0.0, "midpoint → 0");
+        assert_eq!(map(30, 10, 30), 1.0, "right edge → +1");
         // Out-of-range clicks clamp.
-        assert_eq!(map(5,  10, 30), -1.0);
-        assert_eq!(map(40, 10, 30),  1.0);
+        assert_eq!(map(5, 10, 30), -1.0);
+        assert_eq!(map(40, 10, 30), 1.0);
     }
 
     /// Mirrors the log_scroll_offset arithmetic from handle_key:
@@ -2761,15 +3465,23 @@ mod click_tests {
     ///   Down: offset.saturating_sub(1)
     /// Pure functions so we can pin the cap and the saturating-zero
     /// behavior without spinning up an App.
-    fn scroll_up(o: usize) -> usize { (o + 1).min(1000) }
-    fn scroll_down(o: usize) -> usize { o.saturating_sub(1) }
+    fn scroll_up(o: usize) -> usize {
+        (o + 1).min(1000)
+    }
+    fn scroll_down(o: usize) -> usize {
+        o.saturating_sub(1)
+    }
 
     #[test]
     fn log_scroll_up_caps_at_1000() {
         assert_eq!(scroll_up(0), 1);
         assert_eq!(scroll_up(999), 1000);
         assert_eq!(scroll_up(1000), 1000, "must not exceed cap");
-        assert_eq!(scroll_up(usize::MAX / 2), 1000, "extreme value still capped");
+        assert_eq!(
+            scroll_up(usize::MAX / 2),
+            1000,
+            "extreme value still capped"
+        );
     }
 
     #[test]
@@ -2790,8 +3502,13 @@ mod click_tests {
         // Defensive: a degenerate 0-width or 0-height target shouldn't
         // ever match a click. Guards against renderer bugs that push
         // empty rects.
-        let t = ClickTarget::new(5, 5, 0, 0,
-            ClickAction::SimulateKey(crossterm::event::KeyCode::Esc));
+        let t = ClickTarget::new(
+            5,
+            5,
+            0,
+            0,
+            ClickAction::SimulateKey(crossterm::event::KeyCode::Esc),
+        );
         assert!(!t.contains(5, 5));
         assert!(!t.contains(4, 4));
     }

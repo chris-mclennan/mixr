@@ -42,8 +42,12 @@ pub fn import_rekordbox_xml(xml_path: &Path) -> anyhow::Result<Vec<BeatportTrack
                 }
             }
             Ok(Event::Eof) => break,
-            Err(e) => return Err(anyhow::anyhow!("rekordbox.xml parse error at {}: {e}",
-                reader.buffer_position())),
+            Err(e) => {
+                return Err(anyhow::anyhow!(
+                    "rekordbox.xml parse error at {}: {e}",
+                    reader.buffer_position()
+                ));
+            }
             _ => {}
         }
         buf.clear();
@@ -68,7 +72,10 @@ fn track_from_attributes(e: &quick_xml::events::BytesStart) -> Option<BeatportTr
 
     for attr in e.attributes().flatten() {
         let key_bytes = attr.key.as_ref();
-        let value = match attr.unescape_value() { Ok(v) => v.into_owned(), Err(_) => continue };
+        let value = match attr.unescape_value() {
+            Ok(v) => v.into_owned(),
+            Err(_) => continue,
+        };
         match key_bytes {
             b"Name" => name = Some(value),
             b"Artist" => artist = Some(value),
@@ -88,10 +95,15 @@ fn track_from_attributes(e: &quick_xml::events::BytesStart) -> Option<BeatportTr
     let path = PathBuf::from(&path_str);
     // Skip entries that point at files we can't open. rekordbox can
     // hold dead links (drive offline, file moved) — silently filter.
-    if !path.exists() { return None; }
+    if !path.exists() {
+        return None;
+    }
 
     let title = name.unwrap_or_else(|| {
-        path.file_stem().and_then(|s| s.to_str()).unwrap_or("Untitled").to_string()
+        path.file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("Untitled")
+            .to_string()
     });
     let artist_name = artist.unwrap_or_else(|| "Unknown".into());
 
@@ -99,7 +111,10 @@ fn track_from_attributes(e: &quick_xml::events::BytesStart) -> Option<BeatportTr
         id: stable_path_id(&path),
         title,
         mix_name: None,
-        artists: vec![BeatportTrackArtist { id: 0, name: artist_name }],
+        artists: vec![BeatportTrackArtist {
+            id: 0,
+            name: artist_name,
+        }],
         bpm,
         key,
         duration,
@@ -122,7 +137,8 @@ fn track_from_attributes(e: &quick_xml::events::BytesStart) -> Option<BeatportTr
 /// a dep just for this single call.
 fn decode_file_url(url: &str) -> String {
     let stripped = url
-        .strip_prefix("file://localhost").or_else(|| url.strip_prefix("file://"))
+        .strip_prefix("file://localhost")
+        .or_else(|| url.strip_prefix("file://"))
         .unwrap_or(url);
     percent_decode(stripped)
 }
@@ -188,42 +204,54 @@ pub fn import_engine_db(db_path: &Path) -> anyhow::Result<Vec<BeatportTrack>> {
     use rusqlite::{Connection, OpenFlags};
 
     if !db_path.exists() {
-        return Err(anyhow::anyhow!("Engine DB not found: {}", db_path.display()));
+        return Err(anyhow::anyhow!(
+            "Engine DB not found: {}",
+            db_path.display()
+        ));
     }
     let conn = Connection::open_with_flags(db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
-    let library_root = db_path.parent().and_then(|p| p.parent())
+    let library_root = db_path
+        .parent()
+        .and_then(|p| p.parent())
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|| std::path::PathBuf::from("/"));
 
     let tracks = query_engine_v3(&conn, &library_root)
         .or_else(|_| query_engine_legacy(&conn, &library_root))?;
 
-    tracing::info!("Imported {} tracks from Engine DJ DB at {}",
-        tracks.len(), db_path.display());
+    tracing::info!(
+        "Imported {} tracks from Engine DJ DB at {}",
+        tracks.len(),
+        db_path.display()
+    );
     Ok(tracks)
 }
 
-fn query_engine_v3(conn: &rusqlite::Connection, library_root: &Path) -> anyhow::Result<Vec<BeatportTrack>> {
+fn query_engine_v3(
+    conn: &rusqlite::Connection,
+    library_root: &Path,
+) -> anyhow::Result<Vec<BeatportTrack>> {
     // Engine DJ v3: `Track` table holds metadata. `bpmAnalyzed` is
     // the post-analysis BPM (preferred over user-entered `bpm`).
     // `key` is integer 0-23 (Camelot wheel ordering); we leave it
     // as the raw int → string for now since mapping is non-trivial.
     let mut stmt = conn.prepare(
         "SELECT id, title, artist, album, genre, length, bpmAnalyzed, bpm, key, path \
-         FROM Track WHERE path IS NOT NULL"
+         FROM Track WHERE path IS NOT NULL",
     )?;
     let rows = stmt.query_map([], |row| {
         let path: String = row.get(9)?;
         let resolved = resolve_engine_path(library_root, &path);
         Ok((
-            row.get::<_, Option<String>>(1)?,                              // title
-            row.get::<_, Option<String>>(2)?,                              // artist
-            row.get::<_, Option<String>>(3)?,                              // album
-            row.get::<_, Option<String>>(4)?,                              // genre
-            row.get::<_, Option<f64>>(5)?,                                 // length
-            row.get::<_, Option<f64>>(6)?.or_else(||                       // bpmAnalyzed
-                row.get::<_, Option<f64>>(7).ok().flatten()),              // fallback to bpm
-            row.get::<_, Option<i64>>(8)?,                                 // key (int)
+            row.get::<_, Option<String>>(1)?, // title
+            row.get::<_, Option<String>>(2)?, // artist
+            row.get::<_, Option<String>>(3)?, // album
+            row.get::<_, Option<String>>(4)?, // genre
+            row.get::<_, Option<f64>>(5)?,    // length
+            row.get::<_, Option<f64>>(6)?
+                .or_else(||                       // bpmAnalyzed
+                row.get::<_, Option<f64>>(7).ok().flatten()), // fallback to bpm
+            row.get::<_, Option<i64>>(8)?,    // key (int)
             resolved,
         ))
     })?;
@@ -231,15 +259,23 @@ fn query_engine_v3(conn: &rusqlite::Connection, library_root: &Path) -> anyhow::
     let mut tracks = Vec::new();
     for row in rows.flatten() {
         let (title, artist, album, genre, length, bpm, key_int, path) = row;
-        if !path.exists() { continue; }
+        if !path.exists() {
+            continue;
+        }
         let id = stable_path_id(&path);
         tracks.push(BeatportTrack {
             id,
             title: title.unwrap_or_else(|| {
-                path.file_stem().and_then(|s| s.to_str()).unwrap_or("Untitled").to_string()
+                path.file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("Untitled")
+                    .to_string()
             }),
             mix_name: None,
-            artists: vec![BeatportTrackArtist { id: 0, name: artist.unwrap_or_else(|| "Unknown".into()) }],
+            artists: vec![BeatportTrackArtist {
+                id: 0,
+                name: artist.unwrap_or_else(|| "Unknown".into()),
+            }],
             bpm,
             key: key_int.map(engine_key_to_camelot),
             duration: length,
@@ -257,13 +293,15 @@ fn query_engine_v3(conn: &rusqlite::Connection, library_root: &Path) -> anyhow::
     Ok(tracks)
 }
 
-fn query_engine_legacy(conn: &rusqlite::Connection, library_root: &Path) -> anyhow::Result<Vec<BeatportTrack>> {
+fn query_engine_legacy(
+    conn: &rusqlite::Connection,
+    library_root: &Path,
+) -> anyhow::Result<Vec<BeatportTrack>> {
     // Legacy schema had `AnalyzedTrack` joined to `Track`. Best-
     // effort fallback — if both queries fail, the user gets a clear
     // error pointing at the DB path.
-    let mut stmt = conn.prepare(
-        "SELECT id, title, artist, length, bpm, path FROM Track WHERE path IS NOT NULL"
-    )?;
+    let mut stmt = conn
+        .prepare("SELECT id, title, artist, length, bpm, path FROM Track WHERE path IS NOT NULL")?;
     let rows = stmt.query_map([], |row| {
         let path: String = row.get(5)?;
         Ok((
@@ -277,16 +315,27 @@ fn query_engine_legacy(conn: &rusqlite::Connection, library_root: &Path) -> anyh
     let mut tracks = Vec::new();
     for row in rows.flatten() {
         let (title, artist, length, bpm, path) = row;
-        if !path.exists() { continue; }
+        if !path.exists() {
+            continue;
+        }
         tracks.push(BeatportTrack {
             id: stable_path_id(&path),
             title: title.unwrap_or_else(|| "Untitled".into()),
             mix_name: None,
-            artists: vec![BeatportTrackArtist { id: 0, name: artist.unwrap_or_else(|| "Unknown".into()) }],
-            bpm, key: None,
+            artists: vec![BeatportTrackArtist {
+                id: 0,
+                name: artist.unwrap_or_else(|| "Unknown".into()),
+            }],
+            bpm,
+            key: None,
             duration: length,
-            label_id: None, label_name: None, genre_id: None, genre_name: None,
-            genre_slug: None, release_id: None, release_date: None,
+            label_id: None,
+            label_name: None,
+            genre_id: None,
+            genre_name: None,
+            genre_slug: None,
+            release_id: None,
+            release_date: None,
             remixers: vec![],
             local_path: Some(path.to_string_lossy().into_owned()),
         });
@@ -300,14 +349,20 @@ fn query_engine_legacy(conn: &rusqlite::Connection, library_root: &Path) -> anyh
 /// rooted) — handle both. Always returns an absolute path.
 fn resolve_engine_path(library_root: &Path, path: &str) -> std::path::PathBuf {
     let p = std::path::Path::new(path);
-    if p.is_absolute() { p.to_path_buf() } else { library_root.join(p) }
+    if p.is_absolute() {
+        p.to_path_buf()
+    } else {
+        library_root.join(p)
+    }
 }
 
 /// Engine DJ stores the musical key as an integer 0-23 in Camelot
 /// wheel order (1A, 1B, 2A, 2B, ..., 12A, 12B). Map back to the
 /// human label so it matches what Beatport returns.
 fn engine_key_to_camelot(k: i64) -> String {
-    if !(0..=23).contains(&k) { return format!("?{k}"); }
+    if !(0..=23).contains(&k) {
+        return format!("?{k}");
+    }
     let camelot_num = (k / 2) + 1;
     let camelot_letter = if k % 2 == 0 { "A" } else { "B" };
     format!("{camelot_num}{camelot_letter}")
@@ -331,7 +386,9 @@ fn engine_key_to_camelot(k: i64) -> String {
 /// "MM:SS" or seconds), `tgen` (genre).
 pub fn import_serato_database(db_path: &Path) -> anyhow::Result<Vec<BeatportTrack>> {
     let bytes = std::fs::read(db_path)?;
-    let library_root = db_path.parent().and_then(|p| p.parent())
+    let library_root = db_path
+        .parent()
+        .and_then(|p| p.parent())
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|| std::path::PathBuf::from("/"));
 
@@ -340,21 +397,30 @@ pub fn import_serato_database(db_path: &Path) -> anyhow::Result<Vec<BeatportTrac
     while cursor + 8 <= bytes.len() {
         let tag = &bytes[cursor..cursor + 4];
         let len = u32::from_be_bytes([
-            bytes[cursor + 4], bytes[cursor + 5],
-            bytes[cursor + 6], bytes[cursor + 7],
+            bytes[cursor + 4],
+            bytes[cursor + 5],
+            bytes[cursor + 6],
+            bytes[cursor + 7],
         ]) as usize;
         let payload_start = cursor + 8;
         let payload_end = payload_start + len;
-        if payload_end > bytes.len() { break; }
+        if payload_end > bytes.len() {
+            break;
+        }
 
         if tag == b"otrk"
-            && let Some(track) = parse_serato_track(&bytes[payload_start..payload_end], &library_root) {
-                tracks.push(track);
-            }
+            && let Some(track) =
+                parse_serato_track(&bytes[payload_start..payload_end], &library_root)
+        {
+            tracks.push(track);
+        }
         cursor = payload_end;
     }
-    tracing::info!("Imported {} tracks from Serato database at {}",
-        tracks.len(), db_path.display());
+    tracing::info!(
+        "Imported {} tracks from Serato database at {}",
+        tracks.len(),
+        db_path.display()
+    );
     Ok(tracks)
 }
 
@@ -374,12 +440,16 @@ fn parse_serato_track(payload: &[u8], library_root: &Path) -> Option<BeatportTra
     while cursor + 8 <= payload.len() {
         let tag = &payload[cursor..cursor + 4];
         let len = u32::from_be_bytes([
-            payload[cursor + 4], payload[cursor + 5],
-            payload[cursor + 6], payload[cursor + 7],
+            payload[cursor + 4],
+            payload[cursor + 5],
+            payload[cursor + 6],
+            payload[cursor + 7],
         ]) as usize;
         let val_start = cursor + 8;
         let val_end = val_start + len;
-        if val_end > payload.len() { break; }
+        if val_end > payload.len() {
+            break;
+        }
 
         let value_bytes = &payload[val_start..val_end];
         match tag {
@@ -400,16 +470,29 @@ fn parse_serato_track(payload: &[u8], library_root: &Path) -> Option<BeatportTra
     // Serato stores paths relative to the library root (or absolute
     // on macOS — sometimes leading "/Users/..."). Resolve both.
     let candidate = std::path::PathBuf::from(&raw_path);
-    let resolved = if candidate.is_absolute() { candidate } else { library_root.join(&raw_path) };
-    if !resolved.exists() { return None; }
+    let resolved = if candidate.is_absolute() {
+        candidate
+    } else {
+        library_root.join(&raw_path)
+    };
+    if !resolved.exists() {
+        return None;
+    }
 
     Some(BeatportTrack {
         id: stable_path_id(&resolved),
         title: title.unwrap_or_else(|| {
-            resolved.file_stem().and_then(|s| s.to_str()).unwrap_or("Untitled").to_string()
+            resolved
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("Untitled")
+                .to_string()
         }),
         mix_name: None,
-        artists: vec![BeatportTrackArtist { id: 0, name: artist.unwrap_or_else(|| "Unknown".into()) }],
+        artists: vec![BeatportTrackArtist {
+            id: 0,
+            name: artist.unwrap_or_else(|| "Unknown".into()),
+        }],
         bpm,
         key,
         duration,
@@ -429,7 +512,8 @@ fn parse_serato_track(payload: &[u8], library_root: &Path) -> Option<BeatportTra
 /// string fields) into a Rust String. Best-effort: invalid pairs
 /// become U+FFFD via `String::from_utf16_lossy`.
 fn decode_utf16be(bytes: &[u8]) -> String {
-    let units: Vec<u16> = bytes.chunks_exact(2)
+    let units: Vec<u16> = bytes
+        .chunks_exact(2)
         .map(|c| u16::from_be_bytes([c[0], c[1]]))
         .collect();
     String::from_utf16_lossy(&units)
@@ -438,7 +522,9 @@ fn decode_utf16be(bytes: &[u8]) -> String {
 /// Serato's `tlen` field is sometimes a "MM:SS" string and sometimes
 /// just a number-of-seconds string. Try both.
 fn parse_serato_duration(s: &str) -> Option<f64> {
-    if let Ok(secs) = s.parse::<f64>() { return Some(secs); }
+    if let Ok(secs) = s.parse::<f64>() {
+        return Some(secs);
+    }
     // MM:SS form.
     let mut parts = s.split(':');
     let m: f64 = parts.next()?.parse().ok()?;
@@ -479,7 +565,10 @@ pub fn import_rekordbox_pdb(pdb_path: &Path) -> anyhow::Result<Vec<BeatportTrack
     let bytes = std::fs::read(pdb_path)?;
     // Volume root is the directory containing PIONEER/. The .pdb sits
     // at <root>/PIONEER/rekordbox/export.pdb so we walk up three.
-    let volume_root = pdb_path.parent().and_then(|p| p.parent()).and_then(|p| p.parent())
+    let volume_root = pdb_path
+        .parent()
+        .and_then(|p| p.parent())
+        .and_then(|p| p.parent())
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|| PathBuf::from("/"));
 
@@ -492,13 +581,19 @@ pub fn import_rekordbox_pdb(pdb_path: &Path) -> anyhow::Result<Vec<BeatportTrack
     for table in &header.tables {
         match table.page_type {
             PDB_PAGE_TYPE_ARTISTS => walk_pdb_pages(&bytes, &header, table, |row| {
-                if let Some((id, name)) = parse_pdb_artist_row(row) { artists.insert(id, name); }
+                if let Some((id, name)) = parse_pdb_artist_row(row) {
+                    artists.insert(id, name);
+                }
             }),
             PDB_PAGE_TYPE_GENRES => walk_pdb_pages(&bytes, &header, table, |row| {
-                if let Some((id, name)) = parse_pdb_genre_row(row) { genres.insert(id, name); }
+                if let Some((id, name)) = parse_pdb_genre_row(row) {
+                    genres.insert(id, name);
+                }
             }),
             PDB_PAGE_TYPE_KEYS => walk_pdb_pages(&bytes, &header, table, |row| {
-                if let Some((id, name)) = parse_pdb_key_row(row) { keys.insert(id, name); }
+                if let Some((id, name)) = parse_pdb_key_row(row) {
+                    keys.insert(id, name);
+                }
             }),
             _ => {}
         }
@@ -506,32 +601,60 @@ pub fn import_rekordbox_pdb(pdb_path: &Path) -> anyhow::Result<Vec<BeatportTrack
 
     let mut tracks: Vec<BeatportTrack> = Vec::new();
     for table in &header.tables {
-        if table.page_type != PDB_PAGE_TYPE_TRACKS { continue; }
+        if table.page_type != PDB_PAGE_TYPE_TRACKS {
+            continue;
+        }
         walk_pdb_pages(&bytes, &header, table, |row| {
             if let Some(pdb) = parse_pdb_track_row(row) {
                 let resolved = resolve_pdb_path(&volume_root, &pdb.file_path);
-                if !resolved.exists() { return; }
+                if !resolved.exists() {
+                    return;
+                }
                 tracks.push(BeatportTrack {
                     id: stable_path_id(&resolved),
                     title: if pdb.title.is_empty() {
-                        resolved.file_stem().and_then(|s| s.to_str())
-                            .unwrap_or("Untitled").to_string()
-                    } else { pdb.title },
-                    mix_name: if pdb.mix_name.is_empty() { None } else { Some(pdb.mix_name) },
+                        resolved
+                            .file_stem()
+                            .and_then(|s| s.to_str())
+                            .unwrap_or("Untitled")
+                            .to_string()
+                    } else {
+                        pdb.title
+                    },
+                    mix_name: if pdb.mix_name.is_empty() {
+                        None
+                    } else {
+                        Some(pdb.mix_name)
+                    },
                     artists: vec![BeatportTrackArtist {
                         id: pdb.artist_id as i64,
-                        name: artists.get(&pdb.artist_id).cloned().unwrap_or_else(|| "Unknown".into()),
+                        name: artists
+                            .get(&pdb.artist_id)
+                            .cloned()
+                            .unwrap_or_else(|| "Unknown".into()),
                     }],
-                    bpm: if pdb.tempo > 0 { Some(pdb.tempo as f64 / 100.0) } else { None },
+                    bpm: if pdb.tempo > 0 {
+                        Some(pdb.tempo as f64 / 100.0)
+                    } else {
+                        None
+                    },
                     key: keys.get(&pdb.key_id).cloned(),
-                    duration: if pdb.duration > 0 { Some(pdb.duration as f64) } else { None },
+                    duration: if pdb.duration > 0 {
+                        Some(pdb.duration as f64)
+                    } else {
+                        None
+                    },
                     label_id: None,
                     label_name: None,
                     genre_id: None,
                     genre_name: genres.get(&pdb.genre_id).cloned(),
                     genre_slug: None,
                     release_id: None,
-                    release_date: if pdb.release_date.is_empty() { None } else { Some(pdb.release_date) },
+                    release_date: if pdb.release_date.is_empty() {
+                        None
+                    } else {
+                        Some(pdb.release_date)
+                    },
                     remixers: vec![],
                     local_path: Some(resolved.to_string_lossy().into_owned()),
                 });
@@ -539,8 +662,11 @@ pub fn import_rekordbox_pdb(pdb_path: &Path) -> anyhow::Result<Vec<BeatportTrack
         });
     }
 
-    tracing::info!("Imported {} tracks from rekordbox.pdb at {}",
-        tracks.len(), pdb_path.display());
+    tracing::info!(
+        "Imported {} tracks from rekordbox.pdb at {}",
+        tracks.len(),
+        pdb_path.display()
+    );
     Ok(tracks)
 }
 
@@ -566,21 +692,33 @@ struct PdbTable {
 fn parse_pdb_header(bytes: &[u8]) -> Option<PdbHeader> {
     // u32 unknown1=0, u32 page_size, u32 num_tables, u32 next_unused,
     // u32 unknown, u32 sequence, u32 gap=0, then num_tables * Table.
-    if bytes.len() < 28 { return None; }
-    if read_u32_le(bytes, 0) != 0 { return None; }
+    if bytes.len() < 28 {
+        return None;
+    }
+    if read_u32_le(bytes, 0) != 0 {
+        return None;
+    }
     let page_size = read_u32_le(bytes, 4);
     let num_tables = read_u32_le(bytes, 8) as usize;
-    if read_u32_le(bytes, 24) != 0 { return None; }
+    if read_u32_le(bytes, 24) != 0 {
+        return None;
+    }
 
     let mut tables = Vec::with_capacity(num_tables);
     let mut cursor = 28;
     for _ in 0..num_tables {
-        if cursor + 16 > bytes.len() { return None; }
+        if cursor + 16 > bytes.len() {
+            return None;
+        }
         let page_type = read_u32_le(bytes, cursor);
         // empty_candidate at +4 is ignored.
         let first_page = read_u32_le(bytes, cursor + 8);
         let last_page = read_u32_le(bytes, cursor + 12);
-        tables.push(PdbTable { page_type, first_page, last_page });
+        tables.push(PdbTable {
+            page_type,
+            first_page,
+            last_page,
+        });
         cursor += 16;
     }
     Some(PdbHeader { page_size, tables })
@@ -591,12 +729,7 @@ fn parse_pdb_header(bytes: &[u8]) -> Option<PdbHeader> {
 /// subsequent pages chain via `next_page`. We stop when we hit
 /// `last_page`. Empty/dataless pages are skipped via the page_flags
 /// bit (0x40 set = no data).
-fn walk_pdb_pages(
-    bytes: &[u8],
-    header: &PdbHeader,
-    table: &PdbTable,
-    mut each: impl FnMut(&[u8]),
-) {
+fn walk_pdb_pages(bytes: &[u8], header: &PdbHeader, table: &PdbTable, mut each: impl FnMut(&[u8])) {
     let page_size = header.page_size as u64;
     let mut page_index = table.first_page;
     let mut visited = 0;
@@ -605,9 +738,13 @@ fn walk_pdb_pages(
     while visited < 100_000 {
         visited += 1;
         let page_offset = (page_index as u64) * page_size;
-        if page_offset as usize + page_size as usize > bytes.len() { return; }
+        if page_offset as usize + page_size as usize > bytes.len() {
+            return;
+        }
         let page = &bytes[page_offset as usize..(page_offset + page_size) as usize];
-        if read_u32_le(page, 0) != 0 { return; } // magic
+        if read_u32_le(page, 0) != 0 {
+            return;
+        } // magic
         let this_index = read_u32_le(page, 4);
         let _page_type = read_u32_le(page, 8);
         let next_page = read_u32_le(page, 12);
@@ -630,8 +767,12 @@ fn walk_pdb_pages(
             });
         }
 
-        if this_index == table.last_page { return; }
-        if next_page == page_index { return; }
+        if this_index == table.last_page {
+            return;
+        }
+        if next_page == page_index {
+            return;
+        }
         page_index = next_page;
     }
 }
@@ -658,8 +799,11 @@ fn walk_pdb_row_groups(
     // page_end - 36; group 0 (lowest row indices) starts at
     // page_end - group_count*36.
     for group_idx in 0..group_count {
-        let group_end = page_end - ((group_count - 1 - group_idx) as i64) * (PDB_ROW_GROUP_SIZE as i64);
-        if group_end < (PDB_ROW_GROUP_SIZE as i64) || group_end > page_end { continue; }
+        let group_end =
+            page_end - ((group_count - 1 - group_idx) as i64) * (PDB_ROW_GROUP_SIZE as i64);
+        if group_end < (PDB_ROW_GROUP_SIZE as i64) || group_end > page_end {
+            continue;
+        }
         let group_start = group_end - PDB_ROW_GROUP_SIZE as i64;
         let group = &page[group_start as usize..group_end as usize];
         // Layout inside the group (32 bytes of offsets, then flags + unknown):
@@ -670,14 +814,21 @@ fn walk_pdb_row_groups(
         for i in 0..16 {
             // Row index within the page (skip groups before this one).
             let abs_row_index = group_idx * 16 + i;
-            if abs_row_index >= num_rows as usize { break; }
-            if (presence & (1 << i)) == 0 { continue; }
+            if abs_row_index >= num_rows as usize {
+                break;
+            }
+            if (presence & (1 << i)) == 0 {
+                continue;
+            }
             // Row offsets are stored at end-(2*(i+1)) per rekordcrate.
             let off_pos = 32 - 2 * (i + 1);
             let row_offset = read_u16_le(group, off_pos);
             // Defend against insane offsets.
-            if (row_offset as u64) < PDB_PAGE_HEADER_SIZE { continue; }
-            if (row_offset as u64) >= (page.len() as u64 - page_heap_offset.min(page.len() as u64)) {
+            if (row_offset as u64) < PDB_PAGE_HEADER_SIZE {
+                continue;
+            }
+            if (row_offset as u64) >= (page.len() as u64 - page_heap_offset.min(page.len() as u64))
+            {
                 // Just sanity — let caller bound-check too.
             }
             each(row_offset);
@@ -702,17 +853,23 @@ fn read_u32_le(b: &[u8], off: usize) -> u32 {
 ///   - ISRC (flags=0x90, magic 0x03): rekordbox quirk — used for the
 ///     ISRC-only field; null-terminated ASCII after a 0x03 byte
 fn decode_devicesql_string(slice: &[u8]) -> Option<String> {
-    if slice.is_empty() { return None; }
+    if slice.is_empty() {
+        return None;
+    }
     let header = slice[0];
     if header & 1 == 1 {
         // Short ASCII: total length in bytes is (header>>1) including
         // the header itself, so content_len = (header>>1) - 1.
         let content_len = (header as usize >> 1).saturating_sub(1);
-        if 1 + content_len > slice.len() { return None; }
+        if 1 + content_len > slice.len() {
+            return None;
+        }
         return Some(String::from_utf8_lossy(&slice[1..1 + content_len]).into_owned());
     }
     // Long form: u8 flags(=header), u16 length, u8 padding, then body.
-    if slice.len() < 4 { return None; }
+    if slice.len() < 4 {
+        return None;
+    }
     let length = read_u16_le(slice, 1) as usize;
     let _padding = slice[3];
     let body_len = length.saturating_sub(4);
@@ -722,13 +879,21 @@ fn decode_devicesql_string(slice: &[u8]) -> Option<String> {
         0x90 => {
             // ISRC variant has magic 0x03 + null-terminated ASCII.
             if !body.is_empty() && body[0] == 0x03 {
-                let end = body[1..].iter().position(|&b| b == 0).map(|p| 1 + p).unwrap_or(body.len());
+                let end = body[1..]
+                    .iter()
+                    .position(|&b| b == 0)
+                    .map(|p| 1 + p)
+                    .unwrap_or(body.len());
                 return Some(String::from_utf8_lossy(&body[1..end]).into_owned());
             }
             // UCS-2 LE: read u16 pairs.
-            if !body_len.is_multiple_of(2) { return None; }
-            let units: Vec<u16> = body.chunks_exact(2)
-                .map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
+            if !body_len.is_multiple_of(2) {
+                return None;
+            }
+            let units: Vec<u16> = body
+                .chunks_exact(2)
+                .map(|c| u16::from_le_bytes([c[0], c[1]]))
+                .collect();
             Some(String::from_utf16_lossy(&units))
         }
         _ => None,
@@ -741,8 +906,8 @@ struct PdbTrackRow {
     artist_id: u32,
     key_id: u32,
     genre_id: u32,
-    tempo: u32,        // centi-BPM
-    duration: u16,     // seconds
+    tempo: u32,    // centi-BPM
+    duration: u16, // seconds
     title: String,
     mix_name: String,
     file_path: String,
@@ -754,14 +919,16 @@ struct PdbTrackRow {
 /// Each FilePtr16 points to a DeviceSQLString later in the row.
 fn parse_pdb_track_row(row: &[u8]) -> Option<PdbTrackRow> {
     // We need 94 + 21*2 = 136 bytes of fixed-size header.
-    if row.len() < 136 { return None; }
+    if row.len() < 136 {
+        return None;
+    }
 
     // Key numeric offsets (see rekordcrate Track struct comments).
-    let key_id      = read_u32_le(row, 32);
-    let tempo       = read_u32_le(row, 56);
-    let genre_id    = read_u32_le(row, 60);
-    let artist_id   = read_u32_le(row, 68);
-    let duration    = read_u16_le(row, 84);
+    let key_id = read_u32_le(row, 32);
+    let tempo = read_u32_le(row, 56);
+    let genre_id = read_u32_le(row, 60);
+    let artist_id = read_u32_le(row, 68);
+    let duration = read_u16_le(row, 84);
 
     // The 21 string offsets start at byte 94. We only care about a
     // few of them — index by position in the published list:
@@ -772,7 +939,9 @@ fn parse_pdb_track_row(row: &[u8]) -> Option<PdbTrackRow> {
     let read_str_at = |idx: usize| -> String {
         let off_pos = 94 + idx * 2;
         let str_off = read_u16_le(row, off_pos) as usize;
-        if str_off == 0 || str_off >= row.len() { return String::new(); }
+        if str_off == 0 || str_off >= row.len() {
+            return String::new();
+        }
         decode_devicesql_string(&row[str_off..]).unwrap_or_default()
     };
 
@@ -782,9 +951,9 @@ fn parse_pdb_track_row(row: &[u8]) -> Option<PdbTrackRow> {
         genre_id,
         tempo,
         duration,
-        title:        read_str_at(17),
-        mix_name:     read_str_at(12),
-        file_path:    read_str_at(20),
+        title: read_str_at(17),
+        mix_name: read_str_at(12),
+        file_path: read_str_at(20),
         release_date: read_str_at(11),
     })
 }
@@ -793,24 +962,32 @@ fn parse_pdb_track_row(row: &[u8]) -> Option<PdbTrackRow> {
 /// unknown, ofs_name_near. If subtype == 0x64, then a u16 ofs_name_far
 /// follows. The string lives at `row_start + (subtype==0x64 ? ofs_far : ofs_near)`.
 fn parse_pdb_artist_row(row: &[u8]) -> Option<(u32, String)> {
-    if row.len() < 10 { return None; }
+    if row.len() < 10 {
+        return None;
+    }
     let subtype = read_u16_le(row, 0);
     let id = read_u32_le(row, 4);
     let ofs_near = row[9];
     let str_off: usize = if subtype == 0x64 {
-        if row.len() < 12 { return None; }
+        if row.len() < 12 {
+            return None;
+        }
         read_u16_le(row, 10) as usize
     } else {
         ofs_near as usize
     };
-    if str_off == 0 || str_off >= row.len() { return Some((id, String::new())); }
+    if str_off == 0 || str_off >= row.len() {
+        return Some((id, String::new()));
+    }
     let name = decode_devicesql_string(&row[str_off..]).unwrap_or_default();
     Some((id, name))
 }
 
 /// Genre row: u32 id, then DeviceSQLString name immediately after.
 fn parse_pdb_genre_row(row: &[u8]) -> Option<(u32, String)> {
-    if row.len() < 5 { return None; }
+    if row.len() < 5 {
+        return None;
+    }
     let id = read_u32_le(row, 0);
     let name = decode_devicesql_string(&row[4..]).unwrap_or_default();
     Some((id, name))
@@ -818,7 +995,9 @@ fn parse_pdb_genre_row(row: &[u8]) -> Option<(u32, String)> {
 
 /// Key row: u32 id, u32 id2 (duplicate), then DeviceSQLString name.
 fn parse_pdb_key_row(row: &[u8]) -> Option<(u32, String)> {
-    if row.len() < 9 { return None; }
+    if row.len() < 9 {
+        return None;
+    }
     let id = read_u32_le(row, 0);
     let name = decode_devicesql_string(&row[8..]).unwrap_or_default();
     Some((id, name))
@@ -843,10 +1022,14 @@ mod tests {
 
     #[test]
     fn decode_file_url_strips_scheme() {
-        assert_eq!(decode_file_url("file://localhost/Users/me/track.flac"),
-            "/Users/me/track.flac");
-        assert_eq!(decode_file_url("file:///Users/me/track%20with%20spaces.flac"),
-            "/Users/me/track with spaces.flac");
+        assert_eq!(
+            decode_file_url("file://localhost/Users/me/track.flac"),
+            "/Users/me/track.flac"
+        );
+        assert_eq!(
+            decode_file_url("file:///Users/me/track%20with%20spaces.flac"),
+            "/Users/me/track with spaces.flac"
+        );
     }
 
     #[test]
@@ -869,7 +1052,8 @@ mod tests {
   <COLLECTION Entries="1">
     <TRACK TrackID="1" Name="Test Track" Artist="Tester" AverageBpm="128.50" Tonality="7A" TotalTime="240" Location="{url_encoded}"/>
   </COLLECTION>
-</DJ_PLAYLISTS>"#);
+</DJ_PLAYLISTS>"#
+        );
         let tmp = std::env::temp_dir().join("mixr-rekordbox-test.xml");
         std::fs::write(&tmp, &xml).unwrap();
         let tracks = import_rekordbox_xml(&tmp).unwrap();
@@ -892,7 +1076,11 @@ mod tests {
         assert_eq!(engine_key_to_camelot(1), "1B");
         assert_eq!(engine_key_to_camelot(14), "8A");
         assert_eq!(engine_key_to_camelot(23), "12B");
-        assert_eq!(engine_key_to_camelot(99), "?99", "out-of-range stays detectable");
+        assert_eq!(
+            engine_key_to_camelot(99),
+            "?99",
+            "out-of-range stays detectable"
+        );
     }
 
     #[test]
@@ -910,8 +1098,11 @@ mod tests {
 
         // Unique temp path per test run to avoid collisions when
         // tests run in parallel (cargo test default).
-        let unique = format!("mixr-engine-test-{}-{:?}",
-            std::process::id(), std::thread::current().id());
+        let unique = format!(
+            "mixr-engine-test-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        );
         let db_dir = std::env::temp_dir().join(format!("{unique}/Engine Library/Database2"));
         let _ = std::fs::remove_dir_all(std::env::temp_dir().join(&unique));
         std::fs::create_dir_all(&db_dir).unwrap();
@@ -924,8 +1115,9 @@ mod tests {
                 id INTEGER PRIMARY KEY, title TEXT, artist TEXT, album TEXT,
                 genre TEXT, length REAL, bpmAnalyzed REAL, bpm REAL,
                 key INTEGER, path TEXT
-            );"
-        ).unwrap();
+            );",
+        )
+        .unwrap();
         // Use absolute path so the resolver returns it unchanged + exists.
         conn.execute(
             "INSERT INTO Track VALUES (1, 'Test', 'Tester', 'Album', 'Techno', 360.0, 128.5, 128.0, 14, ?1)",
@@ -992,8 +1184,11 @@ mod tests {
 
         let db = record(b"otrk", &otrk_payload);
 
-        let unique = format!("mixr-serato-test-{}-{:?}",
-            std::process::id(), std::thread::current().id());
+        let unique = format!(
+            "mixr-serato-test-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        );
         let db_path = std::env::temp_dir().join(unique);
         std::fs::write(&db_path, &db).unwrap();
         let tracks = import_serato_database(&db_path).unwrap();
@@ -1026,8 +1221,11 @@ mod tests {
         otrk.extend(record(b"tsng", &utf16be("Ghost")));
         let db = record(b"otrk", &otrk);
 
-        let unique = format!("mixr-serato-dead-{}-{:?}",
-            std::process::id(), std::thread::current().id());
+        let unique = format!(
+            "mixr-serato-dead-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        );
         let path = std::env::temp_dir().join(unique);
         std::fs::write(&path, &db).unwrap();
         let tracks = import_serato_database(&path).unwrap();
@@ -1056,8 +1254,10 @@ mod tests {
     #[test]
     fn devicesql_short_ascii_decodes() {
         // header byte 0x09 = ((3+1) << 1) | 1 = 9 → 3-byte ASCII payload "foo"
-        assert_eq!(decode_devicesql_string(&[0x09, b'f', b'o', b'o']),
-            Some("foo".into()));
+        assert_eq!(
+            decode_devicesql_string(&[0x09, b'f', b'o', b'o']),
+            Some("foo".into())
+        );
     }
 
     #[test]
@@ -1083,13 +1283,13 @@ mod tests {
     fn pdb_header_round_trips() {
         // Build a 28-byte header + one 16-byte table entry.
         let mut bytes = vec![0u8; 0]; // unknown1=0
-        bytes.extend_from_slice(&0u32.to_le_bytes());      // unknown1
-        bytes.extend_from_slice(&4096u32.to_le_bytes());   // page_size
-        bytes.extend_from_slice(&1u32.to_le_bytes());      // num_tables
-        bytes.extend_from_slice(&50u32.to_le_bytes());     // next_unused
-        bytes.extend_from_slice(&0u32.to_le_bytes());      // unknown
-        bytes.extend_from_slice(&34u32.to_le_bytes());     // sequence
-        bytes.extend_from_slice(&0u32.to_le_bytes());      // gap
+        bytes.extend_from_slice(&0u32.to_le_bytes()); // unknown1
+        bytes.extend_from_slice(&4096u32.to_le_bytes()); // page_size
+        bytes.extend_from_slice(&1u32.to_le_bytes()); // num_tables
+        bytes.extend_from_slice(&50u32.to_le_bytes()); // next_unused
+        bytes.extend_from_slice(&0u32.to_le_bytes()); // unknown
+        bytes.extend_from_slice(&34u32.to_le_bytes()); // sequence
+        bytes.extend_from_slice(&0u32.to_le_bytes()); // gap
         // Table: page_type=Tracks(0), empty_candidate=47, first_page=1, last_page=2
         bytes.extend_from_slice(&0u32.to_le_bytes());
         bytes.extend_from_slice(&47u32.to_le_bytes());
@@ -1120,11 +1320,11 @@ mod tests {
         // subtype=0x60 short, index_shift=0, id=7, unknown=0, ofs_near=10,
         // then string at offset 10 = "DJ"
         let mut bytes = Vec::new();
-        bytes.extend_from_slice(&0x0060u16.to_le_bytes());  // subtype
-        bytes.extend_from_slice(&0u16.to_le_bytes());        // index_shift
-        bytes.extend_from_slice(&7u32.to_le_bytes());        // id
-        bytes.push(0);                                        // unknown1
-        bytes.push(10);                                       // ofs_near
+        bytes.extend_from_slice(&0x0060u16.to_le_bytes()); // subtype
+        bytes.extend_from_slice(&0u16.to_le_bytes()); // index_shift
+        bytes.extend_from_slice(&7u32.to_le_bytes()); // id
+        bytes.push(0); // unknown1
+        bytes.push(10); // ofs_near
         // String at offset 10: header for "DJ" = ((2+1) << 1) | 1 = 0x07
         bytes.extend_from_slice(&[0x07, b'D', b'J']);
         let (id, name) = parse_pdb_artist_row(&bytes).unwrap();
@@ -1154,11 +1354,11 @@ mod tests {
 
         // Short-ASCII header = ((len+1)<<1)|1, content is `len` bytes.
         // "Test T" len=6 → header = (7<<1)|1 = 0x0F.
-        let s_title = vec![0x0Fu8, b'T', b'e', b's', b't', b' ', b'T'];        // 7 bytes
+        let s_title = vec![0x0Fu8, b'T', b'e', b's', b't', b' ', b'T']; // 7 bytes
         // "/a.f" len=4 → header = (5<<1)|1 = 0x0B
-        let s_file  = vec![0x0Bu8, b'/', b'a', b'.', b'f'];                    // 5 bytes
+        let s_file = vec![0x0Bu8, b'/', b'a', b'.', b'f']; // 5 bytes
         // "2024" len=4 → header = 0x0B
-        let s_rel   = vec![0x0Bu8, b'2', b'0', b'2', b'4'];                    // 5 bytes
+        let s_rel = vec![0x0Bu8, b'2', b'0', b'2', b'4']; // 5 bytes
 
         let mut strings_blob = Vec::new();
         let title_off = 136;

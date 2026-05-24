@@ -1,9 +1,9 @@
+use super::api::{ClaudeAPI, ToolCall};
+use super::memory::{DjMemory, MixEntry};
+use crate::config::{ClaudeDjMode, ClaudeDjSettings, DjStyle, Strictness};
+use serde_json::Value;
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
-use serde_json::Value;
-use super::api::{ClaudeAPI, ToolCall};
-use crate::config::{ClaudeDjSettings, ClaudeDjMode, Strictness, DjStyle};
-use super::memory::{DjMemory, MixEntry};
 
 /// Which operational mode a DJ call is running in. Set by the app on
 /// each trigger based on engine state — during an active crossfade
@@ -127,7 +127,6 @@ pub enum LogEntryType {
     Info,
 }
 
-
 impl ClaudeDJ {
     #[allow(dead_code)] // used in #[cfg(test)] only; production uses from_key_file()
     pub fn new(api_key: String) -> Self {
@@ -172,13 +171,17 @@ impl ClaudeDJ {
     /// memory has been disabled in settings — the user can opt out
     /// without losing the ability to hit the rating hotkeys.
     pub fn rate_good(&mut self, entry: MixEntry) {
-        if !self.settings.memory_enabled { return; }
+        if !self.settings.memory_enabled {
+            return;
+        }
         self.memory.remember_good(entry);
         self.memory.save();
     }
 
     pub fn rate_bad(&mut self, entry: MixEntry) {
-        if !self.settings.memory_enabled { return; }
+        if !self.settings.memory_enabled {
+            return;
+        }
         self.memory.remember_bad(entry);
         self.memory.save();
     }
@@ -187,9 +190,13 @@ impl ClaudeDJ {
     /// when the user hits the same rating key twice. Returns true if
     /// an entry was found and removed. No-op when memory is disabled.
     pub fn unrate(&mut self, rated_at: i64, was_good: bool) -> bool {
-        if !self.settings.memory_enabled { return false; }
+        if !self.settings.memory_enabled {
+            return false;
+        }
         let removed = self.memory.unremember_by_rated_at(rated_at, was_good);
-        if removed { self.memory.save(); }
+        if removed {
+            self.memory.save();
+        }
         removed
     }
 
@@ -236,33 +243,47 @@ impl ClaudeDJ {
     /// callers can compose a Duration. Not affected by 429 backoff —
     /// that's a runtime multiplier on top.
     fn base_interval_secs(&self) -> u64 {
-        if self.settings.mode == ClaudeDjMode::Manual { MIN_INTERVAL_MANUAL_SECS } else { MIN_INTERVAL_AUTO_SECS }
+        if self.settings.mode == ClaudeDjMode::Manual {
+            MIN_INTERVAL_MANUAL_SECS
+        } else {
+            MIN_INTERVAL_AUTO_SECS
+        }
     }
 
     /// Set the operational mode for the next API call. Called by the
     /// app right before trigger() / continue_with_results() so the
     /// right prompt + tool set composes. Does not affect an
     /// in-flight chain.
-    pub fn set_call_mode(&mut self, m: CallMode) { self.call_mode = m; }
+    pub fn set_call_mode(&mut self, m: CallMode) {
+        self.call_mode = m;
+    }
 
-    pub fn enable(&mut self) { self.enabled = true; }
-    pub fn disable(&mut self) { self.enabled = false; }
-    pub fn is_enabled(&self) -> bool { self.enabled }
+    pub fn enable(&mut self) {
+        self.enabled = true;
+    }
+    pub fn disable(&mut self) {
+        self.enabled = false;
+    }
+    pub fn is_enabled(&self) -> bool {
+        self.enabled
+    }
 
     pub fn set_prompt(&mut self, prompt: String) {
         self.add_log(LogEntryType::User, format!("Direction: {prompt}"));
         self.user_prompt = Some(prompt);
     }
 
-    pub fn log_entries(&self) -> &[LogEntry] { &self.log }
+    pub fn log_entries(&self) -> &[LogEntry] {
+        &self.log
+    }
 
     /// Classify a tool call by name into the appropriate log entry type.
     fn classify_tool(name: &str) -> LogEntryType {
         match name {
-            "queue_track" | "queue_all" | "search_tracks" | "browse_screen"
-            | "select_item" | "go_back" | "skip_track" => LogEntryType::Track,
-            "read_phase" | "read_alignment" | "nudge" | "adjust_tempo"
-            | "jump_beats" | "set_crossfader" | "sweep_crossfader" => LogEntryType::Phase,
+            "queue_track" | "queue_all" | "search_tracks" | "browse_screen" | "select_item"
+            | "go_back" | "skip_track" => LogEntryType::Track,
+            "read_phase" | "read_alignment" | "nudge" | "adjust_tempo" | "jump_beats"
+            | "set_crossfader" | "sweep_crossfader" => LogEntryType::Phase,
             _ => LogEntryType::Action,
         }
     }
@@ -285,7 +306,9 @@ impl ClaudeDJ {
             entry_type,
             message,
         });
-        if self.log.len() > 200 { self.log.drain(0..50); }
+        if self.log.len() > 200 {
+            self.log.drain(0..50);
+        }
     }
 
     pub fn can_call(&self) -> bool {
@@ -316,7 +339,11 @@ impl ClaudeDJ {
         self.round = 0;
         self.add_log(
             LogEntryType::Info,
-            format!("Rate limited, backoff {}s, cleared {} conversation messages", self.min_interval.as_secs(), cleared),
+            format!(
+                "Rate limited, backoff {}s, cleared {} conversation messages",
+                self.min_interval.as_secs(),
+                cleared
+            ),
         );
     }
 
@@ -377,20 +404,34 @@ impl ClaudeDJ {
         let recent_browse = if self.recent_screens.is_empty() {
             "none".into()
         } else {
-            self.recent_screens.iter().cloned().collect::<Vec<_>>().join(" → ")
+            self.recent_screens
+                .iter()
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(" → ")
         };
         let recent_queued = if self.recent_queued.is_empty() {
             "none".into()
         } else {
-            self.recent_queued.iter().cloned().collect::<Vec<_>>().join(", ")
+            self.recent_queued
+                .iter()
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", ")
         };
         let memory_summary = if self.settings.memory_enabled {
             let s = self.memory.prompt_summary();
-            if s.is_empty() { String::new() } else { format!("\nMEMORY: {s}") }
+            if s.is_empty() {
+                String::new()
+            } else {
+                format!("\nMEMORY: {s}")
+            }
         } else {
             String::new()
         };
-        let user_dir = self.user_prompt.as_ref()
+        let user_dir = self
+            .user_prompt
+            .as_ref()
             .map(|p| format!("\nUSER DIRECTION: {p}"))
             .unwrap_or_default();
         format!(
@@ -413,40 +454,57 @@ impl ClaudeDJ {
         // Compose style-specific digging guidance. Pure prompt flavor —
         // doesn't hard-gate anything, just tilts track selection.
         let style_guidance = match self.settings.style {
-            DjStyle::Underground => "DIG DEEP — think like an underground DJ: \
+            DjStyle::Underground => {
+                "DIG DEEP — think like an underground DJ: \
                 prefer DJ-curated charts over generic Top 100, when using Top 100 pick \
-                from tracks 20-100, search for labels you discover.",
-            DjStyle::Mainstream => "COMMERCIAL mode — Top 10 and Top 100 are fine, favor \
-                recognizable tracks, don't dig too deep.",
-            DjStyle::Exploratory => "EXPLORE — cross-genre, break typical rules, favor \
-                unexpected picks that reward the listener. Surprises are welcome.",
+                from tracks 20-100, search for labels you discover."
+            }
+            DjStyle::Mainstream => {
+                "COMMERCIAL mode — Top 10 and Top 100 are fine, favor \
+                recognizable tracks, don't dig too deep."
+            }
+            DjStyle::Exploratory => {
+                "EXPLORE — cross-genre, break typical rules, favor \
+                unexpected picks that reward the listener. Surprises are welcome."
+            }
         };
 
         let camelot_rule = match self.settings.camelot_strictness {
-            Strictness::Strict => "Camelot key compatibility is REQUIRED: same key, \
-                ±1 number same letter, or same number A↔B. Never queue a key-clashing track.",
-            Strictness::Prefer => "Prefer Camelot-compatible keys (same, ±1, or A↔B swap) \
-                but a deliberate key jump is fine if it serves the set.",
+            Strictness::Strict => {
+                "Camelot key compatibility is REQUIRED: same key, \
+                ±1 number same letter, or same number A↔B. Never queue a key-clashing track."
+            }
+            Strictness::Prefer => {
+                "Prefer Camelot-compatible keys (same, ±1, or A↔B swap) \
+                but a deliberate key jump is fine if it serves the set."
+            }
             Strictness::Off => "",
         };
 
         let bpm_rule = match self.settings.bpm_gap_strictness {
             Strictness::Strict => "BPM gap must stay under 8% — never queue outside that.",
-            Strictness::Prefer => "Prefer BPM gaps under 8%; larger gaps are ok when paired \
-                with an EchoOut-style transition.",
+            Strictness::Prefer => {
+                "Prefer BPM gaps under 8%; larger gaps are ok when paired \
+                with an EchoOut-style transition."
+            }
             Strictness::Off => "",
         };
 
         let round_cap = self.current_round_cap();
 
         let mode_guidance = match self.settings.mode {
-            ClaudeDjMode::Auto => "MODE: Auto. The engine handles beatmatching, crossfade \
+            ClaudeDjMode::Auto => {
+                "MODE: Auto. The engine handles beatmatching, crossfade \
                 curves, and deck swaps. You pick tracks and monitor phase; nudge or adjust_tempo \
-                only when the engine asks for help.",
-            ClaudeDjMode::Assist => "MODE: Assist. Auto drives the mix; you comment and \
+                only when the engine asks for help."
+            }
+            ClaudeDjMode::Assist => {
+                "MODE: Assist. Auto drives the mix; you comment and \
                 suggest but don't move faders. Flag issues in your reasoning text — the user is \
-                watching the DJ log.",
-            ClaudeDjMode::Manual => "MODE: MANUAL. You are driving the mix. Physical decks \
+                watching the DJ log."
+            }
+            ClaudeDjMode::Manual => {
+                "MODE: MANUAL. You are driving the mix. Physical decks \
                 A and B are yours to load, preview, beatmatch, and crossfade. Use load_to_deck \
                 to cue up the next track on the idle deck, preview_deck to audition in the \
                 monitor bus, adjust tempo + nudge to match, seek_deck to a cue point, then \
@@ -476,7 +534,8 @@ impl ClaudeDJ {
                 - NEVER nudge opposite to what the phase says. If phase_ms is +15, nudge -1 (slow the incoming). \
                   If phase_ms is -15, nudge +1 (speed the incoming). \
                 - If beat_in_bar is mismatched, call jump_beats to fix the bar alignment — that IS worth the glitch. \
-                The sweep doesn't need your help; the phase does.",
+                The sweep doesn't need your help; the phase does."
+            }
         };
 
         format!(
@@ -520,7 +579,9 @@ impl ClaudeDJ {
     /// the most-recent entry (same-screen refresh doesn't bloat the list)
     /// and bounded to MEMORY_LEN.
     pub fn remember_browse(&mut self, breadcrumb: String) {
-        if self.recent_screens.back() == Some(&breadcrumb) { return; }
+        if self.recent_screens.back() == Some(&breadcrumb) {
+            return;
+        }
         self.recent_screens.push_back(breadcrumb);
         while self.recent_screens.len() > MEMORY_LEN {
             self.recent_screens.pop_front();
@@ -571,14 +632,18 @@ impl ClaudeDJ {
         // it at 1.25× cost every call.
         let dyn_state = self.dynamic_state_block();
         let user_msg = format!("{context}{dyn_state}\n\nTRIGGER: {trigger_reason}");
-        self.conversation.push(serde_json::json!({"role": "user", "content": user_msg}));
+        self.conversation
+            .push(serde_json::json!({"role": "user", "content": user_msg}));
 
         self.last_call = Some(Instant::now());
-        let result = self.api.ask_with_tools(
-            &self.system_prompt(),
-            &self.conversation,
-            &Self::tool_definitions_for(self.call_mode),
-        ).await;
+        let result = self
+            .api
+            .ask_with_tools(
+                &self.system_prompt(),
+                &self.conversation,
+                &Self::tool_definitions_for(self.call_mode),
+            )
+            .await;
 
         match result {
             Ok(resp) => {
@@ -595,9 +660,13 @@ impl ClaudeDJ {
                     content.push(serde_json::json!({
                         "type": "tool_use", "id": tc.id, "name": tc.name, "input": tc.input
                     }));
-                    self.add_log(Self::classify_tool(&tc.name), format!("→ {}({})", tc.name, tc.input));
+                    self.add_log(
+                        Self::classify_tool(&tc.name),
+                        format!("→ {}({})", tc.name, tc.input),
+                    );
                 }
-                self.conversation.push(serde_json::json!({"role": "assistant", "content": content}));
+                self.conversation
+                    .push(serde_json::json!({"role": "assistant", "content": content}));
                 // Mark chain in-progress only if Claude actually wants more
                 // tool calls. An empty tool_calls list means "I'm done" —
                 // chain ends here, next trigger is free to fire.
@@ -606,7 +675,9 @@ impl ClaudeDJ {
             }
             Err(e) => {
                 let msg = e.to_string();
-                if msg.contains("429") { self.handle_rate_limit(); }
+                if msg.contains("429") {
+                    self.handle_rate_limit();
+                }
                 if msg.contains("400") {
                     self.conversation.clear();
                     tracing::info!("ClaudeDJ: HTTP 400, cleared conversation to recover");
@@ -627,7 +698,9 @@ impl ClaudeDJ {
         &mut self,
         results: Vec<(String, String)>, // (tool_use_id, result_text)
     ) -> Result<Vec<ToolCall>, anyhow::Error> {
-        if results.is_empty() { return Ok(vec![]); }
+        if results.is_empty() {
+            return Ok(vec![]);
+        }
 
         self.round += 1;
         // `>` so round 15 is the last one that actually runs; at round 16
@@ -661,23 +734,30 @@ impl ClaudeDJ {
         // Add tool results to conversation. Bodies are truncated so a
         // chatty tool (browse_screen returning 20 items) can't blow the
         // input-token budget on the next round — see TOOL_RESULT_MAX_CHARS.
-        let content: Vec<Value> = results.iter().map(|(id, text)| {
-            let truncated: String = if text.chars().count() > TOOL_RESULT_MAX_CHARS {
-                let head: String = text.chars().take(TOOL_RESULT_MAX_CHARS).collect();
-                format!("{head}…[truncated]")
-            } else {
-                text.clone()
-            };
-            serde_json::json!({"type": "tool_result", "tool_use_id": id, "content": truncated})
-        }).collect();
-        self.conversation.push(serde_json::json!({"role": "user", "content": content}));
+        let content: Vec<Value> = results
+            .iter()
+            .map(|(id, text)| {
+                let truncated: String = if text.chars().count() > TOOL_RESULT_MAX_CHARS {
+                    let head: String = text.chars().take(TOOL_RESULT_MAX_CHARS).collect();
+                    format!("{head}…[truncated]")
+                } else {
+                    text.clone()
+                };
+                serde_json::json!({"type": "tool_result", "tool_use_id": id, "content": truncated})
+            })
+            .collect();
+        self.conversation
+            .push(serde_json::json!({"role": "user", "content": content}));
 
         self.last_call = Some(Instant::now());
-        let result = self.api.ask_with_tools(
-            &self.system_prompt(),
-            &self.conversation,
-            &Self::tool_definitions_for(self.call_mode),
-        ).await;
+        let result = self
+            .api
+            .ask_with_tools(
+                &self.system_prompt(),
+                &self.conversation,
+                &Self::tool_definitions_for(self.call_mode),
+            )
+            .await;
 
         match result {
             Ok(resp) => {
@@ -693,9 +773,13 @@ impl ClaudeDJ {
                     content.push(serde_json::json!({
                         "type": "tool_use", "id": tc.id, "name": tc.name, "input": tc.input
                     }));
-                    self.add_log(Self::classify_tool(&tc.name), format!("→ {}({})", tc.name, tc.input));
+                    self.add_log(
+                        Self::classify_tool(&tc.name),
+                        format!("→ {}({})", tc.name, tc.input),
+                    );
                 }
-                self.conversation.push(serde_json::json!({"role": "assistant", "content": content}));
+                self.conversation
+                    .push(serde_json::json!({"role": "assistant", "content": content}));
                 // Same logic as trigger(): chain continues only while
                 // Claude is still asking for tool calls.
                 self.chain_in_progress = !resp.tool_calls.is_empty();
@@ -703,7 +787,9 @@ impl ClaudeDJ {
             }
             Err(e) => {
                 let msg = e.to_string();
-                if msg.contains("429") { self.handle_rate_limit(); }
+                if msg.contains("429") {
+                    self.handle_rate_limit();
+                }
                 if msg.contains("400") {
                     self.conversation.clear();
                     tracing::info!("ClaudeDJ: HTTP 400, cleared conversation to recover");
@@ -723,14 +809,22 @@ impl ClaudeDJ {
     /// Anthropic rejects messages with dangling ids, and blind
     /// `drain(0..20)` used to cause the 400 errors we saw in the wild.
     pub fn trim_conversation(&mut self) {
-        if self.conversation.len() <= 40 { return; }
+        if self.conversation.len() <= 40 {
+            return;
+        }
         // Safe cut = first user message after index 20 whose content is
         // a plain string (i.e., the start of a fresh trigger, not a
         // tool_result-carrying user message).
-        let cut = self.conversation.iter().enumerate().skip(20).find(|(_, msg)| {
-            msg.get("role").and_then(|r| r.as_str()) == Some("user")
-                && msg.get("content").is_some_and(|c| c.is_string())
-        }).map(|(i, _)| i);
+        let cut = self
+            .conversation
+            .iter()
+            .enumerate()
+            .skip(20)
+            .find(|(_, msg)| {
+                msg.get("role").and_then(|r| r.as_str()) == Some("user")
+                    && msg.get("content").is_some_and(|c| c.is_string())
+            })
+            .map(|(i, _)| i);
         if let Some(idx) = cut {
             self.conversation.drain(0..idx);
         }
@@ -744,54 +838,76 @@ impl ClaudeDJ {
     /// dangling ids.
     fn close_dangling_tool_use(&mut self) {
         // Find the last assistant message.
-        let last_assistant_idx = self.conversation.iter().rposition(|m| {
-            m.get("role").and_then(|r| r.as_str()) == Some("assistant")
-        });
-        let Some(idx) = last_assistant_idx else { return; };
+        let last_assistant_idx = self
+            .conversation
+            .iter()
+            .rposition(|m| m.get("role").and_then(|r| r.as_str()) == Some("assistant"));
+        let Some(idx) = last_assistant_idx else {
+            return;
+        };
 
         // Collect tool_use ids from the last assistant message.
         let mut ids: Vec<String> = Vec::new();
-        if let Some(content) = self.conversation[idx].get("content").and_then(|c| c.as_array()) {
+        if let Some(content) = self.conversation[idx]
+            .get("content")
+            .and_then(|c| c.as_array())
+        {
             for block in content {
                 if block.get("type").and_then(|t| t.as_str()) == Some("tool_use")
-                    && let Some(id) = block.get("id").and_then(|i| i.as_str()) {
-                        ids.push(id.to_string());
-                    }
+                    && let Some(id) = block.get("id").and_then(|i| i.as_str())
+                {
+                    ids.push(id.to_string());
+                }
             }
         }
-        if ids.is_empty() { return; }
+        if ids.is_empty() {
+            return;
+        }
 
         // Check whether a following user message already carries matching
         // tool_result blocks. If ALL ids are covered, nothing to do.
         let mut resolved: std::collections::HashSet<String> = Default::default();
         for msg in self.conversation.iter().skip(idx + 1) {
             if msg.get("role").and_then(|r| r.as_str()) == Some("user")
-                && let Some(arr) = msg.get("content").and_then(|c| c.as_array()) {
-                    for block in arr {
-                        if block.get("type").and_then(|t| t.as_str()) == Some("tool_result")
-                            && let Some(id) = block.get("tool_use_id").and_then(|i| i.as_str()) {
-                                resolved.insert(id.to_string());
-                            }
+                && let Some(arr) = msg.get("content").and_then(|c| c.as_array())
+            {
+                for block in arr {
+                    if block.get("type").and_then(|t| t.as_str()) == Some("tool_result")
+                        && let Some(id) = block.get("tool_use_id").and_then(|i| i.as_str())
+                    {
+                        resolved.insert(id.to_string());
                     }
                 }
+            }
         }
-        let missing: Vec<String> = ids.into_iter().filter(|id| !resolved.contains(id)).collect();
-        if missing.is_empty() { return; }
+        let missing: Vec<String> = ids
+            .into_iter()
+            .filter(|id| !resolved.contains(id))
+            .collect();
+        if missing.is_empty() {
+            return;
+        }
 
         // Synthesize a user message with cancellation stubs for each
         // dangling id.
-        let content: Vec<Value> = missing.iter().map(|id| {
-            serde_json::json!({
-                "type": "tool_result",
-                "tool_use_id": id,
-                "content": "cancelled: new trigger fired before results were delivered",
+        let content: Vec<Value> = missing
+            .iter()
+            .map(|id| {
+                serde_json::json!({
+                    "type": "tool_result",
+                    "tool_use_id": id,
+                    "content": "cancelled: new trigger fired before results were delivered",
+                })
             })
-        }).collect();
+            .collect();
         self.conversation.push(serde_json::json!({
             "role": "user",
             "content": content,
         }));
-        tracing::info!("ClaudeDJ: closed {} dangling tool_use id(s) from prior chain", missing.len());
+        tracing::info!(
+            "ClaudeDJ: closed {} dangling tool_use id(s) from prior chain",
+            missing.len()
+        );
     }
 
     /// Retro-truncate older tool_result bodies so cumulative input
@@ -802,23 +918,46 @@ impl ClaudeDJ {
     /// that preserves tool_use_id pairing but drops the body text.
     fn compact_old_tool_results(&mut self) {
         // Indexes of user messages that carry tool_result blocks.
-        let tr_indexes: Vec<usize> = self.conversation.iter().enumerate().filter_map(|(i, m)| {
-            if m.get("role").and_then(|r| r.as_str()) != Some("user") { return None; }
-            let arr = m.get("content").and_then(|c| c.as_array())?;
-            if arr.iter().any(|b| b.get("type").and_then(|t| t.as_str()) == Some("tool_result")) {
-                Some(i)
-            } else { None }
-        }).collect();
+        let tr_indexes: Vec<usize> = self
+            .conversation
+            .iter()
+            .enumerate()
+            .filter_map(|(i, m)| {
+                if m.get("role").and_then(|r| r.as_str()) != Some("user") {
+                    return None;
+                }
+                let arr = m.get("content").and_then(|c| c.as_array())?;
+                if arr
+                    .iter()
+                    .any(|b| b.get("type").and_then(|t| t.as_str()) == Some("tool_result"))
+                {
+                    Some(i)
+                } else {
+                    None
+                }
+            })
+            .collect();
 
-        if tr_indexes.len() <= TOOL_RESULT_KEEP_RECENT { return; }
+        if tr_indexes.len() <= TOOL_RESULT_KEEP_RECENT {
+            return;
+        }
         let stale_end = tr_indexes.len() - TOOL_RESULT_KEEP_RECENT;
         for &idx in &tr_indexes[..stale_end] {
-            let Some(content) = self.conversation[idx].get_mut("content").and_then(|c| c.as_array_mut()) else { continue };
+            let Some(content) = self.conversation[idx]
+                .get_mut("content")
+                .and_then(|c| c.as_array_mut())
+            else {
+                continue;
+            };
             for block in content.iter_mut() {
-                if block.get("type").and_then(|t| t.as_str()) != Some("tool_result") { continue; }
+                if block.get("type").and_then(|t| t.as_str()) != Some("tool_result") {
+                    continue;
+                }
                 let body = block.get("content").and_then(|c| c.as_str()).unwrap_or("");
                 let head: String = body.chars().take(TOOL_RESULT_STALE_MAX_CHARS).collect();
-                if head.len() == body.len() { continue; } // already shorter than cap
+                if head.len() == body.len() {
+                    continue;
+                } // already shorter than cap
                 block["content"] = serde_json::Value::String(format!("{head}…[stale-compacted]"));
             }
         }
@@ -831,18 +970,28 @@ impl ClaudeDJ {
     /// track-selection mid-mix.
     pub fn tool_definitions_for(mode: CallMode) -> Vec<Value> {
         let all = Self::tool_definitions();
-        if mode == CallMode::Prep { return all; }
+        if mode == CallMode::Prep {
+            return all;
+        }
         // Performance tools: everything useful for correcting phase,
         // phrase, and rate during an active crossfade.
         const PERFORMANCE_TOOLS: &[&str] = &[
-            "read_phase", "read_alignment",
-            "nudge", "jump_beats", "adjust_tempo",
-            "set_eq", "set_filter",
-            "set_crossfader", "sweep_crossfader",
+            "read_phase",
+            "read_alignment",
+            "nudge",
+            "jump_beats",
+            "adjust_tempo",
+            "set_eq",
+            "set_filter",
+            "set_crossfader",
+            "sweep_crossfader",
         ];
         all.into_iter()
-            .filter(|t| t.get("name").and_then(|n| n.as_str())
-                .is_some_and(|n| PERFORMANCE_TOOLS.contains(&n)))
+            .filter(|t| {
+                t.get("name")
+                    .and_then(|n| n.as_str())
+                    .is_some_and(|n| PERFORMANCE_TOOLS.contains(&n))
+            })
             .collect()
     }
 
@@ -1138,7 +1287,9 @@ impl ClaudeDJ {
     }
 
     #[cfg(test)]
-    pub(crate) fn set_round_for_test(&mut self, r: u32) { self.round = r; }
+    pub(crate) fn set_round_for_test(&mut self, r: u32) {
+        self.round = r;
+    }
 }
 
 #[cfg(test)]
@@ -1164,8 +1315,12 @@ mod tests {
         // read_phase loops, which legitimately need more rounds.
         assert_eq!(MAX_ROUNDS, 10);
         assert_eq!(MAX_ROUNDS_MANUAL, 20);
-        const { assert!(MAX_ROUNDS_MANUAL > MAX_ROUNDS,
-            "manual cap must exceed auto cap to be useful") };
+        const {
+            assert!(
+                MAX_ROUNDS_MANUAL > MAX_ROUNDS,
+                "manual cap must exceed auto cap to be useful"
+            )
+        };
     }
 
     #[test]
@@ -1174,7 +1329,10 @@ mod tests {
         // MAX_ROUNDS must still run; round MAX_ROUNDS+1 must short.
         let mut dj = fake_dj();
         dj.set_round_for_test(MAX_ROUNDS - 1);
-        assert!(!dj.would_cap_next_round(), "last allowed round should still run");
+        assert!(
+            !dj.would_cap_next_round(),
+            "last allowed round should still run"
+        );
         dj.set_round_for_test(MAX_ROUNDS);
         assert!(dj.would_cap_next_round(), "round past max must be capped");
     }
@@ -1183,8 +1341,18 @@ mod tests {
     fn tool_result_truncation_constant_is_sane() {
         // Documents the per-tool-result body cap. Guards against
         // accidental zero or absurdly large values.
-        const { assert!(TOOL_RESULT_MAX_CHARS >= 200, "too small to carry useful context") };
-        const { assert!(TOOL_RESULT_MAX_CHARS <= 5000, "too large to keep input tokens bounded") };
+        const {
+            assert!(
+                TOOL_RESULT_MAX_CHARS >= 200,
+                "too small to carry useful context"
+            )
+        };
+        const {
+            assert!(
+                TOOL_RESULT_MAX_CHARS <= 5000,
+                "too large to keep input tokens bounded"
+            )
+        };
     }
 
     #[test]
@@ -1203,7 +1371,8 @@ mod tests {
         // Simulate an assistant message with tool_use and no matching
         // tool_result — this was the shape that produced the 400
         // "tool_use ids were referenced but not provided" in prod.
-        dj.conversation.push(serde_json::json!({"role": "user", "content": "TRIGGER: x"}));
+        dj.conversation
+            .push(serde_json::json!({"role": "user", "content": "TRIGGER: x"}));
         dj.conversation.push(serde_json::json!({
             "role": "assistant",
             "content": [{ "type": "tool_use", "id": "tool_abc", "name": "search_tracks", "input": {} }]
@@ -1222,7 +1391,8 @@ mod tests {
     #[test]
     fn close_dangling_tool_use_noop_when_all_resolved() {
         let mut dj = fake_dj();
-        dj.conversation.push(serde_json::json!({"role": "user", "content": "x"}));
+        dj.conversation
+            .push(serde_json::json!({"role": "user", "content": "x"}));
         dj.conversation.push(serde_json::json!({
             "role": "assistant",
             "content": [{ "type": "tool_use", "id": "tool_abc", "name": "search", "input": {} }]
@@ -1233,7 +1403,11 @@ mod tests {
         }));
         let before = dj.conversation.len();
         dj.close_dangling_tool_use();
-        assert_eq!(dj.conversation.len(), before, "should not add stub when already resolved");
+        assert_eq!(
+            dj.conversation.len(),
+            before,
+            "should not add stub when already resolved"
+        );
     }
 
     #[test]
@@ -1252,22 +1426,38 @@ mod tests {
             }));
         }
         dj.compact_old_tool_results();
-        let tr_msgs: Vec<&Value> = dj.conversation.iter()
-            .filter(|m| m.get("role").and_then(|r| r.as_str()) == Some("user")
-                && m.get("content").and_then(|c| c.as_array())
-                    .is_some_and(|a| a.iter().any(|b| b["type"] == "tool_result")))
+        let tr_msgs: Vec<&Value> = dj
+            .conversation
+            .iter()
+            .filter(|m| {
+                m.get("role").and_then(|r| r.as_str()) == Some("user")
+                    && m.get("content")
+                        .and_then(|c| c.as_array())
+                        .is_some_and(|a| a.iter().any(|b| b["type"] == "tool_result"))
+            })
             .collect();
         assert_eq!(tr_msgs.len(), 4);
         // Stale (0,1) squashed
         for m in &tr_msgs[..2] {
             let body = m["content"][0]["content"].as_str().unwrap();
-            assert!(body.ends_with("[stale-compacted]"), "stale body should be marked: {body}");
-            assert!(body.chars().count() < 200, "stale body should be short: {}", body.chars().count());
+            assert!(
+                body.ends_with("[stale-compacted]"),
+                "stale body should be marked: {body}"
+            );
+            assert!(
+                body.chars().count() < 200,
+                "stale body should be short: {}",
+                body.chars().count()
+            );
         }
         // Recent (2,3) intact
         for m in &tr_msgs[2..] {
             let body = m["content"][0]["content"].as_str().unwrap();
-            assert_eq!(body.chars().count(), 500, "recent body must not be compacted");
+            assert_eq!(
+                body.chars().count(),
+                500,
+                "recent body must not be compacted"
+            );
         }
     }
 
@@ -1280,8 +1470,14 @@ mod tests {
             "content": [{"type": "tool_result", "tool_use_id": "t0", "content": big.clone()}]
         }));
         dj.compact_old_tool_results();
-        let body = dj.conversation[0]["content"][0]["content"].as_str().unwrap();
-        assert_eq!(body.chars().count(), 500, "single tool_result must stay untouched");
+        let body = dj.conversation[0]["content"][0]["content"]
+            .as_str()
+            .unwrap();
+        assert_eq!(
+            body.chars().count(),
+            500,
+            "single tool_result must stay untouched"
+        );
     }
 
     #[test]
@@ -1303,12 +1499,16 @@ mod tests {
     #[test]
     fn rate_limit_clears_state_and_backs_off() {
         let mut dj = fake_dj();
-        dj.conversation.push(serde_json::json!({"role": "user", "content": "x"}));
+        dj.conversation
+            .push(serde_json::json!({"role": "user", "content": "x"}));
         dj.chain_in_progress = true;
         dj.set_round_for_test(5);
         let base = dj.min_interval;
         dj.handle_rate_limit();
-        assert!(dj.conversation.is_empty(), "429 must clear conversation to stop bleed");
+        assert!(
+            dj.conversation.is_empty(),
+            "429 must clear conversation to stop bleed"
+        );
         assert!(!dj.is_busy(), "429 must drop chain_in_progress");
         assert_eq!(dj.round, 0, "429 must reset round counter");
         assert!(dj.min_interval > base, "429 must widen min_interval");
@@ -1317,8 +1517,14 @@ mod tests {
     #[test]
     fn rate_limit_caps_backoff_at_60s() {
         let mut dj = fake_dj();
-        for _ in 0..20 { dj.handle_rate_limit(); }
-        assert_eq!(dj.min_interval, Duration::from_secs(60), "backoff must cap at 60s");
+        for _ in 0..20 {
+            dj.handle_rate_limit();
+        }
+        assert_eq!(
+            dj.min_interval,
+            Duration::from_secs(60),
+            "backoff must cap at 60s"
+        );
     }
 
     #[test]
@@ -1340,14 +1546,20 @@ mod tests {
         let mut dj = fake_dj();
         dj.set_call_mode(CallMode::Prep);
         dj.set_round_for_test(MAX_ROUNDS);
-        assert!(dj.would_cap_next_round(),
-            "prep mode at MAX_ROUNDS must cap the next round");
+        assert!(
+            dj.would_cap_next_round(),
+            "prep mode at MAX_ROUNDS must cap the next round"
+        );
         dj.set_call_mode(CallMode::Performance);
-        assert!(!dj.would_cap_next_round(),
-            "same round count under performance should still fit (higher cap)");
+        assert!(
+            !dj.would_cap_next_round(),
+            "same round count under performance should still fit (higher cap)"
+        );
         dj.set_round_for_test(MAX_ROUNDS_MANUAL);
-        assert!(dj.would_cap_next_round(),
-            "performance at MAX_ROUNDS_MANUAL must cap");
+        assert!(
+            dj.would_cap_next_round(),
+            "performance at MAX_ROUNDS_MANUAL must cap"
+        );
     }
 
     #[test]
@@ -1357,12 +1569,18 @@ mod tests {
         assert_eq!(dj.min_interval, Duration::from_secs(MIN_INTERVAL_AUTO_SECS));
         // Simulate a 429 that widened the interval — then flip to manual.
         dj.min_interval = Duration::from_secs(30);
-        let s = ClaudeDjSettings { mode: ClaudeDjMode::Manual, ..Default::default() };
+        let s = ClaudeDjSettings {
+            mode: ClaudeDjMode::Manual,
+            ..Default::default()
+        };
         dj.apply_settings(s);
         // Transition must snap to the manual floor (faster loop) so
         // beatmatching can iterate — a stale 30s hold-over from a prior
         // backoff would freeze the whole preview/nudge/read_phase loop.
-        assert_eq!(dj.min_interval, Duration::from_secs(MIN_INTERVAL_MANUAL_SECS));
+        assert_eq!(
+            dj.min_interval,
+            Duration::from_secs(MIN_INTERVAL_MANUAL_SECS)
+        );
     }
 
     #[test]
@@ -1374,8 +1592,11 @@ mod tests {
         // 429 backoff.
         let s = ClaudeDjSettings::default();
         dj.apply_settings(s);
-        assert_eq!(dj.min_interval, Duration::from_secs(30),
-            "same-mode settings patch must preserve the active backoff");
+        assert_eq!(
+            dj.min_interval,
+            Duration::from_secs(30),
+            "same-mode settings patch must preserve the active backoff"
+        );
     }
 
     #[test]
@@ -1386,8 +1607,10 @@ mod tests {
         let mut dj = fake_dj();
         dj.set_call_mode(CallMode::Prep);
         let prep_p = dj.system_prompt();
-        assert!(prep_p.contains(&format!("{MAX_ROUNDS} rounds per trigger")),
-            "prep prompt must advertise the prep round cap ({MAX_ROUNDS})");
+        assert!(
+            prep_p.contains(&format!("{MAX_ROUNDS} rounds per trigger")),
+            "prep prompt must advertise the prep round cap ({MAX_ROUNDS})"
+        );
     }
 
     #[test]
@@ -1398,32 +1621,53 @@ mod tests {
         let mut dj = fake_dj();
         let mut m = DjMemory::default();
         m.remember_good(MixEntry {
-            pair: "Alice → Bob".into(), bpm: None, key: None,
-            transition: None, note: Some("clean".into()), rated_at: None,
+            pair: "Alice → Bob".into(),
+            bpm: None,
+            key: None,
+            transition: None,
+            note: Some("clean".into()),
+            rated_at: None,
         });
         dj.inject_memory_for_test(m);
         let block = dj.dynamic_state_block();
-        assert!(block.contains("MEMORY"), "dynamic state must mention memory when non-empty");
-        assert!(block.contains("Alice → Bob"), "entry content must be surfaced");
+        assert!(
+            block.contains("MEMORY"),
+            "dynamic state must mention memory when non-empty"
+        );
+        assert!(
+            block.contains("Alice → Bob"),
+            "entry content must be surfaced"
+        );
         // And NOT in the system prompt — that's the cache-stability invariant.
-        assert!(!dj.system_prompt().contains("Alice → Bob"),
-            "system prompt must stay stable — no dynamic memory content");
+        assert!(
+            !dj.system_prompt().contains("Alice → Bob"),
+            "system prompt must stay stable — no dynamic memory content"
+        );
     }
 
     #[test]
     fn memory_disabled_hides_block_even_when_entries_exist() {
         let mut dj = fake_dj();
-        let s = ClaudeDjSettings { memory_enabled: false, ..Default::default() };
+        let s = ClaudeDjSettings {
+            memory_enabled: false,
+            ..Default::default()
+        };
         dj.apply_settings(s);
         let mut m = DjMemory::default();
         m.remember_good(MixEntry {
-            pair: "Alice → Bob".into(), bpm: None, key: None,
-            transition: None, note: None, rated_at: None,
+            pair: "Alice → Bob".into(),
+            bpm: None,
+            key: None,
+            transition: None,
+            note: None,
+            rated_at: None,
         });
         dj.inject_memory_for_test(m);
         let block = dj.dynamic_state_block();
-        assert!(!block.contains("MEMORY"),
-            "disabling memory must keep entries out of the dynamic state");
+        assert!(
+            !block.contains("MEMORY"),
+            "disabling memory must keep entries out of the dynamic state"
+        );
         assert!(!block.contains("Alice → Bob"));
     }
 
@@ -1431,8 +1675,10 @@ mod tests {
     fn memory_empty_does_not_leave_dangling_header() {
         let dj = fake_dj();
         let block = dj.dynamic_state_block();
-        assert!(!block.contains("MEMORY:"),
-            "empty memory must not emit a dangling MEMORY: header in dynamic state");
+        assert!(
+            !block.contains("MEMORY:"),
+            "empty memory must not emit a dangling MEMORY: header in dynamic state"
+        );
     }
 
     #[test]
@@ -1450,28 +1696,43 @@ mod tests {
         dj.set_prompt("peak hour".into());
         let mut m = DjMemory::default();
         m.remember_good(MixEntry {
-            pair: "X → Y".into(), bpm: None, key: None,
-            transition: None, note: None, rated_at: None,
+            pair: "X → Y".into(),
+            bpm: None,
+            key: None,
+            transition: None,
+            note: None,
+            rated_at: None,
         });
         dj.inject_memory_for_test(m);
 
         let after = dj.system_prompt();
-        assert_eq!(baseline, after,
+        assert_eq!(
+            baseline, after,
             "session-state changes must NOT change the system prompt \
-             — that would invalidate Anthropic prompt caching");
+             — that would invalidate Anthropic prompt caching"
+        );
     }
 
     #[test]
     fn rate_good_no_ops_when_memory_disabled() {
         let mut dj = fake_dj();
-        let s = ClaudeDjSettings { memory_enabled: false, ..Default::default() };
+        let s = ClaudeDjSettings {
+            memory_enabled: false,
+            ..Default::default()
+        };
         dj.apply_settings(s);
         dj.rate_good(MixEntry {
-            pair: "x".into(), bpm: None, key: None,
-            transition: None, note: None, rated_at: None,
+            pair: "x".into(),
+            bpm: None,
+            key: None,
+            transition: None,
+            note: None,
+            rated_at: None,
         });
-        assert!(dj.memory.good.is_empty(),
-            "memory disabled must silently drop ratings — no surprise writes to disk");
+        assert!(
+            dj.memory.good.is_empty(),
+            "memory disabled must silently drop ratings — no surprise writes to disk"
+        );
     }
 
     #[test]
@@ -1485,33 +1746,51 @@ mod tests {
         // leaves room for the essential mix-correction guidance but
         // guards against the two prompts accidentally converging as
         // future edits pile on.
-        assert!((perf as f64) < (prep as f64) * 0.6,
-            "performance prompt ({perf} chars) should be <60% of prep prompt ({prep} chars)");
+        assert!(
+            (perf as f64) < (prep as f64) * 0.6,
+            "performance prompt ({perf} chars) should be <60% of prep prompt ({prep} chars)"
+        );
     }
 
     #[test]
     fn performance_tools_are_subset_of_all() {
         let all = ClaudeDJ::tool_definitions();
         let perf = ClaudeDJ::tool_definitions_for(CallMode::Performance);
-        let all_names: std::collections::HashSet<_> = all.iter()
+        let all_names: std::collections::HashSet<_> = all
+            .iter()
             .filter_map(|t| t.get("name").and_then(|n| n.as_str().map(String::from)))
             .collect();
-        let perf_names: std::collections::HashSet<_> = perf.iter()
+        let perf_names: std::collections::HashSet<_> = perf
+            .iter()
             .filter_map(|t| t.get("name").and_then(|n| n.as_str().map(String::from)))
             .collect();
-        assert!(perf_names.is_subset(&all_names),
-            "performance tools must exist in the full set");
-        assert!(perf_names.len() < all_names.len(),
-            "performance tools should be a proper subset");
+        assert!(
+            perf_names.is_subset(&all_names),
+            "performance tools must exist in the full set"
+        );
+        assert!(
+            perf_names.len() < all_names.len(),
+            "performance tools should be a proper subset"
+        );
         // Performance must NOT include prep-specific tools.
-        for banned in ["browse_screen", "queue_track", "search_tracks", "go_back", "select_item"] {
-            assert!(!perf_names.contains(banned),
-                "performance set must exclude {banned} — no curation mid-mix");
+        for banned in [
+            "browse_screen",
+            "queue_track",
+            "search_tracks",
+            "go_back",
+            "select_item",
+        ] {
+            assert!(
+                !perf_names.contains(banned),
+                "performance set must exclude {banned} — no curation mid-mix"
+            );
         }
         // Performance MUST include the critical mix-correction tools.
         for required in ["read_alignment", "nudge", "jump_beats", "sweep_crossfader"] {
-            assert!(perf_names.contains(required),
-                "performance set must include {required} for phase/phrase correction");
+            assert!(
+                perf_names.contains(required),
+                "performance set must include {required} for phase/phrase correction"
+            );
         }
     }
 
@@ -1522,38 +1801,59 @@ mod tests {
         let prep = dj.system_prompt();
         dj.set_call_mode(CallMode::Performance);
         let perf = dj.system_prompt();
-        assert_ne!(prep, perf, "call_mode must actually route to different prompts");
-        assert!(perf.contains("PERFORMANCE"), "performance branch must self-identify");
+        assert_ne!(
+            prep, perf,
+            "call_mode must actually route to different prompts"
+        );
+        assert!(
+            perf.contains("PERFORMANCE"),
+            "performance branch must self-identify"
+        );
     }
 
     #[test]
     fn prep_tools_is_full_set() {
         let all = ClaudeDJ::tool_definitions();
         let prep = ClaudeDJ::tool_definitions_for(CallMode::Prep);
-        assert_eq!(all.len(), prep.len(),
-            "prep mode must expose the full tool set — no hidden restrictions");
+        assert_eq!(
+            all.len(),
+            prep.len(),
+            "prep mode must expose the full tool set — no hidden restrictions"
+        );
     }
 
     #[test]
     fn system_prompt_reflects_manual_mode() {
         let mut dj = fake_dj();
-        let s = ClaudeDjSettings { mode: ClaudeDjMode::Manual, ..Default::default() };
+        let s = ClaudeDjSettings {
+            mode: ClaudeDjMode::Manual,
+            ..Default::default()
+        };
         dj.apply_settings(s);
         let prompt = dj.system_prompt();
-        assert!(prompt.contains("MANUAL"),
-            "manual mode must be flagged in the prompt so Claude knows to drive");
-        assert!(prompt.contains("load_to_deck") || prompt.contains("preview_deck"),
-            "manual-mode prompt must reference physical-deck tools");
+        assert!(
+            prompt.contains("MANUAL"),
+            "manual mode must be flagged in the prompt so Claude knows to drive"
+        );
+        assert!(
+            prompt.contains("load_to_deck") || prompt.contains("preview_deck"),
+            "manual-mode prompt must reference physical-deck tools"
+        );
     }
 
     #[test]
     fn system_prompt_reflects_assist_mode() {
         let mut dj = fake_dj();
-        let s = ClaudeDjSettings { mode: ClaudeDjMode::Assist, ..Default::default() };
+        let s = ClaudeDjSettings {
+            mode: ClaudeDjMode::Assist,
+            ..Default::default()
+        };
         dj.apply_settings(s);
         let prompt = dj.system_prompt();
-        assert!(prompt.contains("Assist"),
-            "assist mode must be flagged distinctly");
+        assert!(
+            prompt.contains("Assist"),
+            "assist mode must be flagged distinctly"
+        );
     }
 
     #[test]
@@ -1562,34 +1862,51 @@ mod tests {
         let prompt = dj.system_prompt();
         assert!(prompt.contains("Auto"));
         // Manual-only language must NOT appear in auto mode.
-        assert!(!prompt.contains("MANUAL"), "auto mode should not promise manual tools");
+        assert!(
+            !prompt.contains("MANUAL"),
+            "auto mode should not promise manual tools"
+        );
     }
 
     #[test]
     fn camelot_strictness_changes_prompt() {
         let mut dj = fake_dj();
-        let mut s = ClaudeDjSettings { camelot_strictness: Strictness::Strict, ..Default::default() };
+        let mut s = ClaudeDjSettings {
+            camelot_strictness: Strictness::Strict,
+            ..Default::default()
+        };
         dj.apply_settings(s.clone());
-        assert!(dj.system_prompt().contains("REQUIRED"),
-            "strict camelot must say so");
+        assert!(
+            dj.system_prompt().contains("REQUIRED"),
+            "strict camelot must say so"
+        );
         s.camelot_strictness = Strictness::Off;
         dj.apply_settings(s);
         let p = dj.system_prompt();
-        assert!(!p.contains("REQUIRED") && !p.contains("Prefer Camelot"),
-            "camelot=off must drop the rule entirely");
+        assert!(
+            !p.contains("REQUIRED") && !p.contains("Prefer Camelot"),
+            "camelot=off must drop the rule entirely"
+        );
     }
 
     #[test]
     fn style_changes_digging_guidance() {
         let mut dj = fake_dj();
-        let mut s = ClaudeDjSettings { style: DjStyle::Mainstream, ..Default::default() };
+        let mut s = ClaudeDjSettings {
+            style: DjStyle::Mainstream,
+            ..Default::default()
+        };
         dj.apply_settings(s.clone());
-        assert!(dj.system_prompt().contains("COMMERCIAL"),
-            "mainstream style should read differently from default underground");
+        assert!(
+            dj.system_prompt().contains("COMMERCIAL"),
+            "mainstream style should read differently from default underground"
+        );
         s.style = DjStyle::Exploratory;
         dj.apply_settings(s);
-        assert!(dj.system_prompt().contains("EXPLORE"),
-            "exploratory style must appear");
+        assert!(
+            dj.system_prompt().contains("EXPLORE"),
+            "exploratory style must appear"
+        );
     }
 
     #[test]
@@ -1598,7 +1915,10 @@ mod tests {
         // clone, subsequent system_prompt calls would still use the
         // default settings.
         let mut dj = fake_dj();
-        let s = ClaudeDjSettings { mode: ClaudeDjMode::Manual, ..Default::default() };
+        let s = ClaudeDjSettings {
+            mode: ClaudeDjMode::Manual,
+            ..Default::default()
+        };
         dj.apply_settings(s);
         let a = dj.system_prompt();
         let b = dj.system_prompt();
@@ -1617,8 +1937,11 @@ mod tests {
         for i in 0..MEMORY_LEN + 5 {
             dj.remember_browse(format!("S{i}"));
         }
-        assert_eq!(dj.recent_screens.len(), MEMORY_LEN,
-            "recent_screens must be bounded at MEMORY_LEN");
+        assert_eq!(
+            dj.recent_screens.len(),
+            MEMORY_LEN,
+            "recent_screens must be bounded at MEMORY_LEN"
+        );
     }
 
     #[test]
@@ -1629,8 +1952,11 @@ mod tests {
         }
         assert_eq!(dj.recent_queued.len(), MEMORY_LEN);
         // Oldest entries drop first — the front should be Track 3, not Track 0.
-        assert_eq!(dj.recent_queued.front().map(|s| s.as_str()), Some("Track 3"),
-            "FIFO must drop oldest");
+        assert_eq!(
+            dj.recent_queued.front().map(|s| s.as_str()),
+            Some("Track 3"),
+            "FIFO must drop oldest"
+        );
     }
 
     #[test]
@@ -1639,17 +1965,23 @@ mod tests {
         let long = "x".repeat(500);
         dj.add_log(LogEntryType::Info, long);
         let stored = &dj.log.last().unwrap().message;
-        assert!(stored.chars().count() < 500,
-            "long dashboard log entries must be truncated; got {} chars", stored.chars().count());
-        assert!(stored.ends_with('…'),
-            "truncation must be marked with an ellipsis; got: {stored}");
+        assert!(
+            stored.chars().count() < 500,
+            "long dashboard log entries must be truncated; got {} chars",
+            stored.chars().count()
+        );
+        assert!(
+            stored.ends_with('…'),
+            "truncation must be marked with an ellipsis; got: {stored}"
+        );
     }
 
     #[test]
     fn trim_conversation_short_is_noop() {
         let mut dj = fake_dj();
         for i in 0..10 {
-            dj.conversation.push(serde_json::json!({"role": "user", "content": format!("u{i}")}));
+            dj.conversation
+                .push(serde_json::json!({"role": "user", "content": format!("u{i}")}));
         }
         let before = dj.conversation.len();
         dj.trim_conversation();

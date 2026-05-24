@@ -11,10 +11,18 @@ fn mixr_dir() -> PathBuf {
     dir
 }
 
-fn command_path() -> PathBuf { mixr_dir().join("command") }
-fn status_path() -> PathBuf { mixr_dir().join("status.json") }
-fn screen_path() -> PathBuf { mixr_dir().join("screen.txt") }
-fn events_path() -> PathBuf { mixr_dir().join("events.jsonl") }
+fn command_path() -> PathBuf {
+    mixr_dir().join("command")
+}
+fn status_path() -> PathBuf {
+    mixr_dir().join("status.json")
+}
+fn screen_path() -> PathBuf {
+    mixr_dir().join("screen.txt")
+}
+fn events_path() -> PathBuf {
+    mixr_dir().join("events.jsonl")
+}
 
 /// Convert a shorthand command line ("queue 12345", "vol 0.8",
 /// "tx echoout", or just "skip") into the JSON envelope mixr's IPC
@@ -69,14 +77,21 @@ pub fn write_event(event: &serde_json::Value) {
     use std::io::Write;
     let ts = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs_f64()).unwrap_or(0.0);
+        .map(|d| d.as_secs_f64())
+        .unwrap_or(0.0);
     let mut line = serde_json::json!({ "ts": ts });
     if let (Some(obj_l), Some(obj_r)) = (line.as_object_mut(), event.as_object()) {
-        for (k, v) in obj_r { obj_l.insert(k.clone(), v.clone()); }
+        for (k, v) in obj_r {
+            obj_l.insert(k.clone(), v.clone());
+        }
     }
     let Ok(mut f) = std::fs::OpenOptions::new()
-        .create(true).append(true)
-        .open(events_path()) else { return };
+        .create(true)
+        .append(true)
+        .open(events_path())
+    else {
+        return;
+    };
     let _ = writeln!(f, "{line}");
 }
 
@@ -102,19 +117,36 @@ pub fn write_screen_lines(title: &str, lines: &[String]) {
 
 /// Write quick status text (compact, no formatting — for fast reads).
 pub fn write_quick_status(info: &crate::audio::engine::NowPlayingInfo, view: &str) {
-    let playing = info.playing_track.as_ref().map(|t| format!("{} - {}", t.artist_name(), t.full_title())).unwrap_or("—".into());
-    let incoming = info.incoming_track.as_ref().map(|t| format!("{} - {}", t.artist_name(), t.full_title())).unwrap_or("—".into());
+    let playing = info
+        .playing_track
+        .as_ref()
+        .map(|t| format!("{} - {}", t.artist_name(), t.full_title()))
+        .unwrap_or("—".into());
+    let incoming = info
+        .incoming_track
+        .as_ref()
+        .map(|t| format!("{} - {}", t.artist_name(), t.full_title()))
+        .unwrap_or("—".into());
     // Whether the playing-role deck is actually producing audio. A
     // track can be cued (`playing` above carries its name) without the
     // deck running — external readers (mnml's now-playing chip) key
     // off this so they don't mistake "loaded" for "playing".
-    let playing_active = if info.playing_is_a { info.deck_a_is_playing } else { info.deck_b_is_playing };
+    let playing_active = if info.playing_is_a {
+        info.deck_a_is_playing
+    } else {
+        info.deck_b_is_playing
+    };
     let lines = format!(
         "view={view}\nstate={:?}\nplaying={playing}\nplaying_active={playing_active}\nplaying_bpm={}\nplaying_time={:.0}/{:.0}\nincoming={incoming}\nincoming_bpm={}\nphase={:+.1}ms\ncrossfade={:.0}%\nqueue={}\nhistory={}",
         info.state,
-        info.playing_bpm.map(|b| format!("{:.1}", b)).unwrap_or("—".into()),
-        info.playing_time, info.playing_duration,
-        info.incoming_bpm.map(|b| format!("{:.1}", b)).unwrap_or("—".into()),
+        info.playing_bpm
+            .map(|b| format!("{:.1}", b))
+            .unwrap_or("—".into()),
+        info.playing_time,
+        info.playing_duration,
+        info.incoming_bpm
+            .map(|b| format!("{:.1}", b))
+            .unwrap_or("—".into()),
         info.phase_offset_ms,
         info.crossfade_progress * 100.0,
         info.queue.len(),
@@ -136,10 +168,14 @@ pub fn write_quick_status(info: &crate::audio::engine::NowPlayingInfo, view: &st
 pub fn read_command() -> Vec<serde_json::Value> {
     let path = command_path();
     let tmp = path.with_extension("processing");
-    if std::fs::rename(&path, &tmp).is_err() { return Vec::new(); }
+    if std::fs::rename(&path, &tmp).is_err() {
+        return Vec::new();
+    }
     let data = std::fs::read_to_string(&tmp).unwrap_or_default();
     std::fs::remove_file(&tmp).ok();
-    if data.trim().is_empty() { return Vec::new(); }
+    if data.trim().is_empty() {
+        return Vec::new();
+    }
     data.lines()
         .filter(|l| !l.trim().is_empty())
         .filter_map(|l| serde_json::from_str(l).ok())
@@ -155,7 +191,14 @@ pub fn write_status_with_screen(
     dash_section: Option<&str>,
     dash_focus: Option<&str>,
 ) {
-    write_status_inner(info, Some(screen_title), Some(screen_items), toast, dash_section, dash_focus);
+    write_status_inner(
+        info,
+        Some(screen_title),
+        Some(screen_items),
+        toast,
+        dash_section,
+        dash_focus,
+    );
 }
 
 fn write_status_inner(
@@ -166,20 +209,26 @@ fn write_status_inner(
     dash_section: Option<&str>,
     dash_focus: Option<&str>,
 ) {
-    let track = info.playing_track.as_ref().map(|t| {
-        format!("{} - {}", t.artist_name(), t.full_title())
-    }).unwrap_or_default();
+    let track = info
+        .playing_track
+        .as_ref()
+        .map(|t| format!("{} - {}", t.artist_name(), t.full_title()))
+        .unwrap_or_default();
 
     let bpm = info.playing_bpm.unwrap_or(0.0);
     let time_remaining = info.playing_duration - info.playing_time;
     let state = format!("{:?}", info.state);
 
-    let queue: Vec<serde_json::Value> = info.queue.iter().map(|e| {
-        serde_json::json!({
-            "track": format!("{} - {}", e.track.artist_name(), e.track.full_title()),
-            "bpm": e.track.bpm,
+    let queue: Vec<serde_json::Value> = info
+        .queue
+        .iter()
+        .map(|e| {
+            serde_json::json!({
+                "track": format!("{} - {}", e.track.artist_name(), e.track.full_title()),
+                "bpm": e.track.bpm,
+            })
         })
-    }).collect();
+        .collect();
 
     // Per-deck mixer/tone-stack state so smoke tests and external
     // scripts can observe EQ / filter / cue state without scraping
@@ -249,21 +298,37 @@ pub enum IpcCommand {
     ResumeAuto,
     /// Load the currently-highlighted browse-list track to a specific
     /// deck. App-side handler resolves the selection + deck routing.
-    LoadDeck { is_a: bool },
+    LoadDeck {
+        is_a: bool,
+    },
     /// Per-deck nudge — like `Nudge` but always targets a specific deck
     /// regardless of mix state. Used by per-deck pitch-bend buttons on
     /// hardware controllers.
-    NudgeDeck { is_a: bool, direction: i32 },
+    NudgeDeck {
+        is_a: bool,
+        direction: i32,
+    },
     /// Per-deck play/pause toggle. Independent of `Pause`, which only
     /// affects the playing deck.
-    PlayDeck { is_a: bool },
+    PlayDeck {
+        is_a: bool,
+    },
     /// Per-deck bar jump. `Jump(bars)` targets the playing deck;
     /// this targets a specific deck.
-    JumpDeck { is_a: bool, bars: i32 },
+    JumpDeck {
+        is_a: bool,
+        bars: i32,
+    },
     /// Per-deck hot-cue jump. Slot 0..3.
-    CueJump { is_a: bool, slot: u8 },
+    CueJump {
+        is_a: bool,
+        slot: u8,
+    },
     /// Per-deck hot-cue set at current playhead. Slot 0..3.
-    CueSet { is_a: bool, slot: u8 },
+    CueSet {
+        is_a: bool,
+        slot: u8,
+    },
     Metronome,
     SplitCue,
     Search(String),
@@ -288,8 +353,14 @@ pub enum IpcCommand {
     /// Tempo rate setter. `deck = None` → operate on incoming (legacy
     /// Claude DJ flow); `deck = Some(is_a)` → set the named deck's
     /// rate directly (MIDI tempo faders, smoke tests, manual tweaks).
-    SetRate { deck: Option<bool>, rate: f64 },
-    Volume { playing: Option<f64>, incoming: Option<f64> },
+    SetRate {
+        deck: Option<bool>,
+        rate: f64,
+    },
+    Volume {
+        playing: Option<f64>,
+        incoming: Option<f64>,
+    },
     SetMixIn(f64),
     Diagnose,
     /// Simulate a keyboard event. Single-char strings produce a `Char(c)`
@@ -307,21 +378,41 @@ pub enum IpcCommand {
     GetScreen,
     QueueTrack(i64),
     /// Set EQ bands on a specific physical deck. None = unchanged.
-    SetEq { is_a: bool, low: Option<f32>, mid: Option<f32>, high: Option<f32> },
+    SetEq {
+        is_a: bool,
+        low: Option<f32>,
+        mid: Option<f32>,
+        high: Option<f32>,
+    },
     /// Filter sweep on a specific physical deck (pos in [-1, +1]).
-    SetDeckFilter { is_a: bool, pos: f32 },
+    SetDeckFilter {
+        is_a: bool,
+        pos: f32,
+    },
     /// Channel fader per physical deck (0..1).
-    SetChannelFader { is_a: bool, level: f32 },
+    SetChannelFader {
+        is_a: bool,
+        level: f32,
+    },
     /// Mixer-wide crossfader (-1 = full A, 0 = center, +1 = full B).
     SetCrossfader(f32),
     /// Override transition type for the next crossfade.
     SetTransition(String),
     /// Beat-aligned loop on a specific deck.
-    LoopBeats { is_a: bool, beats: f64 },
+    LoopBeats {
+        is_a: bool,
+        beats: f64,
+    },
     /// Release any loop on a specific deck.
-    LoopRelease { is_a: bool },
+    LoopRelease {
+        is_a: bool,
+    },
     /// Set, jump, or clear a hot cue slot (0..=3) on a specific deck.
-    Cue { is_a: bool, slot: usize, action: CueAction },
+    Cue {
+        is_a: bool,
+        slot: usize,
+        action: CueAction,
+    },
     /// Switch the pitch-stretch engine globally. Accepts "off" or "rubberband".
     PitchStretch(String),
     /// Set the headphone-cue monitor device by name. Empty string disables.
@@ -378,14 +469,21 @@ pub enum IpcCommand {
     /// Synthesize a left-click at terminal (col, row). Used by smoke
     /// tests to verify click hit-targets are wired correctly without
     /// a real mouse. Modifiers carry SHIFT-state for hot-cue set.
-    Click { col: u16, row: u16, shift: bool },
+    Click {
+        col: u16,
+        row: u16,
+        shift: bool,
+    },
     /// Synthesize a mouse-drag event at terminal (col, row). Hits the
     /// same code path a real `Drag(Left)` event takes — used by
     /// smoke tests to exercise continuous-drag targets (crossfader,
     /// tempo/volume/EQ/filter strips). Caller typically emits one
     /// Click to "start" the drag, then one or more Drag events to
     /// simulate the cursor moving under a held button.
-    Drag { col: u16, row: u16 },
+    Drag {
+        col: u16,
+        row: u16,
+    },
     /// Dump the current frame's labeled click targets to
     /// `~/.mixr/layout.json`. Smoke tests use this to look up
     /// control rects (tempoA, crossfader, play_a, etc.) without
@@ -395,28 +493,53 @@ pub enum IpcCommand {
     /// smoke tests to disable quantize so loop / jump clicks fire
     /// immediately instead of waiting for the next boundary.
     /// `beats` accepts 0.125 / 0.25 / 0.5 / 1 / 2 / 4 / 8.
-    Quantize { on: bool, beats: f64 },
+    Quantize {
+        on: bool,
+        beats: f64,
+    },
     /// Set delay feedback on a specific deck (0.0..1.0).
-    DelayFeedback { is_a: bool, value: f32 },
+    DelayFeedback {
+        is_a: bool,
+        value: f32,
+    },
     /// Set delay time in samples on a specific deck.
-    DelaySamples { is_a: bool, value: usize },
+    DelaySamples {
+        is_a: bool,
+        value: usize,
+    },
     /// Set delay time synced to BPM (beat_fraction, e.g. 0.75 = dotted eighth).
-    DelaySync { is_a: bool, beat_fraction: f64 },
+    DelaySync {
+        is_a: bool,
+        beat_fraction: f64,
+    },
     /// Set loop in-point at current position on a specific deck.
-    LoopIn { is_a: bool },
+    LoopIn {
+        is_a: bool,
+    },
     /// Set loop out-point at current position on a specific deck.
-    LoopOut { is_a: bool },
+    LoopOut {
+        is_a: bool,
+    },
     /// Stop a specific deck.
-    StopDeck { is_a: bool },
+    StopDeck {
+        is_a: bool,
+    },
     /// Seek a specific deck to a time in seconds.
-    SeekDeck { is_a: bool, time: f64 },
+    SeekDeck {
+        is_a: bool,
+        time: f64,
+    },
     /// Switch the monitor headphone-cue source at runtime.
     /// "incoming", "playing" (maps to role-based deck), "both", "a", "b".
     MonitorSource(String),
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum CueAction { Set, Jump, Clear }
+pub enum CueAction {
+    Set,
+    Jump,
+    Clear,
+}
 
 pub fn parse_command(json: &serde_json::Value) -> Vec<IpcCommand> {
     let mut cmds = Vec::new();
@@ -438,15 +561,22 @@ pub fn parse_command(json: &serde_json::Value) -> Vec<IpcCommand> {
                         cmds.push(IpcCommand::Nudge(if dir >= 0 { 1 } else { -1 }));
                     } else if let Some(obj) = val.as_object() {
                         let dir = obj.get("direction").and_then(|v| v.as_i64()).unwrap_or(1) as i32;
-                        let is_a = obj.get("deck").and_then(|v| v.as_str())
+                        let is_a = obj
+                            .get("deck")
+                            .and_then(|v| v.as_str())
                             .map(|s| matches!(s.to_ascii_lowercase().as_str(), "a" | "0" | "left"))
                             .unwrap_or(true);
-                        cmds.push(IpcCommand::NudgeDeck { is_a, direction: if dir >= 0 { 1 } else { -1 } });
+                        cmds.push(IpcCommand::NudgeDeck {
+                            is_a,
+                            direction: if dir >= 0 { 1 } else { -1 },
+                        });
                     }
                 }
                 "play_deck" => {
                     if let Some(obj) = val.as_object() {
-                        let is_a = obj.get("deck").and_then(|v| v.as_str())
+                        let is_a = obj
+                            .get("deck")
+                            .and_then(|v| v.as_str())
                             .map(|s| matches!(s.to_ascii_lowercase().as_str(), "a" | "0" | "left"))
                             .unwrap_or(true);
                         cmds.push(IpcCommand::PlayDeck { is_a });
@@ -454,35 +584,55 @@ pub fn parse_command(json: &serde_json::Value) -> Vec<IpcCommand> {
                 }
                 "cue" => {
                     if let Some(obj) = val.as_object() {
-                        let is_a = obj.get("deck").and_then(|v| v.as_str())
+                        let is_a = obj
+                            .get("deck")
+                            .and_then(|v| v.as_str())
                             .map(|s| matches!(s.to_ascii_lowercase().as_str(), "a" | "0" | "left"))
                             .unwrap_or(true);
                         let slot = obj.get("slot").and_then(|v| v.as_u64()).unwrap_or(0) as u8;
-                        cmds.push(IpcCommand::CueJump { is_a, slot: slot.min(3) });
+                        cmds.push(IpcCommand::CueJump {
+                            is_a,
+                            slot: slot.min(3),
+                        });
                     }
                 }
                 "cue_set" => {
                     if let Some(obj) = val.as_object() {
-                        let is_a = obj.get("deck").and_then(|v| v.as_str())
+                        let is_a = obj
+                            .get("deck")
+                            .and_then(|v| v.as_str())
                             .map(|s| matches!(s.to_ascii_lowercase().as_str(), "a" | "0" | "left"))
                             .unwrap_or(true);
                         let slot = obj.get("slot").and_then(|v| v.as_u64()).unwrap_or(0) as u8;
-                        cmds.push(IpcCommand::CueSet { is_a, slot: slot.min(3) });
+                        cmds.push(IpcCommand::CueSet {
+                            is_a,
+                            slot: slot.min(3),
+                        });
                     }
                 }
                 "metronome" => cmds.push(IpcCommand::Metronome),
                 "resume_auto" | "auto" => cmds.push(IpcCommand::ResumeAuto),
                 "load_deck" => {
                     if let Some(obj) = val.as_object() {
-                        let is_a = obj.get("deck").and_then(|v| v.as_str())
+                        let is_a = obj
+                            .get("deck")
+                            .and_then(|v| v.as_str())
                             .map(|s| matches!(s.to_ascii_lowercase().as_str(), "a" | "0" | "left"))
                             .unwrap_or(true);
                         cmds.push(IpcCommand::LoadDeck { is_a });
                     }
                 }
                 "splitcue" => cmds.push(IpcCommand::SplitCue),
-                "search" => if !str_val.is_empty() { cmds.push(IpcCommand::Search(str_val)); },
-                "browse" => if !str_val.is_empty() { cmds.push(IpcCommand::Browse(str_val)); },
+                "search" => {
+                    if !str_val.is_empty() {
+                        cmds.push(IpcCommand::Search(str_val));
+                    }
+                }
+                "browse" => {
+                    if !str_val.is_empty() {
+                        cmds.push(IpcCommand::Browse(str_val));
+                    }
+                }
                 "queueall" => cmds.push(IpcCommand::QueueAll),
                 "navigate" => {
                     if str_val == "queueall" {
@@ -514,25 +664,35 @@ pub fn parse_command(json: &serde_json::Value) -> Vec<IpcCommand> {
                         cmds.push(IpcCommand::Jump(bars as i32));
                     } else if let Some(obj) = val.as_object() {
                         let bars = obj.get("bars").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-                        let is_a = obj.get("deck").and_then(|v| v.as_str())
+                        let is_a = obj
+                            .get("deck")
+                            .and_then(|v| v.as_str())
                             .map(|s| matches!(s.to_ascii_lowercase().as_str(), "a" | "0" | "left"))
                             .unwrap_or(true);
                         cmds.push(IpcCommand::JumpDeck { is_a, bars });
                     }
                 }
                 "shiftgrid" => {
-                    if let Some(ms) = val.as_f64() { cmds.push(IpcCommand::ShiftGrid(ms)); }
-                    else if let Some(ms) = val.as_i64() { cmds.push(IpcCommand::ShiftGrid(ms as f64)); }
+                    if let Some(ms) = val.as_f64() {
+                        cmds.push(IpcCommand::ShiftGrid(ms));
+                    } else if let Some(ms) = val.as_i64() {
+                        cmds.push(IpcCommand::ShiftGrid(ms as f64));
+                    }
                 }
                 "extend" => {
-                    if let Some(bars) = val.as_i64() { cmds.push(IpcCommand::Extend(bars as i32)); }
+                    if let Some(bars) = val.as_i64() {
+                        cmds.push(IpcCommand::Extend(bars as i32));
+                    }
                 }
                 "setrate" => {
                     // Two shapes:
                     //   {"setrate": 1.05}                       → legacy, targets incoming
                     //   {"setrate": {"deck":"a","rate":1.05}}   → per-deck
                     if let Some(r) = val.as_f64() {
-                        cmds.push(IpcCommand::SetRate { deck: None, rate: r });
+                        cmds.push(IpcCommand::SetRate {
+                            deck: None,
+                            rate: r,
+                        });
                     } else if let Some(obj) = val.as_object() {
                         if let Some(rate) = obj.get("rate").and_then(|v| v.as_f64()) {
                             let deck = obj.get("deck").and_then(|v| v.as_str()).map(|s| {
@@ -548,7 +708,9 @@ pub fn parse_command(json: &serde_json::Value) -> Vec<IpcCommand> {
                     cmds.push(IpcCommand::Volume { playing, incoming });
                 }
                 "setmixin" => {
-                    if let Some(t) = val.as_f64() { cmds.push(IpcCommand::SetMixIn(t)); }
+                    if let Some(t) = val.as_f64() {
+                        cmds.push(IpcCommand::SetMixIn(t));
+                    }
                 }
                 "diagnose" => cmds.push(IpcCommand::Diagnose),
                 "key" => {
@@ -564,27 +726,49 @@ pub fn parse_command(json: &serde_json::Value) -> Vec<IpcCommand> {
                 "export" => cmds.push(IpcCommand::ExportHistory),
                 "smart_shuffle" => cmds.push(IpcCommand::SmartShuffle),
                 "favorite" => cmds.push(IpcCommand::Favorite),
-                "filter" => if !str_val.is_empty() { cmds.push(IpcCommand::Filter(str_val)); },
+                "filter" => {
+                    if !str_val.is_empty() {
+                        cmds.push(IpcCommand::Filter(str_val));
+                    }
+                }
                 "get_screen" => cmds.push(IpcCommand::GetScreen),
                 "queue_track" => {
-                    if let Some(id) = val.as_i64() { cmds.push(IpcCommand::QueueTrack(id)); }
+                    if let Some(id) = val.as_i64() {
+                        cmds.push(IpcCommand::QueueTrack(id));
+                    }
                 }
                 "eq" => {
                     // {"eq": {"deck": "a", "low": -6, "mid": 0, "high": 3}}
                     if let Some(obj) = val.as_object() {
-                        let is_a = obj.get("deck").and_then(|v| v.as_str()).map(|s| s.eq_ignore_ascii_case("a")).unwrap_or(true);
+                        let is_a = obj
+                            .get("deck")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.eq_ignore_ascii_case("a"))
+                            .unwrap_or(true);
                         let low = obj.get("low").and_then(|v| v.as_f64()).map(|v| v as f32);
                         let mid = obj.get("mid").and_then(|v| v.as_f64()).map(|v| v as f32);
                         let high = obj.get("high").and_then(|v| v.as_f64()).map(|v| v as f32);
-                        cmds.push(IpcCommand::SetEq { is_a, low, mid, high });
+                        cmds.push(IpcCommand::SetEq {
+                            is_a,
+                            low,
+                            mid,
+                            high,
+                        });
                     }
                 }
                 "deck_filter" => {
                     // {"deck_filter": {"deck": "a", "pos": -0.5}}
                     if let Some(obj) = val.as_object() {
-                        let is_a = obj.get("deck").and_then(|v| v.as_str()).map(|s| s.eq_ignore_ascii_case("a")).unwrap_or(true);
+                        let is_a = obj
+                            .get("deck")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.eq_ignore_ascii_case("a"))
+                            .unwrap_or(true);
                         if let Some(pos) = obj.get("pos").and_then(|v| v.as_f64()) {
-                            cmds.push(IpcCommand::SetDeckFilter { is_a, pos: pos as f32 });
+                            cmds.push(IpcCommand::SetDeckFilter {
+                                is_a,
+                                pos: pos as f32,
+                            });
                         }
                     }
                 }
@@ -592,24 +776,42 @@ pub fn parse_command(json: &serde_json::Value) -> Vec<IpcCommand> {
                     // {"fader": {"a": 0.8, "b": 1.0}} — any subset
                     if let Some(obj) = val.as_object() {
                         if let Some(l) = obj.get("a").and_then(|v| v.as_f64()) {
-                            cmds.push(IpcCommand::SetChannelFader { is_a: true, level: l as f32 });
+                            cmds.push(IpcCommand::SetChannelFader {
+                                is_a: true,
+                                level: l as f32,
+                            });
                         }
                         if let Some(l) = obj.get("b").and_then(|v| v.as_f64()) {
-                            cmds.push(IpcCommand::SetChannelFader { is_a: false, level: l as f32 });
+                            cmds.push(IpcCommand::SetChannelFader {
+                                is_a: false,
+                                level: l as f32,
+                            });
                         }
                     }
                 }
                 "crossfader" => {
-                    if let Some(p) = val.as_f64() { cmds.push(IpcCommand::SetCrossfader(p as f32)); }
+                    if let Some(p) = val.as_f64() {
+                        cmds.push(IpcCommand::SetCrossfader(p as f32));
+                    }
                 }
                 "transition" => {
-                    if !str_val.is_empty() { cmds.push(IpcCommand::SetTransition(str_val)); }
+                    if !str_val.is_empty() {
+                        cmds.push(IpcCommand::SetTransition(str_val));
+                    }
                 }
                 "loop" => {
                     // {"loop": {"deck": "a", "beats": 4}} or {"loop": {"deck": "a", "release": true}}
                     if let Some(obj) = val.as_object() {
-                        let is_a = obj.get("deck").and_then(|v| v.as_str()).map(|s| s.eq_ignore_ascii_case("a")).unwrap_or(true);
-                        if obj.get("release").and_then(|v| v.as_bool()).unwrap_or(false) {
+                        let is_a = obj
+                            .get("deck")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.eq_ignore_ascii_case("a"))
+                            .unwrap_or(true);
+                        if obj
+                            .get("release")
+                            .and_then(|v| v.as_bool())
+                            .unwrap_or(false)
+                        {
                             cmds.push(IpcCommand::LoopRelease { is_a });
                         } else if let Some(beats) = obj.get("beats").and_then(|v| v.as_f64()) {
                             cmds.push(IpcCommand::LoopBeats { is_a, beats });
@@ -617,7 +819,9 @@ pub fn parse_command(json: &serde_json::Value) -> Vec<IpcCommand> {
                     }
                 }
                 "pitch_stretch" => {
-                    if !str_val.is_empty() { cmds.push(IpcCommand::PitchStretch(str_val)); }
+                    if !str_val.is_empty() {
+                        cmds.push(IpcCommand::PitchStretch(str_val));
+                    }
                 }
                 "monitor_device" => {
                     // Empty string is valid — it disables the monitor.
@@ -638,10 +842,14 @@ pub fn parse_command(json: &serde_json::Value) -> Vec<IpcCommand> {
                     cmds.push(IpcCommand::SeratoDb(str_val));
                 }
                 "monitor_source" => {
-                    if !str_val.is_empty() { cmds.push(IpcCommand::MonitorSource(str_val)); }
+                    if !str_val.is_empty() {
+                        cmds.push(IpcCommand::MonitorSource(str_val));
+                    }
                 }
                 "playlist_create" => {
-                    if !str_val.is_empty() { cmds.push(IpcCommand::PlaylistCreate(str_val)); }
+                    if !str_val.is_empty() {
+                        cmds.push(IpcCommand::PlaylistCreate(str_val));
+                    }
                 }
                 "playlist_delete" => {
                     // Two shapes accepted:
@@ -652,7 +860,10 @@ pub fn parse_command(json: &serde_json::Value) -> Vec<IpcCommand> {
                         cmds.push(IpcCommand::PlaylistDeleteRequest(id));
                     } else if let Some(obj) = val.as_object() {
                         let id = obj.get("id").and_then(|v| v.as_i64());
-                        let confirmed = obj.get("confirm").and_then(|v| v.as_bool()).unwrap_or(false);
+                        let confirmed = obj
+                            .get("confirm")
+                            .and_then(|v| v.as_bool())
+                            .unwrap_or(false);
                         if let Some(id) = id {
                             if confirmed {
                                 cmds.push(IpcCommand::PlaylistDelete(id));
@@ -702,7 +913,9 @@ pub fn parse_command(json: &serde_json::Value) -> Vec<IpcCommand> {
                             b
                         } else if let Some(bars) = obj.get("bars").and_then(|v| v.as_f64()) {
                             bars * 4.0 // back-compat
-                        } else { 1.0 };
+                        } else {
+                            1.0
+                        };
                         cmds.push(IpcCommand::Quantize { on, beats });
                     }
                 }
@@ -719,7 +932,9 @@ pub fn parse_command(json: &serde_json::Value) -> Vec<IpcCommand> {
                         },
                         _ => None,
                     };
-                    if let Some(b) = good { cmds.push(IpcCommand::RateMix(b)); }
+                    if let Some(b) = good {
+                        cmds.push(IpcCommand::RateMix(b));
+                    }
                 }
                 "profile" => {
                     let on = match val {
@@ -736,10 +951,16 @@ pub fn parse_command(json: &serde_json::Value) -> Vec<IpcCommand> {
                     cmds.push(IpcCommand::Profile(on));
                 }
                 "master_gain" | "master" | "gain" => {
-                    if let Some(g) = val.as_f64() { cmds.push(IpcCommand::MasterGain(g as f32)); }
+                    if let Some(g) = val.as_f64() {
+                        cmds.push(IpcCommand::MasterGain(g as f32));
+                    }
                 }
-                "test_mix" => { cmds.push(IpcCommand::TestMix); }
-                "install_rubberband" => { cmds.push(IpcCommand::InstallRubberband); }
+                "test_mix" => {
+                    cmds.push(IpcCommand::TestMix);
+                }
+                "install_rubberband" => {
+                    cmds.push(IpcCommand::InstallRubberband);
+                }
                 // FIXME: this `"cue"` arm is shadowed by the simpler one
                 // earlier at line 455 — anyone who sends an `action` field
                 // gets ignored. The fix is small: delete lines 455-471 (the
@@ -755,44 +976,75 @@ pub fn parse_command(json: &serde_json::Value) -> Vec<IpcCommand> {
                 "cue" => {
                     // {"cue": {"deck": "a", "slot": 1, "action": "set|jump|clear"}}
                     if let Some(obj) = val.as_object() {
-                        let is_a = obj.get("deck").and_then(|v| v.as_str()).map(|s| s.eq_ignore_ascii_case("a")).unwrap_or(true);
-                        let slot_num = obj.get("slot").and_then(|v| v.as_u64()).unwrap_or(1) as usize;
+                        let is_a = obj
+                            .get("deck")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.eq_ignore_ascii_case("a"))
+                            .unwrap_or(true);
+                        let slot_num =
+                            obj.get("slot").and_then(|v| v.as_u64()).unwrap_or(1) as usize;
                         let slot = slot_num.saturating_sub(1).min(3);
-                        let action = match obj.get("action").and_then(|v| v.as_str()).unwrap_or("jump") {
-                            "set" => CueAction::Set,
-                            "clear" => CueAction::Clear,
-                            _ => CueAction::Jump,
-                        };
+                        let action =
+                            match obj.get("action").and_then(|v| v.as_str()).unwrap_or("jump") {
+                                "set" => CueAction::Set,
+                                "clear" => CueAction::Clear,
+                                _ => CueAction::Jump,
+                            };
                         cmds.push(IpcCommand::Cue { is_a, slot, action });
                     }
                 }
                 "delay_feedback" => {
                     if let Some(obj) = val.as_object() {
-                        let is_a = obj.get("deck").and_then(|v| v.as_str()).map(|s| s.eq_ignore_ascii_case("a")).unwrap_or(true);
+                        let is_a = obj
+                            .get("deck")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.eq_ignore_ascii_case("a"))
+                            .unwrap_or(true);
                         if let Some(v) = obj.get("value").and_then(|v| v.as_f64()) {
-                            cmds.push(IpcCommand::DelayFeedback { is_a, value: v as f32 });
+                            cmds.push(IpcCommand::DelayFeedback {
+                                is_a,
+                                value: v as f32,
+                            });
                         }
                     }
                 }
                 "delay_samples" => {
                     if let Some(obj) = val.as_object() {
-                        let is_a = obj.get("deck").and_then(|v| v.as_str()).map(|s| s.eq_ignore_ascii_case("a")).unwrap_or(true);
+                        let is_a = obj
+                            .get("deck")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.eq_ignore_ascii_case("a"))
+                            .unwrap_or(true);
                         if let Some(v) = obj.get("value").and_then(|v| v.as_u64()) {
-                            cmds.push(IpcCommand::DelaySamples { is_a, value: v as usize });
+                            cmds.push(IpcCommand::DelaySamples {
+                                is_a,
+                                value: v as usize,
+                            });
                         }
                     }
                 }
                 "delay_sync" => {
                     if let Some(obj) = val.as_object() {
-                        let is_a = obj.get("deck").and_then(|v| v.as_str()).map(|s| s.eq_ignore_ascii_case("a")).unwrap_or(true);
+                        let is_a = obj
+                            .get("deck")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.eq_ignore_ascii_case("a"))
+                            .unwrap_or(true);
                         if let Some(v) = obj.get("beat_fraction").and_then(|v| v.as_f64()) {
-                            cmds.push(IpcCommand::DelaySync { is_a, beat_fraction: v });
+                            cmds.push(IpcCommand::DelaySync {
+                                is_a,
+                                beat_fraction: v,
+                            });
                         }
                     }
                 }
                 "loop_in" => {
                     if let Some(obj) = val.as_object() {
-                        let is_a = obj.get("deck").and_then(|v| v.as_str()).map(|s| s.eq_ignore_ascii_case("a")).unwrap_or(true);
+                        let is_a = obj
+                            .get("deck")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.eq_ignore_ascii_case("a"))
+                            .unwrap_or(true);
                         cmds.push(IpcCommand::LoopIn { is_a });
                     } else {
                         cmds.push(IpcCommand::LoopIn { is_a: true });
@@ -800,19 +1052,32 @@ pub fn parse_command(json: &serde_json::Value) -> Vec<IpcCommand> {
                 }
                 "loop_out" => {
                     if let Some(obj) = val.as_object() {
-                        let is_a = obj.get("deck").and_then(|v| v.as_str()).map(|s| s.eq_ignore_ascii_case("a")).unwrap_or(true);
+                        let is_a = obj
+                            .get("deck")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.eq_ignore_ascii_case("a"))
+                            .unwrap_or(true);
                         cmds.push(IpcCommand::LoopOut { is_a });
                     } else {
                         cmds.push(IpcCommand::LoopOut { is_a: true });
                     }
                 }
                 "stop_deck" => {
-                    let is_a = val.as_object().and_then(|o| o.get("deck")).and_then(|v| v.as_str()).map(|s| s.eq_ignore_ascii_case("a")).unwrap_or(true);
+                    let is_a = val
+                        .as_object()
+                        .and_then(|o| o.get("deck"))
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.eq_ignore_ascii_case("a"))
+                        .unwrap_or(true);
                     cmds.push(IpcCommand::StopDeck { is_a });
                 }
                 "seek_deck" => {
                     if let Some(obj) = val.as_object() {
-                        let is_a = obj.get("deck").and_then(|v| v.as_str()).map(|s| s.eq_ignore_ascii_case("a")).unwrap_or(true);
+                        let is_a = obj
+                            .get("deck")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.eq_ignore_ascii_case("a"))
+                            .unwrap_or(true);
                         let time = obj.get("time").and_then(|v| v.as_f64()).unwrap_or(0.0);
                         cmds.push(IpcCommand::SeekDeck { is_a, time });
                     }
@@ -831,7 +1096,9 @@ pub struct StatusWriter {
 
 impl StatusWriter {
     pub fn new() -> Self {
-        Self { last_write: Instant::now() - std::time::Duration::from_secs(10) }
+        Self {
+            last_write: Instant::now() - std::time::Duration::from_secs(10),
+        }
     }
 
     /// True if the 2-second interval has elapsed and a write is pending.
@@ -850,11 +1117,17 @@ impl StatusWriter {
         dash_focus: Option<&str>,
     ) {
         if self.last_write.elapsed() >= std::time::Duration::from_secs(2) {
-            write_status_with_screen(info, screen_title, screen_items, toast, dash_section, dash_focus);
+            write_status_with_screen(
+                info,
+                screen_title,
+                screen_items,
+                toast,
+                dash_section,
+                dash_focus,
+            );
             self.last_write = Instant::now();
         }
     }
-
 }
 
 #[cfg(test)]
@@ -862,7 +1135,9 @@ mod shorthand_tests {
     use super::shorthand_to_json;
     use serde_json::Value;
 
-    fn parse(s: &str) -> Value { serde_json::from_str(s).expect("must be valid JSON") }
+    fn parse(s: &str) -> Value {
+        serde_json::from_str(s).expect("must be valid JSON")
+    }
 
     #[test]
     fn bare_keyword_becomes_one() {

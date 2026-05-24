@@ -1,4 +1,3 @@
-
 /// Crossfade controller — volume curves and phase sync correction.
 pub struct CrossfadeController {
     pub crossfade_bars: u32,
@@ -33,13 +32,21 @@ impl CrossfadeController {
     }
 
     fn beat_interval_secs(&self) -> f64 {
-        let b = if self.playing_bpm > 0.0 { self.playing_bpm } else { 128.0 };
+        let b = if self.playing_bpm > 0.0 {
+            self.playing_bpm
+        } else {
+            128.0
+        };
         60.0 / b
     }
 
     /// Duration in seconds (N bars at playing deck's BPM).
     pub fn duration(&self) -> f64 {
-        let bpm = if self.playing_bpm > 0.0 { self.playing_bpm } else { 128.0 };
+        let bpm = if self.playing_bpm > 0.0 {
+            self.playing_bpm
+        } else {
+            128.0
+        };
         let bar_duration = (60.0 / bpm) * 4.0;
         bar_duration * self.crossfade_bars as f64
     }
@@ -52,9 +59,10 @@ impl CrossfadeController {
         let now = std::time::Instant::now();
         let beat = self.beat_interval_secs();
         if let Some(prev) = self.last_correction_at
-            && now.duration_since(prev).as_secs_f64() < beat {
-                return self.last_returned;
-            }
+            && now.duration_since(prev).as_secs_f64() < beat
+        {
+            return self.last_returned;
+        }
         self.last_correction_at = Some(now);
 
         let abs_offset = phase_offset_ms.abs();
@@ -118,7 +126,9 @@ impl CrossfadeController {
 mod tests {
     use super::*;
 
-    fn fresh() -> CrossfadeController { CrossfadeController::new(128.0, 128.0, 16) }
+    fn fresh() -> CrossfadeController {
+        CrossfadeController::new(128.0, 128.0, 16)
+    }
 
     #[test]
     fn rate_correction_dead_zone_decays_to_zero() {
@@ -130,8 +140,11 @@ mod tests {
             c.last_correction_at = None;
             c.rate_correction(1.5);
         }
-        assert!(c.smoothed_correction.abs() < 1e-3,
-            "expected near-zero after decay, got {}", c.smoothed_correction);
+        assert!(
+            c.smoothed_correction.abs() < 1e-3,
+            "expected near-zero after decay, got {}",
+            c.smoothed_correction
+        );
     }
 
     #[test]
@@ -144,7 +157,10 @@ mod tests {
             c.last_correction_at = None;
             let r = c.rate_correction(ms);
             assert!(r.abs() > 1e-9, "expected non-zero at {ms}ms, got {r}");
-            assert!(r.abs() < 0.01, "should stay clamped under 1% at {ms}ms, got {r}");
+            assert!(
+                r.abs() < 0.01,
+                "should stay clamped under 1% at {ms}ms, got {r}"
+            );
         }
     }
 
@@ -155,7 +171,10 @@ mod tests {
         let r = c.rate_correction(100.0);
         // First call with >20ms triggers the one-shot kick (up to ±3%).
         // At 100ms: 100 * 0.001 = 0.1, clamped to 0.03.
-        assert!(r.abs() <= 0.03, "first-call kick should clamp to 3%, got {r}");
+        assert!(
+            r.abs() <= 0.03,
+            "first-call kick should clamp to 3%, got {r}"
+        );
         // Subsequent calls use normal proportional+EMA path (no kick).
         // The smoothed value decays from the kick's 0.03 over several beats.
         c.last_correction_at = None;
@@ -167,15 +186,24 @@ mod tests {
     fn rate_correction_first_call_large_offset_returns_kick() {
         let mut c = fresh();
         let r = c.rate_correction(25.0);
-        assert!((r - 0.025).abs() < 1e-9, "25ms kick should be 0.025, got {r}");
+        assert!(
+            (r - 0.025).abs() < 1e-9,
+            "25ms kick should be 0.025, got {r}"
+        );
 
         let mut c = fresh();
         let r = c.rate_correction(100.0);
-        assert!((r - 0.03).abs() < 1e-9, "100ms kick should clamp to 0.03, got {r}");
+        assert!(
+            (r - 0.03).abs() < 1e-9,
+            "100ms kick should clamp to 0.03, got {r}"
+        );
 
         let mut c = fresh();
         let r = c.rate_correction(-50.0);
-        assert!((r - (-0.03)).abs() < 1e-9, "-50ms kick should clamp to -0.03, got {r}");
+        assert!(
+            (r - (-0.03)).abs() < 1e-9,
+            "-50ms kick should clamp to -0.03, got {r}"
+        );
     }
 
     #[test]
@@ -192,8 +220,10 @@ mod tests {
         for &ms in &[3.0_f64, 10.0, 15.0, 20.0] {
             let mut c = fresh();
             let r = c.rate_correction(ms);
-            assert!(r.abs() <= 0.01 + 1e-9,
-                "first call at {ms}ms must stay within ±1%, got {r}");
+            assert!(
+                r.abs() <= 0.01 + 1e-9,
+                "first call at {ms}ms must stay within ±1%, got {r}"
+            );
         }
     }
 
@@ -221,8 +251,10 @@ mod tests {
         for &ms in &offsets {
             let mut c = fresh();
             let r = converge(&mut c, ms, 80).abs();
-            assert!(r >= last_mag - 1e-9,
-                "non-monotonic: offset {ms}ms gave {r}, previous band was {last_mag}");
+            assert!(
+                r >= last_mag - 1e-9,
+                "non-monotonic: offset {ms}ms gave {r}, previous band was {last_mag}"
+            );
             last_mag = r;
         }
     }
@@ -233,8 +265,10 @@ mod tests {
         // should approach kp*offset = 0.03, clamped to 0.01.
         let mut c = fresh();
         let r = converge(&mut c, 60.0, 200);
-        assert!((r.abs() - 0.01).abs() < 1e-4,
-            "60ms offset should converge to the 1% clamp, got {r}");
+        assert!(
+            (r.abs() - 0.01).abs() < 1e-4,
+            "60ms offset should converge to the 1% clamp, got {r}"
+        );
     }
 
     #[test]
@@ -245,8 +279,14 @@ mod tests {
         let pos = converge(&mut c, 20.0, 50);
         let mut c = fresh();
         let neg = converge(&mut c, -20.0, 50);
-        assert!(pos > 0.0, "pos offset should give pos correction, got {pos}");
-        assert!(neg < 0.0, "neg offset should give neg correction, got {neg}");
+        assert!(
+            pos > 0.0,
+            "pos offset should give pos correction, got {pos}"
+        );
+        assert!(
+            neg < 0.0,
+            "neg offset should give neg correction, got {neg}"
+        );
         assert!((pos + neg).abs() < 1e-9, "sign flip should be symmetric");
     }
 
@@ -269,8 +309,10 @@ mod tests {
         // Higher-offset step should cover more ground per tick even though
         // the kp at 9 vs 11 ms is nearly identical — the difference comes
         // from 1-smooth_factor flipping 0.15 → 0.25.
-        assert!(step_high > step_low,
-            "expected 11ms first step > 9ms first step, got high={step_high} low={step_low}");
+        assert!(
+            step_high > step_low,
+            "expected 11ms first step > 9ms first step, got high={step_high} low={step_low}"
+        );
     }
 
     #[test]
@@ -298,8 +340,11 @@ mod tests {
             (150.0, 16.0 * 4.0 * 60.0 / 150.0),
         ] {
             let c = CrossfadeController::new(bpm, bpm, 16);
-            assert!((c.duration() - expected).abs() < 1e-6,
-                "bpm={bpm}: expected {expected}s duration, got {}", c.duration());
+            assert!(
+                (c.duration() - expected).abs() < 1e-6,
+                "bpm={bpm}: expected {expected}s duration, got {}",
+                c.duration()
+            );
         }
     }
 
@@ -323,8 +368,10 @@ mod tests {
             let r = c.rate_correction(offset_ms);
             offset_ms -= r * beat_ms;
         }
-        assert!(offset_ms.abs() < 10.0,
-            "controller failed to converge under 10ms: residual={offset_ms}ms");
+        assert!(
+            offset_ms.abs() < 10.0,
+            "controller failed to converge under 10ms: residual={offset_ms}ms"
+        );
     }
 
     #[test]

@@ -198,7 +198,9 @@ pub struct ClaudeDjSettings {
     pub quick_mix_bars: u32,
 }
 
-fn default_quick_mix_bars() -> u32 { 16 }
+fn default_quick_mix_bars() -> u32 {
+    16
+}
 
 impl Default for ClaudeDjSettings {
     fn default() -> Self {
@@ -323,23 +325,57 @@ pub enum AnalyzerEngine {
 }
 
 // Defaults
-fn default_bpm_mode() -> BpmMode { BpmMode::Glide }
-fn default_audio_quality() -> AudioQuality { AudioQuality::High }
-fn default_preview_quality() -> AudioQuality { AudioQuality::Standard }
-fn default_genre() -> String { "Melodic House & Techno".into() }
-fn default_crossfade_bars() -> u32 { 16 }
-fn default_quantize_beats() -> f64 { 1.0 }
-fn default_mix_in_point() -> MixInPoint { MixInPoint::FirstBeat }
-fn default_true() -> bool { true }
-fn default_browser() -> String { "Google Chrome".into() }
-fn default_enabled_transitions() -> Vec<String> {
-    vec!["BeatMatched".into(), "EchoOut".into(), "BassSwap".into(), "FilterSweep".into(), "LoopRoll".into()]
+fn default_bpm_mode() -> BpmMode {
+    BpmMode::Glide
 }
-fn default_glide_bars() -> u32 { 32 }
-fn default_jump_bars() -> u32 { 8 }
-fn default_tempo_range() -> u32 { 8 }
-fn default_nudge_percent() -> u32 { 3 }
-fn default_nudge_tap_ms() -> u32 { 300 }
+fn default_audio_quality() -> AudioQuality {
+    AudioQuality::High
+}
+fn default_preview_quality() -> AudioQuality {
+    AudioQuality::Standard
+}
+fn default_genre() -> String {
+    "Melodic House & Techno".into()
+}
+fn default_crossfade_bars() -> u32 {
+    16
+}
+fn default_quantize_beats() -> f64 {
+    1.0
+}
+fn default_mix_in_point() -> MixInPoint {
+    MixInPoint::FirstBeat
+}
+fn default_true() -> bool {
+    true
+}
+fn default_browser() -> String {
+    "Google Chrome".into()
+}
+fn default_enabled_transitions() -> Vec<String> {
+    vec![
+        "BeatMatched".into(),
+        "EchoOut".into(),
+        "BassSwap".into(),
+        "FilterSweep".into(),
+        "LoopRoll".into(),
+    ]
+}
+fn default_glide_bars() -> u32 {
+    32
+}
+fn default_jump_bars() -> u32 {
+    8
+}
+fn default_tempo_range() -> u32 {
+    8
+}
+fn default_nudge_percent() -> u32 {
+    3
+}
+fn default_nudge_tap_ms() -> u32 {
+    300
+}
 
 impl Default for AppConfig {
     fn default() -> Self {
@@ -389,9 +425,7 @@ impl Default for AppConfig {
 
 impl AppConfig {
     fn config_path() -> PathBuf {
-        let dir = dirs::home_dir()
-            .unwrap_or_default()
-            .join(".mixr");
+        let dir = dirs::home_dir().unwrap_or_default().join(".mixr");
         std::fs::create_dir_all(&dir).ok();
         dir.join("config.json")
     }

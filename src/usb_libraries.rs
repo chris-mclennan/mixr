@@ -43,7 +43,10 @@ pub enum StickKind {
 
 impl StickKind {
     pub fn label(self) -> &'static str {
-        match self { Self::EngineDj => "Engine DJ", Self::Rekordbox => "Rekordbox" }
+        match self {
+            Self::EngineDj => "Engine DJ",
+            Self::Rekordbox => "Rekordbox",
+        }
     }
 }
 
@@ -52,7 +55,10 @@ struct Cache {
     entries: Vec<StickEntry>,
 }
 
-static CACHE: Mutex<Cache> = Mutex::new(Cache { last_scan: None, entries: Vec::new() });
+static CACHE: Mutex<Cache> = Mutex::new(Cache {
+    last_scan: None,
+    entries: Vec::new(),
+});
 const SCAN_INTERVAL: Duration = Duration::from_secs(2);
 
 /// Currently-detected DJ-library USB sticks. Re-scans at most every
@@ -60,7 +66,8 @@ const SCAN_INTERVAL: Duration = Duration::from_secs(2);
 /// menu rebuild) without thrashing the filesystem.
 pub fn detected_sticks() -> Vec<StickEntry> {
     let mut cache = CACHE.lock().unwrap_or_else(|e| e.into_inner());
-    let stale = cache.last_scan
+    let stale = cache
+        .last_scan
         .map(|t| t.elapsed() >= SCAN_INTERVAL)
         .unwrap_or(true);
     if stale {
@@ -73,10 +80,14 @@ pub fn detected_sticks() -> Vec<StickEntry> {
 fn scan_now() -> Vec<StickEntry> {
     let mut found = Vec::new();
     for root in mount_roots() {
-        let Ok(entries) = std::fs::read_dir(&root) else { continue };
+        let Ok(entries) = std::fs::read_dir(&root) else {
+            continue;
+        };
         for entry in entries.flatten() {
             let mount = entry.path();
-            if !mount.is_dir() { continue; }
+            if !mount.is_dir() {
+                continue;
+            }
             if let Some(kind) = detect_kind(&mount) {
                 found.push(StickEntry { mount, kind });
             }
@@ -102,7 +113,9 @@ fn mount_roots() -> Vec<PathBuf> {
     } else if cfg!(target_os = "windows") {
         // Windows assigns drive letters; iterate D-Z and try to read
         // the root. Cheap (most are absent → fast Err).
-        ('D'..='Z').map(|c| PathBuf::from(format!("{c}:\\"))).collect()
+        ('D'..='Z')
+            .map(|c| PathBuf::from(format!("{c}:\\")))
+            .collect()
     } else {
         Vec::new()
     }
@@ -119,8 +132,8 @@ fn detect_kind(mount: &Path) -> Option<StickKind> {
     {
         return Some(StickKind::EngineDj);
     }
-    if mount.join("PIONEER/rekordbox/export.pdb").exists()
-        || mount.join("PIONEER/USBANLZ").exists()  // newer rekordbox layouts
+    if mount.join("PIONEER/rekordbox/export.pdb").exists() || mount.join("PIONEER/USBANLZ").exists()
+    // newer rekordbox layouts
     {
         return Some(StickKind::Rekordbox);
     }

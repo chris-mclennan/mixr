@@ -31,7 +31,10 @@ use serde::{Deserialize, Serialize};
 const MAP_FILENAME: &str = "midi-map.json";
 
 fn map_path() -> PathBuf {
-    dirs::home_dir().unwrap_or_default().join(".mixr").join(MAP_FILENAME)
+    dirs::home_dir()
+        .unwrap_or_default()
+        .join(".mixr")
+        .join(MAP_FILENAME)
 }
 
 /// Identifies a single MIDI control event without its data byte.
@@ -54,10 +57,11 @@ impl MidiEvent {
     /// Compact human label for display in the learn UI.
     pub fn label(&self) -> String {
         match self {
-            Self::ControlChange { channel, controller } =>
-                format!("CC ch{} #{}", channel + 1, controller),
-            Self::NoteOn { channel, note } =>
-                format!("Note ch{} #{}", channel + 1, note),
+            Self::ControlChange {
+                channel,
+                controller,
+            } => format!("CC ch{} #{}", channel + 1, controller),
+            Self::NoteOn { channel, note } => format!("Note ch{} #{}", channel + 1, note),
             Self::PitchBend { channel } => format!("Bend ch{}", channel + 1),
         }
     }
@@ -70,37 +74,65 @@ impl MidiEvent {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Action {
-    Crossfader,                         // CC value → -1..1
-    ChannelFader { is_a: bool },        // CC value → 0..1
-    EqLow { is_a: bool },               // CC value → -24..+12 dB
-    EqMid { is_a: bool },
-    EqHigh { is_a: bool },
-    Filter { is_a: bool },              // CC value → -1..1 (LP..HP)
-    Tempo { is_a: bool },               // CC value → ±range%
-    JumpBars(i32),                      // Note-on triggers ±N bars
-    PlayPause,                          // Note-on toggles
-    Skip,                               // Note-on advances queue
-    MixNow,                             // Note-on starts crossfade
-    Cue { is_a: bool, slot: u8 },       // Note-on jumps to hot cue
-    CueSet { is_a: bool, slot: u8 },    // Note-on sets hot cue
-    LoopBeats { is_a: bool, beats: f64 }, // Note-on toggles loop
-    Nudge(i32),                         // Note-on triggers ±1 nudge (global — picks playing/incoming)
-    NudgeDeck { is_a: bool, direction: i32 }, // Note-on triggers ±1 nudge on a specific deck
-    GridShift(f64),                     // Note-on shifts grid by ms
-    Transition(String),                 // Note-on selects transition (string = transition name)
+    Crossfader, // CC value → -1..1
+    ChannelFader {
+        is_a: bool,
+    }, // CC value → 0..1
+    EqLow {
+        is_a: bool,
+    }, // CC value → -24..+12 dB
+    EqMid {
+        is_a: bool,
+    },
+    EqHigh {
+        is_a: bool,
+    },
+    Filter {
+        is_a: bool,
+    }, // CC value → -1..1 (LP..HP)
+    Tempo {
+        is_a: bool,
+    }, // CC value → ±range%
+    JumpBars(i32), // Note-on triggers ±N bars
+    PlayPause,     // Note-on toggles
+    Skip,          // Note-on advances queue
+    MixNow,        // Note-on starts crossfade
+    Cue {
+        is_a: bool,
+        slot: u8,
+    }, // Note-on jumps to hot cue
+    CueSet {
+        is_a: bool,
+        slot: u8,
+    }, // Note-on sets hot cue
+    LoopBeats {
+        is_a: bool,
+        beats: f64,
+    }, // Note-on toggles loop
+    Nudge(i32),    // Note-on triggers ±1 nudge (global — picks playing/incoming)
+    NudgeDeck {
+        is_a: bool,
+        direction: i32,
+    }, // Note-on triggers ±1 nudge on a specific deck
+    GridShift(f64), // Note-on shifts grid by ms
+    Transition(String), // Note-on selects transition (string = transition name)
     /// Per-deck play/pause. Independent of the global `PlayPause`,
     /// which toggles the playing-deck only. Use this for the play
     /// button on each physical deck.
-    PlayPauseDeck { is_a: bool },
+    PlayPauseDeck {
+        is_a: bool,
+    },
     /// Per-deck bar jump. Same semantic as the global JumpBars but
     /// targets a specific deck.
-    JumpBarsDeck { is_a: bool, bars: i32 },
+    JumpBarsDeck {
+        is_a: bool,
+        bars: i32,
+    },
 
     // ── UI navigation ────────────────────────────────────────────────
     // Used by browse knob, view/source buttons, back button on the
     // Mixstream's nav cluster. Lets the controller drive the TUI's
     // own list/menu navigation alongside the audio controls.
-
     /// Move the cursor up one row in any list (browse, queue, settings).
     /// Map to a momentary button.
     NavigateUp,
@@ -122,7 +154,9 @@ pub enum Action {
     ResumeAuto,
     /// Load the currently-highlighted browse-list track to a specific
     /// deck. Refuses if the target deck is currently playing.
-    LoadDeck { is_a: bool },
+    LoadDeck {
+        is_a: bool,
+    },
 }
 
 impl Action {
@@ -166,91 +200,157 @@ impl Action {
     /// required, or out-of-range value).
     pub fn to_ipc_command(&self, value: u32) -> Option<String> {
         // Helpers: CC value (0..=127) into normalized ranges.
-        let cc01 = value as f64 / 127.0;       // 0..1
+        let cc01 = value as f64 / 127.0; // 0..1
         let cc_signed = (value as f64 / 127.0) * 2.0 - 1.0; // -1..1
-        let cc_db = (cc01 - 0.5) * 36.0;       // -18..+18 dB nominal range
+        let cc_db = (cc01 - 0.5) * 36.0; // -18..+18 dB nominal range
         // Note-on: presence triggers, value is the velocity (>0 = press).
         let pressed = value > 0;
 
         Some(match self {
             Self::Crossfader => format!("{{\"crossfader\":{cc_signed}}}"),
-            Self::ChannelFader { is_a } =>
-                format!("{{\"fader\":{{\"{}\":{cc01}}}}}", if *is_a { "a" } else { "b" }),
-            Self::EqLow { is_a } =>
-                format!("{{\"eq\":{{\"deck\":\"{}\",\"low\":{cc_db}}}}}", if *is_a { "a" } else { "b" }),
-            Self::EqMid { is_a } =>
-                format!("{{\"eq\":{{\"deck\":\"{}\",\"mid\":{cc_db}}}}}", if *is_a { "a" } else { "b" }),
-            Self::EqHigh { is_a } =>
-                format!("{{\"eq\":{{\"deck\":\"{}\",\"high\":{cc_db}}}}}", if *is_a { "a" } else { "b" }),
-            Self::Filter { is_a } =>
-                format!("{{\"deck_filter\":{{\"deck\":\"{}\",\"pos\":{cc_signed}}}}}", if *is_a { "a" } else { "b" }),
+            Self::ChannelFader { is_a } => format!(
+                "{{\"fader\":{{\"{}\":{cc01}}}}}",
+                if *is_a { "a" } else { "b" }
+            ),
+            Self::EqLow { is_a } => format!(
+                "{{\"eq\":{{\"deck\":\"{}\",\"low\":{cc_db}}}}}",
+                if *is_a { "a" } else { "b" }
+            ),
+            Self::EqMid { is_a } => format!(
+                "{{\"eq\":{{\"deck\":\"{}\",\"mid\":{cc_db}}}}}",
+                if *is_a { "a" } else { "b" }
+            ),
+            Self::EqHigh { is_a } => format!(
+                "{{\"eq\":{{\"deck\":\"{}\",\"high\":{cc_db}}}}}",
+                if *is_a { "a" } else { "b" }
+            ),
+            Self::Filter { is_a } => format!(
+                "{{\"deck_filter\":{{\"deck\":\"{}\",\"pos\":{cc_signed}}}}}",
+                if *is_a { "a" } else { "b" }
+            ),
             Self::Tempo { is_a } => {
                 // ±8% of base tempo. Slider center = 1.0 rate.
                 let rate = 1.0 + cc_signed * 0.08;
-                format!("{{\"setrate\":{{\"deck\":\"{}\",\"rate\":{rate}}}}}", if *is_a { "a" } else { "b" })
+                format!(
+                    "{{\"setrate\":{{\"deck\":\"{}\",\"rate\":{rate}}}}}",
+                    if *is_a { "a" } else { "b" }
+                )
             }
             Self::JumpBars(n) => {
-                if !pressed { return None; }
+                if !pressed {
+                    return None;
+                }
                 format!("{{\"jump\":{n}}}")
             }
-            Self::PlayPause => { if !pressed { return None; } "{\"pause\":1}".into() }
-            Self::Skip => { if !pressed { return None; } "{\"skip\":1}".into() }
-            Self::MixNow => { if !pressed { return None; } "{\"mixnow\":1}".into() }
+            Self::PlayPause => {
+                if !pressed {
+                    return None;
+                }
+                "{\"pause\":1}".into()
+            }
+            Self::Skip => {
+                if !pressed {
+                    return None;
+                }
+                "{\"skip\":1}".into()
+            }
+            Self::MixNow => {
+                if !pressed {
+                    return None;
+                }
+                "{\"mixnow\":1}".into()
+            }
             Self::Cue { is_a, slot } => {
-                if !pressed { return None; }
-                format!("{{\"cue\":{{\"deck\":\"{}\",\"slot\":{slot}}}}}",
-                    if *is_a { "a" } else { "b" })
+                if !pressed {
+                    return None;
+                }
+                format!(
+                    "{{\"cue\":{{\"deck\":\"{}\",\"slot\":{slot}}}}}",
+                    if *is_a { "a" } else { "b" }
+                )
             }
             Self::CueSet { is_a, slot } => {
-                if !pressed { return None; }
-                format!("{{\"cue_set\":{{\"deck\":\"{}\",\"slot\":{slot}}}}}",
-                    if *is_a { "a" } else { "b" })
+                if !pressed {
+                    return None;
+                }
+                format!(
+                    "{{\"cue_set\":{{\"deck\":\"{}\",\"slot\":{slot}}}}}",
+                    if *is_a { "a" } else { "b" }
+                )
             }
             Self::LoopBeats { is_a: _is_a, beats } => {
-                if !pressed { return None; }
+                if !pressed {
+                    return None;
+                }
                 format!("{{\"loop\":{{\"beats\":{beats}}}}}")
             }
             Self::Nudge(n) => {
-                if !pressed { return None; }
+                if !pressed {
+                    return None;
+                }
                 format!("{{\"nudge\":{n}}}")
             }
             Self::NudgeDeck { is_a, direction } => {
-                if !pressed { return None; }
-                format!("{{\"nudge\":{{\"deck\":\"{}\",\"direction\":{direction}}}}}",
-                    if *is_a { "a" } else { "b" })
+                if !pressed {
+                    return None;
+                }
+                format!(
+                    "{{\"nudge\":{{\"deck\":\"{}\",\"direction\":{direction}}}}}",
+                    if *is_a { "a" } else { "b" }
+                )
             }
             Self::GridShift(ms) => {
-                if !pressed { return None; }
+                if !pressed {
+                    return None;
+                }
                 format!("{{\"shiftgrid\":{ms}}}")
             }
             Self::Transition(name) => {
-                if !pressed { return None; }
+                if !pressed {
+                    return None;
+                }
                 format!("{{\"transition\":\"{name}\"}}")
             }
             Self::PlayPauseDeck { is_a } => {
-                if !pressed { return None; }
-                format!("{{\"play_deck\":{{\"deck\":\"{}\",\"toggle\":true}}}}",
-                    if *is_a { "a" } else { "b" })
+                if !pressed {
+                    return None;
+                }
+                format!(
+                    "{{\"play_deck\":{{\"deck\":\"{}\",\"toggle\":true}}}}",
+                    if *is_a { "a" } else { "b" }
+                )
             }
             Self::JumpBarsDeck { is_a, bars } => {
-                if !pressed { return None; }
-                format!("{{\"jump\":{{\"deck\":\"{}\",\"bars\":{bars}}}}}",
-                    if *is_a { "a" } else { "b" })
+                if !pressed {
+                    return None;
+                }
+                format!(
+                    "{{\"jump\":{{\"deck\":\"{}\",\"bars\":{bars}}}}}",
+                    if *is_a { "a" } else { "b" }
+                )
             }
             Self::NavigateUp => {
-                if !pressed { return None; }
+                if !pressed {
+                    return None;
+                }
                 "{\"navigate\":\"up\"}".into()
             }
             Self::NavigateDown => {
-                if !pressed { return None; }
+                if !pressed {
+                    return None;
+                }
                 "{\"navigate\":\"down\"}".into()
             }
             Self::NavigateEnter => {
-                if !pressed { return None; }
+                if !pressed {
+                    return None;
+                }
                 "{\"navigate\":\"enter\"}".into()
             }
             Self::NavigateBack => {
-                if !pressed { return None; }
+                if !pressed {
+                    return None;
+                }
                 "{\"navigate\":\"back\"}".into()
             }
             Self::BrowseScroll => {
@@ -268,32 +368,43 @@ impl Action {
                 }
             }
             Self::SwitchView(v) => {
-                if !pressed { return None; }
+                if !pressed {
+                    return None;
+                }
                 // IPC accepts {"view_browse":1}, {"view_queue":1}, etc.
                 // Map our view label to the right command name.
                 let cmd = match v.as_str() {
                     "dashboard" => "dashboard",
-                    "browse"    => "view_browse",
-                    "queue"     => "view_queue",
-                    "history"   => "view_history",
-                    "settings"  => "view_settings",
-                    other       => other,
+                    "browse" => "view_browse",
+                    "queue" => "view_queue",
+                    "history" => "view_history",
+                    "settings" => "view_settings",
+                    other => other,
                 };
                 format!("{{\"{cmd}\":1}}")
             }
             Self::ResumeAuto => {
-                if !pressed { return None; }
+                if !pressed {
+                    return None;
+                }
                 "{\"resume_auto\":1}".into()
             }
             Self::LoadDeck { is_a } => {
-                if !pressed { return None; }
-                format!("{{\"load_deck\":{{\"deck\":\"{}\"}}}}", if *is_a { "a" } else { "b" })
+                if !pressed {
+                    return None;
+                }
+                format!(
+                    "{{\"load_deck\":{{\"deck\":\"{}\"}}}}",
+                    if *is_a { "a" } else { "b" }
+                )
             }
         })
     }
 }
 
-fn deck(is_a: bool) -> &'static str { if is_a { "A" } else { "B" } }
+fn deck(is_a: bool) -> &'static str {
+    if is_a { "A" } else { "B" }
+}
 
 /// User-editable map from MIDI event → action. Loaded from disk at
 /// startup; writes go through `save()` after each change in MIDI-
@@ -322,15 +433,15 @@ impl MidiMap {
     }
 
     pub fn save(&self) -> std::io::Result<()> {
-        let json = serde_json::to_string_pretty(self).map_err(|e| {
-            std::io::Error::new(std::io::ErrorKind::InvalidData, e)
-        })?;
+        let json = serde_json::to_string_pretty(self)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         std::fs::write(map_path(), json)
     }
 
     /// Find the action bound to a MIDI event, if any.
     pub fn lookup(&self, event: &MidiEvent) -> Option<&Action> {
-        self.bindings.iter()
+        self.bindings
+            .iter()
             .find(|b| &b.event == event)
             .map(|b| &b.action)
     }
@@ -339,7 +450,8 @@ impl MidiMap {
     /// action. Used by the learn UI to show "this action is bound
     /// to CC ch=X #Y" alongside each row.
     pub fn event_for(&self, action: &Action) -> Option<&MidiEvent> {
-        self.bindings.iter()
+        self.bindings
+            .iter()
             .find(|b| &b.action == action)
             .map(|b| &b.event)
     }
@@ -420,58 +532,85 @@ fn run_listener(state: Arc<Mutex<ListenerState>>) -> anyhow::Result<()> {
         let owned_input = midir::MidiInput::new(&format!("mixr-midi-{i}"))?;
         let state_clone = state.clone();
         let name_for_log = name.clone();
-        let conn = owned_input.connect(port, "mixr", move |_ts, msg, _| {
-            handle_midi(msg, &state_clone, &name_for_log);
-        }, ()).map_err(|e| anyhow::anyhow!("MIDI connect failed: {e}"))?;
+        let conn = owned_input
+            .connect(
+                port,
+                "mixr",
+                move |_ts, msg, _| {
+                    handle_midi(msg, &state_clone, &name_for_log);
+                },
+                (),
+            )
+            .map_err(|e| anyhow::anyhow!("MIDI connect failed: {e}"))?;
         connections.push(conn);
     }
 
     // Park the thread; midir keeps the connections alive only while
     // their handles are in scope.
-    loop { std::thread::park(); }
+    loop {
+        std::thread::park();
+    }
 }
 
 fn handle_midi(msg: &[u8], state: &Arc<Mutex<ListenerState>>, source: &str) {
-    let Some((event, value)) = parse(msg) else { return };
+    let Some((event, value)) = parse(msg) else {
+        return;
+    };
     tracing::debug!("MIDI [{source}]: {} = {value}", event.label());
 
     let mut s = state.lock().unwrap_or_else(|e| e.into_inner());
     s.last_event = Some((event.clone(), value));
 
     // Don't dispatch while in learn mode — user is binding, not driving.
-    if !s.dispatch_active { return; }
+    if !s.dispatch_active {
+        return;
+    }
 
     if let Some(action) = s.map.lookup(&event).cloned()
-        && let Some(json) = action.to_ipc_command(value) {
-            // Drop the lock before file I/O.
-            drop(s);
-            let path = dirs::home_dir().unwrap_or_default()
-                .join(".mixr").join("command");
-            if let Err(e) = std::fs::write(&path, &json) {
-                tracing::warn!("MIDI: failed to write command file: {e}");
-            }
+        && let Some(json) = action.to_ipc_command(value)
+    {
+        // Drop the lock before file I/O.
+        drop(s);
+        let path = dirs::home_dir()
+            .unwrap_or_default()
+            .join(".mixr")
+            .join("command");
+        if let Err(e) = std::fs::write(&path, &json) {
+            tracing::warn!("MIDI: failed to write command file: {e}");
         }
+    }
 }
 
 /// Decode a raw MIDI message into our (event, value) tuple. Status-
 /// byte top nibble selects the message family; we handle CC, note-on,
 /// note-off (treated as note-on velocity=0), and pitch bend.
 fn parse(msg: &[u8]) -> Option<(MidiEvent, u32)> {
-    if msg.len() < 2 { return None; }
+    if msg.len() < 2 {
+        return None;
+    }
     let status = msg[0];
     let channel = status & 0x0F;
     let kind = status & 0xF0;
     match kind {
         0xB0 if msg.len() >= 3 => Some((
-            MidiEvent::ControlChange { channel, controller: msg[1] },
+            MidiEvent::ControlChange {
+                channel,
+                controller: msg[1],
+            },
             msg[2] as u32,
         )),
         0x90 if msg.len() >= 3 => Some((
-            MidiEvent::NoteOn { channel, note: msg[1] },
+            MidiEvent::NoteOn {
+                channel,
+                note: msg[1],
+            },
             msg[2] as u32, // velocity (0 = note-off in many controllers)
         )),
         0x80 if msg.len() >= 3 => Some((
-            MidiEvent::NoteOn { channel, note: msg[1] },
+            MidiEvent::NoteOn {
+                channel,
+                note: msg[1],
+            },
             0, // explicit note-off → velocity 0
         )),
         0xE0 if msg.len() >= 3 => {
@@ -495,17 +634,51 @@ pub fn all_actions() -> Vec<Action> {
         Action::Crossfader,
         Action::ChannelFader { is_a: true },
         Action::ChannelFader { is_a: false },
-        Action::EqLow { is_a: true }, Action::EqMid { is_a: true }, Action::EqHigh { is_a: true },
-        Action::EqLow { is_a: false }, Action::EqMid { is_a: false }, Action::EqHigh { is_a: false },
-        Action::Filter { is_a: true }, Action::Filter { is_a: false },
-        Action::Tempo { is_a: true }, Action::Tempo { is_a: false },
+        Action::EqLow { is_a: true },
+        Action::EqMid { is_a: true },
+        Action::EqHigh { is_a: true },
+        Action::EqLow { is_a: false },
+        Action::EqMid { is_a: false },
+        Action::EqHigh { is_a: false },
+        Action::Filter { is_a: true },
+        Action::Filter { is_a: false },
+        Action::Tempo { is_a: true },
+        Action::Tempo { is_a: false },
         // ── Per-deck transport ─────────────────────────────────────
         Action::PlayPauseDeck { is_a: true },
         Action::PlayPauseDeck { is_a: false },
-        Action::JumpBarsDeck { is_a: true, bars: -8 }, Action::JumpBarsDeck { is_a: true, bars: 8 },
-        Action::JumpBarsDeck { is_a: false, bars: -8 }, Action::JumpBarsDeck { is_a: false, bars: 8 },
-        Action::NudgeDeck { is_a: true, direction: -1 }, Action::NudgeDeck { is_a: true, direction: 1 },
-        Action::NudgeDeck { is_a: false, direction: -1 }, Action::NudgeDeck { is_a: false, direction: 1 },
+        Action::JumpBarsDeck {
+            is_a: true,
+            bars: -8,
+        },
+        Action::JumpBarsDeck {
+            is_a: true,
+            bars: 8,
+        },
+        Action::JumpBarsDeck {
+            is_a: false,
+            bars: -8,
+        },
+        Action::JumpBarsDeck {
+            is_a: false,
+            bars: 8,
+        },
+        Action::NudgeDeck {
+            is_a: true,
+            direction: -1,
+        },
+        Action::NudgeDeck {
+            is_a: true,
+            direction: 1,
+        },
+        Action::NudgeDeck {
+            is_a: false,
+            direction: -1,
+        },
+        Action::NudgeDeck {
+            is_a: false,
+            direction: 1,
+        },
         // ── Load (browse → deck) ───────────────────────────────────
         Action::LoadDeck { is_a: true },
         Action::LoadDeck { is_a: false },
@@ -522,7 +695,13 @@ pub fn all_actions() -> Vec<Action> {
         out.push(Action::LoopBeats { is_a: true, beats });
         out.push(Action::LoopBeats { is_a: false, beats });
     }
-    for name in ["beatmatched", "echoout", "bassswap", "filtersweep", "looproll"] {
+    for name in [
+        "beatmatched",
+        "echoout",
+        "bassswap",
+        "filtersweep",
+        "looproll",
+    ] {
         out.push(Action::Transition(name.into()));
     }
     // ── UI navigation ──────────────────────────────────────────────
@@ -552,7 +731,13 @@ mod tests {
     fn parse_cc_message() {
         let msg = [0xB0, 0x07, 0x40]; // CC ch1 #7 value=64
         let (event, value) = parse(&msg).unwrap();
-        assert_eq!(event, MidiEvent::ControlChange { channel: 0, controller: 7 });
+        assert_eq!(
+            event,
+            MidiEvent::ControlChange {
+                channel: 0,
+                controller: 7
+            }
+        );
         assert_eq!(value, 64);
     }
 
@@ -560,7 +745,13 @@ mod tests {
     fn parse_note_on_with_velocity() {
         let msg = [0x91, 0x3C, 0x70]; // Note ch2 #60 velocity=112
         let (event, value) = parse(&msg).unwrap();
-        assert_eq!(event, MidiEvent::NoteOn { channel: 1, note: 60 });
+        assert_eq!(
+            event,
+            MidiEvent::NoteOn {
+                channel: 1,
+                note: 60
+            }
+        );
         assert_eq!(value, 112);
     }
 
@@ -590,7 +781,10 @@ mod tests {
     fn map_round_trips_via_json() {
         let mut map = MidiMap::default();
         map.bindings.push(Binding {
-            event: MidiEvent::ControlChange { channel: 0, controller: 7 },
+            event: MidiEvent::ControlChange {
+                channel: 0,
+                controller: 7,
+            },
             action: Action::Crossfader,
         });
         let json = serde_json::to_string(&map).unwrap();
@@ -602,18 +796,30 @@ mod tests {
     #[test]
     fn lookup_finds_binding_after_bind() {
         let mut map = MidiMap::default();
-        let event = MidiEvent::NoteOn { channel: 0, note: 60 };
+        let event = MidiEvent::NoteOn {
+            channel: 0,
+            note: 60,
+        };
         assert!(map.lookup(&event).is_none());
         // Bind without saving (avoid touching disk in unit tests).
-        map.bindings.push(Binding { event: event.clone(), action: Action::PlayPause });
+        map.bindings.push(Binding {
+            event: event.clone(),
+            action: Action::PlayPause,
+        });
         assert_eq!(map.lookup(&event), Some(&Action::PlayPause));
     }
 
     #[test]
     fn rebind_replaces_existing_action() {
         let mut map = MidiMap::default();
-        let event = MidiEvent::NoteOn { channel: 0, note: 60 };
-        map.bindings.push(Binding { event: event.clone(), action: Action::PlayPause });
+        let event = MidiEvent::NoteOn {
+            channel: 0,
+            note: 60,
+        };
+        map.bindings.push(Binding {
+            event: event.clone(),
+            action: Action::PlayPause,
+        });
         // Manual rebind to avoid disk I/O.
         if let Some(slot) = map.bindings.iter_mut().find(|b| b.event == event) {
             slot.action = Action::Skip;
@@ -660,9 +866,19 @@ mod tests {
             .expect("Mixstream preset must parse against the current schema");
         assert!(!map.bindings.is_empty(), "preset must contain bindings");
         // Sanity-check the crossfader binding: CC ch15 #14 → Crossfader.
-        let cf = map.bindings.iter().find(|b|
-            matches!(b.event, MidiEvent::ControlChange { channel: 15, controller: 14 })
-        ).expect("crossfader binding present");
+        let cf = map
+            .bindings
+            .iter()
+            .find(|b| {
+                matches!(
+                    b.event,
+                    MidiEvent::ControlChange {
+                        channel: 15,
+                        controller: 14
+                    }
+                )
+            })
+            .expect("crossfader binding present");
         assert_eq!(cf.action, Action::Crossfader);
     }
 }

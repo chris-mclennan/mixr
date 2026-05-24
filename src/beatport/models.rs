@@ -50,7 +50,11 @@ impl BeatportTrack {
         if self.artists.is_empty() {
             "Unknown Artist".into()
         } else {
-            self.artists.iter().map(|a| a.name.as_str()).collect::<Vec<_>>().join(", ")
+            self.artists
+                .iter()
+                .map(|a| a.name.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
         }
     }
 
@@ -97,7 +101,9 @@ pub struct BeatportRelease {
     pub release_date: Option<String>,
 }
 
-fn unknown_artist() -> String { "Unknown Artist".into() }
+fn unknown_artist() -> String {
+    "Unknown Artist".into()
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BeatportChart {

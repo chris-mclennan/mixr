@@ -1,16 +1,18 @@
 use ratatui::{
+    Frame,
     layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{List, ListItem, Paragraph},
-    Frame,
 };
 
 use crate::beatport::models::BeatportTrack;
 
 /// Truncate a string to max_len, adding "…" if truncated.
 fn trunc(s: &str, max_len: usize) -> String {
-    if max_len <= 2 { return String::new(); }
+    if max_len <= 2 {
+        return String::new();
+    }
     if s.chars().count() > max_len {
         let truncated: String = s.chars().take(max_len - 1).collect();
         format!("{truncated}…")
@@ -56,7 +58,15 @@ pub fn render_track_list(
     // (browse lists, search results). Builds a cheap `Vec<&_>` and hands off
     // to the ref-based renderer so there's only one real implementation.
     let refs: Vec<&BeatportTrack> = tracks.iter().collect();
-    render_track_list_refs(frame, area, &refs, selected, scroll_offset, selected_column, compact);
+    render_track_list_refs(
+        frame,
+        area,
+        &refs,
+        selected,
+        scroll_offset,
+        selected_column,
+        compact,
+    );
 }
 
 /// Ref-based variant of `render_track_list` for call sites where the tracks
@@ -82,15 +92,36 @@ pub fn render_track_list_refs(
     let width = area.width as usize;
 
     if compact {
-        render_track_list_compact(frame, area, tracks, selected, scroll_offset, selected_column, width);
+        render_track_list_compact(
+            frame,
+            area,
+            tracks,
+            selected,
+            scroll_offset,
+            selected_column,
+            width,
+        );
     } else {
-        render_track_list_full(frame, area, tracks, selected, scroll_offset, selected_column, width);
+        render_track_list_full(
+            frame,
+            area,
+            tracks,
+            selected,
+            scroll_offset,
+            selected_column,
+            width,
+        );
     }
 }
 
 fn render_track_list_compact(
-    frame: &mut Frame, area: Rect, tracks: &[&BeatportTrack],
-    selected: usize, scroll_offset: usize, selected_column: i32, width: usize,
+    frame: &mut Frame,
+    area: Rect,
+    tracks: &[&BeatportTrack],
+    selected: usize,
+    scroll_offset: usize,
+    selected_column: i32,
+    width: usize,
 ) {
     let pfx_w = 5;
     let usable = width.saturating_sub(pfx_w);
@@ -115,13 +146,17 @@ fn render_track_list_compact(
         pad("GENRE", col_genre),
         pad("DATE", col_date),
     );
-    let mut items: Vec<ListItem> = vec![
-        ListItem::new(Line::from(Span::styled(header, Style::default().fg(Color::DarkGray)))),
-    ];
+    let mut items: Vec<ListItem> = vec![ListItem::new(Line::from(Span::styled(
+        header,
+        Style::default().fg(Color::DarkGray),
+    )))];
 
     let visible_count = area.height.saturating_sub(1) as usize;
-    let track_items: Vec<ListItem> = tracks.iter().enumerate()
-        .skip(scroll_offset).take(visible_count)
+    let track_items: Vec<ListItem> = tracks
+        .iter()
+        .enumerate()
+        .skip(scroll_offset)
+        .take(visible_count)
         .map(|(i, track)| {
             let is_sel = i == selected;
             let arrow = if is_sel { "▸" } else { " " };
@@ -132,8 +167,14 @@ fn render_track_list_compact(
             let dur_s = pad(&track.formatted_duration(), col_dur);
             let bpm_key = format_bpm_key(track);
             let bpm_s = pad(&trunc(&bpm_key, col_bpm - 1), col_bpm);
-            let label_s = pad(&trunc(track.label_name.as_deref().unwrap_or(""), col_label - 1), col_label);
-            let genre_s = pad(&trunc(track.genre_name.as_deref().unwrap_or(""), col_genre - 1), col_genre);
+            let label_s = pad(
+                &trunc(track.label_name.as_deref().unwrap_or(""), col_label - 1),
+                col_label,
+            );
+            let genre_s = pad(
+                &trunc(track.genre_name.as_deref().unwrap_or(""), col_genre - 1),
+                col_genre,
+            );
             let date_s = pad(track.release_date.as_deref().unwrap_or(""), col_date);
 
             let col_sel = if is_sel { selected_column } else { -2 };
@@ -151,12 +192,19 @@ fn render_track_list_compact(
             } else {
                 row_style
             };
-            let ul_style = Style::default().fg(Color::White).add_modifier(Modifier::UNDERLINED);
+            let ul_style = Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::UNDERLINED);
 
             // (text, column_id): -1=title, 0=artist, 2=label, 3=genre, 4=date, -3=not selectable
             let cols: [(&str, i32); 7] = [
-                (&title_s, -1), (&artist_s, 0), (&dur_s, -3), (&bpm_s, -3),
-                (&label_s, 2), (&genre_s, 3), (&date_s, 4),
+                (&title_s, -1),
+                (&artist_s, 0),
+                (&dur_s, -3),
+                (&bpm_s, -3),
+                (&label_s, 2),
+                (&genre_s, 3),
+                (&date_s, 4),
             ];
 
             let prefix = format!("{arrow} {num} ");
@@ -164,7 +212,12 @@ fn render_track_list_compact(
             for (text, col_id) in &cols {
                 if has_col && *col_id == col_sel {
                     // Underline only the text, not trailing spaces
-                    spans.extend(col_spans(text, text.chars().count(), ul_style, sel_row_style));
+                    spans.extend(col_spans(
+                        text,
+                        text.chars().count(),
+                        ul_style,
+                        sel_row_style,
+                    ));
                 } else {
                     spans.push(Span::styled(text.to_string(), sel_row_style));
                 }
@@ -177,14 +230,19 @@ fn render_track_list_compact(
 }
 
 fn render_track_list_full(
-    frame: &mut Frame, area: Rect, tracks: &[&BeatportTrack],
-    selected: usize, scroll_offset: usize, selected_column: i32, width: usize,
+    frame: &mut Frame,
+    area: Rect,
+    tracks: &[&BeatportTrack],
+    selected: usize,
+    scroll_offset: usize,
+    selected_column: i32,
+    width: usize,
 ) {
     let pfx_w = 7;
     let usable = width.saturating_sub(pfx_w);
     let col1 = (usable * 40 / 100).max(15); // title + dur
-    let col2 = (usable * 20 / 100).max(8);  // label or artist
-    let col3 = (usable * 22 / 100).max(8);  // genre or remixer
+    let col2 = (usable * 20 / 100).max(8); // label or artist
+    let col3 = (usable * 22 / 100).max(8); // genre or remixer
 
     // Full view: header + blank + 3 lines per track
     let visible_lines = area.height as usize;
@@ -199,14 +257,19 @@ fn render_track_list_full(
         pad("LABEL / REMIXERS", col2),
         pad("GENRE / BPM & KEY", col3),
     );
-    items.push(ListItem::new(Line::from(Span::styled(header, Style::default().fg(Color::DarkGray)))));
+    items.push(ListItem::new(Line::from(Span::styled(
+        header,
+        Style::default().fg(Color::DarkGray),
+    ))));
     items.push(ListItem::new(Line::from("")));
 
     let visible_tracks = visible_lines.saturating_sub(2) / 3 + 1;
 
     for idx in 0..visible_tracks {
         let track_idx = scroll_offset + idx;
-        if track_idx >= tracks.len() { break; }
+        if track_idx >= tracks.len() {
+            break;
+        }
         let track = &tracks[track_idx];
         let is_sel = track_idx == selected;
         let col_sel = if is_sel { selected_column } else { -2 };
@@ -220,7 +283,9 @@ fn render_track_list_full(
             Style::default().fg(Color::Gray)
         };
         let dim_style = Style::default().fg(Color::DarkGray);
-        let ul_style = Style::default().fg(Color::White).add_modifier(Modifier::UNDERLINED);
+        let ul_style = Style::default()
+            .fg(Color::White)
+            .add_modifier(Modifier::UNDERLINED);
         let dim_ul = dim_style.add_modifier(Modifier::UNDERLINED);
 
         // Line 0: ▸ N. Title  Duration  Label  Genre  Date
@@ -231,15 +296,21 @@ fn render_track_list_full(
             let d = track.formatted_duration();
             format!("{t}  {d}")
         };
-        let label_s = trunc(track.label_name.as_deref().unwrap_or(""), col2.saturating_sub(2));
-        let genre_s = trunc(track.genre_name.as_deref().unwrap_or(""), col3.saturating_sub(2));
+        let label_s = trunc(
+            track.label_name.as_deref().unwrap_or(""),
+            col2.saturating_sub(2),
+        );
+        let genre_s = trunc(
+            track.genre_name.as_deref().unwrap_or(""),
+            col3.saturating_sub(2),
+        );
         let date_s = track.release_date.as_deref().unwrap_or("").to_string();
 
         let cols0: Vec<(String, i32)> = vec![
-            (pad(&title_dur, col1 + 2), -1),   // title
-            (pad(&label_s, col2), 2),           // label
-            (pad(&genre_s, col3), 3),           // genre
-            (date_s, 4),                         // date
+            (pad(&title_dur, col1 + 2), -1), // title
+            (pad(&label_s, col2), 2),        // label
+            (pad(&genre_s, col3), 3),        // genre
+            (date_s, 4),                     // date
         ];
         let prefix0 = format!("{arrow}{num} ");
         let mut spans0: Vec<Span> = vec![Span::styled(prefix0, sel_style)];
@@ -265,12 +336,22 @@ fn render_track_list_full(
 
         let mut spans1: Vec<Span> = vec![Span::styled(indent, dim_style)];
         if col_sel == 0 {
-            spans1.extend(col_spans(&artist_s, artist_s.chars().count(), dim_ul, dim_style));
+            spans1.extend(col_spans(
+                &artist_s,
+                artist_s.chars().count(),
+                dim_ul,
+                dim_style,
+            ));
         } else {
             spans1.push(Span::styled(artist_s, dim_style));
         }
         if col_sel == 1 {
-            spans1.extend(col_spans(&remixer_s, remixer_s.chars().count(), dim_ul, dim_style));
+            spans1.extend(col_spans(
+                &remixer_s,
+                remixer_s.chars().count(),
+                dim_ul,
+                dim_style,
+            ));
         } else {
             spans1.push(Span::styled(remixer_s, dim_style));
         }
@@ -314,11 +395,13 @@ pub fn render_menu(
 
             if is_sel {
                 ListItem::new(Line::from(Span::styled(
-                    text, Style::default().add_modifier(Modifier::REVERSED),
+                    text,
+                    Style::default().add_modifier(Modifier::REVERSED),
                 )))
             } else {
                 ListItem::new(Line::from(Span::styled(
-                    text, Style::default().fg(Color::Gray),
+                    text,
+                    Style::default().fg(Color::Gray),
                 )))
             }
         })
@@ -374,15 +457,24 @@ pub fn help_lines() -> Vec<(&'static str, &'static str)> {
         ("G", "Toggle analyzer engine + re-grid"),
         ("m", "Mix now (force crossfade)"),
         ("A", "AI analyze mix alignment"),
-        ("< / >", "Jump back/forward N bars (click middle of ◀ JUMP N ▶ label to cycle N)"),
+        (
+            "< / >",
+            "Jump back/forward N bars (click middle of ◀ JUMP N ▶ label to cycle N)",
+        ),
         ("[ / ]", "Nudge incoming deck (hold to keep nudging)"),
         ("; / '", "Shift beat grid ±2ms (phase fix)"),
         ("( / )", "Shift beat grid ±1 beat (downbeat fix)"),
         (":", "Open command prompt (e.g. :queue 12345, :tx echoout)"),
-        ("u / U / i / I / O", "Loop 1 / 2 / 4 / 8 / 16 beats (quantized, toggle)"),
+        (
+            "u / U / i / I / O",
+            "Loop 1 / 2 / 4 / 8 / 16 beats (quantized, toggle)",
+        ),
         ("S", "Split cue (A=left, B=right)"),
         ("M", "Metronome"),
-        ("B", "Bail (manual panic — switch in-progress crossfade to EchoOut)"),
+        (
+            "B",
+            "Bail (manual panic — switch in-progress crossfade to EchoOut)",
+        ),
         ("", ""),
         ("HOT CUES (playing deck)", ""),
         ("1..4", "Jump to hot cue 1–4"),
@@ -410,7 +502,10 @@ pub fn help_lines() -> Vec<(&'static str, &'static str)> {
         ("x", "Smart shuffle (BPM + key)"),
         ("X", "Clear queue"),
         ("{ / }", "Grab / drop (reorder queue)"),
-        ("+ / - (history view)", "Rate selected mix good / bad (saves to DJ memory)"),
+        (
+            "+ / - (history view)",
+            "Rate selected mix good / bad (saves to DJ memory)",
+        ),
         ("+ / - (dashboard)", "Rate the most-recent mix good / bad"),
         ("f / *", "Toggle favorite"),
         ("&", "Add track to Beatport cart"),
@@ -421,7 +516,10 @@ pub fn help_lines() -> Vec<(&'static str, &'static str)> {
         ("w / W", "Follow / unfollow artist/label"),
         ("e", "Export history"),
         ("y", "Copy screen to clipboard"),
-        ("L", "Load more (pagination) / Load Next from dashboard mini-browse"),
+        (
+            "L",
+            "Load more (pagination) / Load Next from dashboard mini-browse",
+        ),
         ("Ctrl+F", "Filter current list"),
         ("", ""),
         ("VIEWS", ""),
@@ -463,7 +561,10 @@ pub fn help_lines() -> Vec<(&'static str, &'static str)> {
         ("~/.mixr/quick.txt", "Quick status"),
         ("~/.mixr/command", "Remote control (JSON)"),
         ("~/.mixr/screen.txt", "Screen dump"),
-        ("(memory only)", "Tracks live in RAM during playback, no disk cache"),
+        (
+            "(memory only)",
+            "Tracks live in RAM during playback, no disk cache",
+        ),
         ("", ""),
         ("BEATPORT NAVIGATION", ""),
         ("Discover", "Trending, Global Top 100, Hype Top 100"),
@@ -495,12 +596,20 @@ pub fn render_help(frame: &mut Frame, area: Rect, filter: &str, scroll: &mut u16
         text.push(Line::from(vec![
             Span::styled("  filter: ", Style::default().fg(Color::DarkGray)),
             Span::styled("_  ", Style::default().fg(Color::Cyan)),
-            Span::styled("(type to search · ↑↓ PgUp/PgDn scroll · Esc close)", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                "(type to search · ↑↓ PgUp/PgDn scroll · Esc close)",
+                Style::default().fg(Color::DarkGray),
+            ),
         ]));
     } else {
         text.push(Line::from(vec![
             Span::styled("  filter: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(filter.to_string(), Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                filter.to_string(),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled("_  ", Style::default().fg(Color::Cyan)),
             Span::styled("(Esc to clear)", Style::default().fg(Color::DarkGray)),
         ]));
@@ -512,10 +621,14 @@ pub fn render_help(frame: &mut Frame, area: Rect, filter: &str, scroll: &mut u16
         if !filter.is_empty() {
             // Hide section headers + blanks while filtering — only
             // matching bindings render.
-            if is_section_header || is_blank { continue; }
+            if is_section_header || is_blank {
+                continue;
+            }
             let k = key.to_ascii_lowercase();
             let d = desc.to_ascii_lowercase();
-            if !k.contains(&f) && !d.contains(&f) { continue; }
+            if !k.contains(&f) && !d.contains(&f) {
+                continue;
+            }
         }
         text.push(if is_section_header {
             Line::from(Span::styled(
@@ -544,7 +657,9 @@ pub fn render_help(frame: &mut Frame, area: Rect, filter: &str, scroll: &mut u16
     // they're part of `text` and the scroll is applied to the whole
     // paragraph uniformly.
     let max_scroll = (text.len() as u16).saturating_sub(area.height.max(1));
-    if *scroll > max_scroll { *scroll = max_scroll; }
+    if *scroll > max_scroll {
+        *scroll = max_scroll;
+    }
 
     frame.render_widget(Paragraph::new(text).scroll((*scroll, 0)), area);
 }

@@ -1,6 +1,6 @@
 use anyhow::Result;
-use cpal::traits::{DeviceTrait, StreamTrait};
 use cpal::Stream;
+use cpal::traits::{DeviceTrait, StreamTrait};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 /// When true, `fill_output` samples per-section timings via `Instant::now()`
@@ -9,8 +9,12 @@ use std::sync::{Arc, Mutex};
 /// Flip with `set_profiler_enabled(true)` or IPC `{"profile":1}`.
 pub static PROFILER_ENABLED: AtomicBool = AtomicBool::new(false);
 
-pub fn set_profiler_enabled(on: bool) { PROFILER_ENABLED.store(on, Ordering::Relaxed); }
-pub fn profiler_enabled() -> bool { PROFILER_ENABLED.load(Ordering::Relaxed) }
+pub fn set_profiler_enabled(on: bool) {
+    PROFILER_ENABLED.store(on, Ordering::Relaxed);
+}
+pub fn profiler_enabled() -> bool {
+    PROFILER_ENABLED.load(Ordering::Relaxed)
+}
 
 /// User has just made a manual mix-touching adjustment (crossfader,
 /// EQ, fader, filter, nudge, etc.). Two effects:
@@ -27,7 +31,9 @@ pub fn profiler_enabled() -> bool { PROFILER_ENABLED.load(Ordering::Relaxed) }
 /// is scoped to the current track / current mix, not permanent.
 fn suppress_train_wreck_during_user_override(s: &mut AudioState) {
     match s.state {
-        EngineState::Crossfading => { s.mix_wreck_fired = true; }
+        EngineState::Crossfading => {
+            s.mix_wreck_fired = true;
+        }
         // Set the flag and a one-shot edge marker the tick loop converts to
         // a single toast. Every CC tweak from a knob sweep would otherwise
         // spam toasts — the inner guard prevents re-firing.
@@ -42,17 +48,17 @@ fn suppress_train_wreck_during_user_override(s: &mut AudioState) {
 use super::beat_grid::BeatGrid;
 use super::crossfade::CrossfadeController;
 use super::deck::DeckPlayer;
-use super::fill_output::{fill_output, build_monitor_stream};
+use super::fill_output::{build_monitor_stream, fill_output};
 // Re-export from fill_output so `crate::audio::engine::*` paths keep working.
 #[allow(unused_imports)]
 pub use super::fill_output::output_device_names;
 use super::fill_output::pick_output_device;
 #[allow(unused_imports)]
-pub(crate) use super::fill_output::{manual_progress_from_crossfader, apply_limiter};
+pub(crate) use super::fill_output::{apply_limiter, manual_progress_from_crossfader};
 use super::mixer::Mixer;
 // Re-export status types so `crate::audio::engine::NowPlayingInfo` etc. keep working.
 #[allow(unused_imports)]
-pub use super::status::{NowPlayingInfo, AlignmentReadout, AlignmentPeaks};
+pub use super::status::{AlignmentPeaks, AlignmentReadout, NowPlayingInfo};
 use super::transition::TransitionType;
 use crate::beatport::models::BeatportTrack;
 use crate::config::AppConfig;
@@ -73,7 +79,9 @@ pub struct QueueEntry {
 
 impl From<BeatportTrack> for QueueEntry {
     fn from(track: BeatportTrack) -> Self {
-        Self { track: std::sync::Arc::new(track) }
+        Self {
+            track: std::sync::Arc::new(track),
+        }
     }
 }
 
@@ -90,13 +98,19 @@ pub enum EngineEvent {
     /// Preload next track onto incoming deck for crossfade.
     NeedNextTrack(QueueEntry),
     PlaybackEnded,
-    CrossfadeComplete { track: std::sync::Arc<BeatportTrack>, bpm: f64 },
+    CrossfadeComplete {
+        track: std::sync::Arc<BeatportTrack>,
+        bpm: f64,
+    },
     /// Mid-mix phase RMS exceeded the wreck threshold. `bailed` is
     /// true when `train_wreck_mode == AutoBail` and the engine
     /// switched the transition to EchoOut on the spot; false in
     /// Detect mode where the user gets a heads-up but no action.
     /// `rms_ms` is the rolling RMS that tripped the detection.
-    TrainWreckDetected { rms_ms: f64, bailed: bool },
+    TrainWreckDetected {
+        rms_ms: f64,
+        bailed: bool,
+    },
     /// User just touched a control while only one deck was playing.
     /// Auto-crossfade trigger is now paused for the rest of this
     /// track. UI shows a toast once per pause cycle.
@@ -106,7 +120,10 @@ pub enum EngineEvent {
 // NowPlayingInfo, AlignmentReadout, AlignmentPeaks are in super::status
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum DeckId { A, B }
+pub(crate) enum DeckId {
+    A,
+    B,
+}
 
 /// Which deck's samples feed the monitor (headphone-cue) output ring.
 /// `Incoming` = role-based (whichever deck isn't currently playing) —
@@ -124,7 +141,12 @@ pub(crate) enum MonitorSource {
 }
 
 impl DeckId {
-    fn other(self) -> Self { match self { Self::A => Self::B, Self::B => Self::A } }
+    fn other(self) -> Self {
+        match self {
+            Self::A => Self::B,
+            Self::B => Self::A,
+        }
+    }
 }
 
 /// Lightweight stack-only snapshot of the fields needed to compute
@@ -249,10 +271,10 @@ pub(crate) struct AudioState {
     // Deferred drop: items moved here by the RT callback, cleaned up by tick()
     pub(crate) deferred_drop: Option<DeckPlayer>,
     // Mixer-wide controls (independent of per-deck volume and transition curves)
-    pub(crate) crossfader_pos: f32,    // -1.0 full A, 0.0 center, +1.0 full B
-    pub(crate) channel_fader_a: f32,   // 0.0..1.0
-    pub(crate) channel_fader_b: f32,   // 0.0..1.0
-    pub(crate) master_gain: f32,       // post-mix output gain (0.0..1.0)
+    pub(crate) crossfader_pos: f32, // -1.0 full A, 0.0 center, +1.0 full B
+    pub(crate) channel_fader_a: f32, // 0.0..1.0
+    pub(crate) channel_fader_b: f32, // 0.0..1.0
+    pub(crate) master_gain: f32,    // post-mix output gain (0.0..1.0)
     pub(crate) limiter_mode: crate::config::LimiterMode,
     /// Shared sample ring between the main callback (producer: incoming
     /// deck pre-mix) and the monitor-device callback (consumer). Mutex
@@ -396,7 +418,11 @@ pub enum PlayNextOutcome {
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum PendingLoopOp {
     /// Activate a beat-loop of `beats` length, starting at `fire_at`.
-    Activate { deck_id: DeckId, beats: f64, fire_at: f64 },
+    Activate {
+        deck_id: DeckId,
+        beats: f64,
+        fire_at: f64,
+    },
     /// Release the active loop at `fire_at` so playback resumes
     /// cleanly off a bar boundary.
     Release { deck_id: DeckId, fire_at: f64 },
@@ -454,19 +480,31 @@ impl AudioState {
     }
 
     fn playing(&self) -> &DeckPlayer {
-        match self.playing_deck { DeckId::A => &self.deck_a, DeckId::B => &self.deck_b }
+        match self.playing_deck {
+            DeckId::A => &self.deck_a,
+            DeckId::B => &self.deck_b,
+        }
     }
 
     fn playing_mut(&mut self) -> &mut DeckPlayer {
-        match self.playing_deck { DeckId::A => &mut self.deck_a, DeckId::B => &mut self.deck_b }
+        match self.playing_deck {
+            DeckId::A => &mut self.deck_a,
+            DeckId::B => &mut self.deck_b,
+        }
     }
 
     fn incoming(&self) -> &DeckPlayer {
-        match self.playing_deck { DeckId::A => &self.deck_b, DeckId::B => &self.deck_a }
+        match self.playing_deck {
+            DeckId::A => &self.deck_b,
+            DeckId::B => &self.deck_a,
+        }
     }
 
     fn incoming_mut(&mut self) -> &mut DeckPlayer {
-        match self.playing_deck { DeckId::A => &mut self.deck_b, DeckId::B => &mut self.deck_a }
+        match self.playing_deck {
+            DeckId::A => &mut self.deck_b,
+            DeckId::B => &mut self.deck_a,
+        }
     }
 
     /// Get mutable refs to both playing and incoming decks simultaneously.
@@ -480,7 +518,12 @@ impl AudioState {
     /// Seek the incoming deck by `raw` seconds. If the backward seek would
     /// go past the buffer start, add `period` (one beat or one bar) to go
     /// forward instead. Returns the adjusted seek amount, or 0 if skipped.
-    fn seek_forward_safe(incoming: &mut DeckPlayer, raw: f64, period: f64, min_threshold: f64) -> f64 {
+    fn seek_forward_safe(
+        incoming: &mut DeckPlayer,
+        raw: f64,
+        period: f64,
+        min_threshold: f64,
+    ) -> f64 {
         let inc_t = incoming.current_time();
         let duration = incoming.duration();
         let adj = forward_safe_delta(inc_t, raw, period, duration, min_threshold);
@@ -523,7 +566,7 @@ impl AudioState {
             // snap on the next tick.
             self.snap_crossfader(match self.playing_deck {
                 DeckId::A => -1.0,
-                DeckId::B =>  1.0,
+                DeckId::B => 1.0,
             });
         }
         let playing_bpm = self.playing().beat_grid.map(|g| g.bpm).unwrap_or(128.0);
@@ -536,7 +579,11 @@ impl AudioState {
         // hardcoded choose() if no rules matched and default is unset.
         let min_bpm = playing_bpm.min(incoming_bpm).max(1.0);
         let ratio = playing_bpm.max(incoming_bpm) / min_bpm;
-        let normalized = if (1.8..=2.2).contains(&ratio) { ratio / 2.0 } else { ratio };
+        let normalized = if (1.8..=2.2).contains(&ratio) {
+            ratio / 2.0
+        } else {
+            ratio
+        };
         let bpm_gap_pct = (normalized - 1.0) * 100.0;
         let key_dist = match (playing_key.as_deref(), incoming_key.as_deref()) {
             (Some(a), Some(b)) => camelot_key_dist(a, b) as usize,
@@ -545,8 +592,18 @@ impl AudioState {
         // Energy delta from analyzer RMS, drop detection from current phrase,
         // and minutes-in-set from session start (first mix wall-clock).
         let energy_delta = {
-            let p = self.playing().analysis.as_ref().map(|a| a.rms_loudness).unwrap_or(0.0);
-            let i = self.incoming().analysis.as_ref().map(|a| a.rms_loudness).unwrap_or(0.0);
+            let p = self
+                .playing()
+                .analysis
+                .as_ref()
+                .map(|a| a.rms_loudness)
+                .unwrap_or(0.0);
+            let i = self
+                .incoming()
+                .analysis
+                .as_ref()
+                .map(|a| a.rms_loudness)
+                .unwrap_or(0.0);
             i - p
         };
         let phrase_is_drop = {
@@ -554,14 +611,18 @@ impl AudioState {
             match (p.analysis.as_ref(), p.beat_grid) {
                 (Some(a), Some(_)) => {
                     let t = p.current_time();
-                    a.phrases.iter().rev().find(|ph| ph.start_time <= t)
+                    a.phrases
+                        .iter()
+                        .rev()
+                        .find(|ph| ph.start_time <= t)
                         .map(|ph| matches!(ph.phrase_type, super::analyzer::PhraseType::Drop))
                         .unwrap_or(false)
                 }
                 _ => false,
             }
         };
-        let time_in_set_min = self.session_start
+        let time_in_set_min = self
+            .session_start
             .map(|t| t.elapsed().as_secs() / 60)
             .unwrap_or(0) as u32;
         let ctx = super::transition_rules::RuleContext {
@@ -580,9 +641,7 @@ impl AudioState {
         let cutoff = bpm_gap_cutoff(self.playing().pitch_stretch.is_some());
         if bpm_gap_pct > cutoff && transition.use_phase_sync() {
             transition = super::transition::TransitionType::EchoOut;
-            tracing::info!(
-                "BPM gap {bpm_gap_pct:.1}% > {cutoff:.0}% cutoff: forcing EchoOut",
-            );
+            tracing::info!("BPM gap {bpm_gap_pct:.1}% > {cutoff:.0}% cutoff: forcing EchoOut",);
         }
         // Manual mode can't drive EchoOut properly: transition.apply()
         // is skipped so delay_wet stays at 1.0 and the incoming never
@@ -628,7 +687,9 @@ impl AudioState {
         if transition.use_phase_sync() {
             let playing_phase = {
                 let p = self.playing();
-                p.beat_grid.map(|g| g.phase(p.current_time())).unwrap_or(0.0)
+                p.beat_grid
+                    .map(|g| g.phase(p.current_time()))
+                    .unwrap_or(0.0)
             };
 
             let incoming = self.incoming_mut();
@@ -640,10 +701,13 @@ impl AudioState {
                 let incoming_phase = ig.phase(inc_time);
 
                 let advance = super::beat_grid::BeatGrid::phase_align_advance(
-                    playing_phase, incoming_phase, incoming_beat_interval,
+                    playing_phase,
+                    incoming_phase,
+                    incoming_beat_interval,
                 );
 
-                let adj = Self::seek_forward_safe(incoming, advance, incoming_beat_interval, 0.0005);
+                let adj =
+                    Self::seek_forward_safe(incoming, advance, incoming_beat_interval, 0.0005);
                 if adj != 0.0 {
                     tracing::info!(
                         "Phase aligned: shifted incoming by {:+.1}ms (playing phase={playing_phase:.3}, incoming phase={incoming_phase:.3})",
@@ -652,7 +716,9 @@ impl AudioState {
                 } else if advance.abs() > 0.001 {
                     tracing::warn!(
                         "Phase align rejected: advance={:+.1}ms (inc_t={:.3}s, dur={:.1}s)",
-                        advance * 1000.0, inc_time, incoming.duration()
+                        advance * 1000.0,
+                        inc_time,
+                        incoming.duration()
                     );
                     // Fallback: if we can't seek backward (position near 0),
                     // seek forward by a full beat + the advance so we land on
@@ -687,7 +753,8 @@ impl AudioState {
             if let (Some(pg), Some(ig)) = (pg, ig) {
                 let bib_p = pg.beat_in_bar(p_time);
                 let bib_i = ig.beat_in_bar(i_time);
-                let bar_seek = super::beat_grid::BeatGrid::bar_aligned_seek_offset(&ig, i_time, &pg, p_time);
+                let bar_seek =
+                    super::beat_grid::BeatGrid::bar_aligned_seek_offset(&ig, i_time, &pg, p_time);
                 tracing::info!(
                     "Downbeat check: playing beat_in_bar={bib_p}, incoming beat_in_bar={bib_i}, bar_seek={:.1}ms",
                     bar_seek * 1000.0
@@ -704,7 +771,8 @@ impl AudioState {
                     } else {
                         tracing::warn!(
                             "Downbeat align rejected: bar_seek={:+.1}ms (inc_t={:.3}s)",
-                            bar_seek * 1000.0, self.incoming().current_time()
+                            bar_seek * 1000.0,
+                            self.incoming().current_time()
                         );
                     }
                 }
@@ -717,12 +785,19 @@ impl AudioState {
                 let (p_phase, i_phase, inc_int) = {
                     let p = self.playing();
                     let i = self.incoming();
-                    let pp = p.beat_grid.map(|g| g.phase(p.current_time())).unwrap_or(0.0);
-                    let ip = i.beat_grid.map(|g| g.phase(i.current_time())).unwrap_or(0.0);
+                    let pp = p
+                        .beat_grid
+                        .map(|g| g.phase(p.current_time()))
+                        .unwrap_or(0.0);
+                    let ip = i
+                        .beat_grid
+                        .map(|g| g.phase(i.current_time()))
+                        .unwrap_or(0.0);
                     let ii = i.beat_grid.map(|g| g.beat_interval()).unwrap_or(0.5);
                     (pp, ip, ii)
                 };
-                let cleanup = super::beat_grid::BeatGrid::phase_align_advance(p_phase, i_phase, inc_int);
+                let cleanup =
+                    super::beat_grid::BeatGrid::phase_align_advance(p_phase, i_phase, inc_int);
                 if cleanup.abs() > 0.002 {
                     let incoming = self.incoming_mut();
                     // Use seek_forward_safe (same helper the main
@@ -731,7 +806,10 @@ impl AudioState {
                     // instead of clamping to 0.0.
                     let applied = Self::seek_forward_safe(incoming, cleanup, inc_int, 0.002);
                     if applied != 0.0 {
-                        tracing::info!("Phase cleanup: nudged {:+.1}ms after combined alignment", applied * 1000.0);
+                        tracing::info!(
+                            "Phase cleanup: nudged {:+.1}ms after combined alignment",
+                            applied * 1000.0
+                        );
                     }
                 } else {
                     // Log even when no nudge fired — gives a clear
@@ -740,7 +818,10 @@ impl AudioState {
                     // ambiguous "no log entry => maybe skipped". Info
                     // level (matches the nudge-fired path above) so it
                     // appears in default production logs.
-                    tracing::info!("Phase cleanup: residual {:+.1}ms within tolerance, no nudge", cleanup * 1000.0);
+                    tracing::info!(
+                        "Phase cleanup: residual {:+.1}ms within tolerance, no nudge",
+                        cleanup * 1000.0
+                    );
                 }
             }
 
@@ -748,14 +829,25 @@ impl AudioState {
             let p = self.playing();
             let i = self.incoming();
             let phase_ms = if let (Some(pg), Some(ig)) = (p.beat_grid, i.beat_grid) {
-                super::beat_grid::BeatGrid::phase_offset(&pg, p.current_time(), &ig, i.current_time()) * 1000.0
-            } else { 0.0 };
+                super::beat_grid::BeatGrid::phase_offset(
+                    &pg,
+                    p.current_time(),
+                    &ig,
+                    i.current_time(),
+                ) * 1000.0
+            } else {
+                0.0
+            };
             tracing::info!(
                 "Crossfade start: playing@{:.3}s (phase {:.2}), incoming@{:.3}s (phase {:.2}), offset={phase_ms:+.1}ms",
                 p.current_time(),
-                p.beat_grid.map(|g| g.phase(p.current_time())).unwrap_or(0.0),
+                p.beat_grid
+                    .map(|g| g.phase(p.current_time()))
+                    .unwrap_or(0.0),
                 i.current_time(),
-                i.beat_grid.map(|g| g.phase(i.current_time())).unwrap_or(0.0),
+                i.beat_grid
+                    .map(|g| g.phase(i.current_time()))
+                    .unwrap_or(0.0),
             );
         }
 
@@ -763,8 +855,7 @@ impl AudioState {
         // the Beatport hint ratio. If they diverge, the grid is wrong and
         // the phase meter will read 0.0ms while actual beats drift.
         if transition.use_phase_sync() {
-            let hint_bpm = self.incoming().track.as_ref()
-                .and_then(|t| t.bpm);
+            let hint_bpm = self.incoming().track.as_ref().and_then(|t| t.bpm);
             if let Some(hint) = hint_bpm {
                 let grid_ratio = playing_bpm / incoming_bpm;
                 let hint_ratio = playing_bpm / hint;
@@ -797,7 +888,8 @@ impl AudioState {
         let base_bars = if self.crossfade_bars_auto {
             let t = self.incoming().track.clone();
             let a = self.incoming().analysis.clone();
-            t.map(|track| auto_crossfade_bars(&track, a.as_deref())).unwrap_or(self.crossfade_bars)
+            t.map(|track| auto_crossfade_bars(&track, a.as_deref()))
+                .unwrap_or(self.crossfade_bars)
         } else {
             self.crossfade_bars
         };
@@ -807,9 +899,14 @@ impl AudioState {
             ((base_bars as f64) * transition.duration_multiplier()).max(1.0) as u32
         };
         if self.crossfade_bars_auto {
-            tracing::info!("Auto crossfade: {} bars (genre {:?})",
+            tracing::info!(
+                "Auto crossfade: {} bars (genre {:?})",
                 base_bars,
-                self.incoming().track.as_ref().and_then(|t| t.genre_name.clone()));
+                self.incoming()
+                    .track
+                    .as_ref()
+                    .and_then(|t| t.genre_name.clone())
+            );
         }
         self.crossfade_controller = Some(CrossfadeController::new(playing_bpm, incoming_bpm, bars));
         self.crossfade_progress = 0.0;
@@ -819,7 +916,9 @@ impl AudioState {
         self.crossfade_start_playing_time = Some(self.playing().current_time());
         self.state = EngineState::Crossfading;
 
-        tracing::info!("Crossfade started: {playing_bpm:.0} → {incoming_bpm:.0} BPM, {transition:?}");
+        tracing::info!(
+            "Crossfade started: {playing_bpm:.0} → {incoming_bpm:.0} BPM, {transition:?}"
+        );
         crate::ipc::write_event(&serde_json::json!({
             "kind": "crossfade_started",
             "playing_bpm": playing_bpm,
@@ -858,18 +957,30 @@ impl AudioState {
 
         // Stop any existing glide first
         self.is_gliding = false;
-        tracing::info!("Swap complete: state={:?}, playing_deck={:?}, playing.playing={}, playing.is_loaded={}",
-            self.state, self.playing_deck, self.playing().playing, self.playing().is_loaded());
+        tracing::info!(
+            "Swap complete: state={:?}, playing_deck={:?}, playing.playing={}, playing.is_loaded={}",
+            self.state,
+            self.playing_deck,
+            self.playing().playing,
+            self.playing().is_loaded()
+        );
         // Log the new playing deck's rate for debugging
         let new_rate = self.playing().rate;
         let new_resample = self.playing().resample_ratio();
-        tracing::info!("Swap: new playing rate={new_rate:.4}, resample={new_resample:.4}, ratio={:.4}", new_rate / new_resample);
+        tracing::info!(
+            "Swap: new playing rate={new_rate:.4}, resample={new_resample:.4}, ratio={:.4}",
+            new_rate / new_resample
+        );
 
         // Start new glide only for beat-matched transitions
         let deck = self.playing_mut();
         let current_rate = deck.rate; // rate is now just the speed multiplier, no resample
-        let was_beat_matched = self.transition_type == super::transition::TransitionType::BeatMatched;
-        if was_beat_matched && config.bpm_mode == crate::config::BpmMode::Glide && (current_rate - 1.0).abs() > 0.005 {
+        let was_beat_matched =
+            self.transition_type == super::transition::TransitionType::BeatMatched;
+        if was_beat_matched
+            && config.bpm_mode == crate::config::BpmMode::Glide
+            && (current_rate - 1.0).abs() > 0.005
+        {
             self.glide_start_rate = current_rate;
             self.glide_start_time = self.playing().current_time();
             // glide_bars = 0 is the "Max" sentinel: stretch the glide
@@ -877,7 +988,9 @@ impl AudioState {
             // settles as gently as possible. Falls back to 8 bars if
             // the runway would be shorter than that (tiny tracks,
             // mid-track teleports, etc.) so the glide never disappears.
-            let bar_dur = self.playing().beat_grid
+            let bar_dur = self
+                .playing()
+                .beat_grid
                 .map(|g| g.bar_interval())
                 .unwrap_or(2.0);
             self.glide_duration = if glide_bars == 0 {
@@ -890,7 +1003,10 @@ impl AudioState {
                 bar_dur * glide_bars as f64
             };
             self.is_gliding = true;
-            tracing::info!("Rate glide: {current_rate:.3} → 1.0 over {:.1}s", self.glide_duration);
+            tracing::info!(
+                "Rate glide: {current_rate:.3} → 1.0 over {:.1}s",
+                self.glide_duration
+            );
         }
 
         tracing::info!("Decks swapped, now {:?}", self.playing_deck);
@@ -968,7 +1084,12 @@ impl MixEngine {
         let sample_rate = supported_config.sample_rate().0;
         let channels = supported_config.channels() as usize;
 
-        tracing::info!("Audio: {} @ {}Hz, {}ch", device.name().unwrap_or_default(), sample_rate, channels);
+        tracing::info!(
+            "Audio: {} @ {}Hz, {}ch",
+            device.name().unwrap_or_default(),
+            sample_rate,
+            channels
+        );
 
         let audio_state = Arc::new(Mutex::new(AudioState {
             deck_a: DeckPlayer::new(sample_rate),
@@ -1074,7 +1195,9 @@ impl MixEngine {
     /// the same chart — the second press should be a no-op per
     /// track, not pile every track in twice.
     pub fn enqueue(&mut self, entry: QueueEntry) -> bool {
-        if self.is_track_queued_or_loaded(entry.track.id) { return false; }
+        if self.is_track_queued_or_loaded(entry.track.id) {
+            return false;
+        }
         crate::ipc::write_event(&serde_json::json!({
             "kind": "queued",
             "track_id": entry.track.id,
@@ -1107,7 +1230,7 @@ impl MixEngine {
         let entry = QueueEntry::from(track);
 
         let mut s = self.audio_state.lock().unwrap_or_else(|e| e.into_inner());
-        
+
         match s.state {
             EngineState::Idle => {
                 drop(s);
@@ -1166,7 +1289,9 @@ impl MixEngine {
             let dur = d.duration();
             if dur > 0.0 && now > dur - 30.0 {
                 d.beat_grid.map(|g| g.first_beat_time).unwrap_or(0.0)
-            } else { now }
+            } else {
+                now
+            }
         };
         let playing_state = playing.track.as_ref().map(|t| crate::session::TrackState {
             track: (**t).clone(),
@@ -1176,9 +1301,7 @@ impl MixEngine {
             track: (**t).clone(),
             position: safe_pos(incoming),
         });
-        let queue: Vec<BeatportTrack> = self.queue.iter()
-            .map(|e| (*e.track).clone())
-            .collect();
+        let queue: Vec<BeatportTrack> = self.queue.iter().map(|e| (*e.track).clone()).collect();
         // Don't bother writing a snapshot with nothing in it — avoids
         // overwriting a useful previous session with an empty one on
         // a quick relaunch before playback starts.
@@ -1202,37 +1325,61 @@ impl MixEngine {
     /// `load_to_deck` tool so the DJ can pick a specific track without
     /// waiting for earlier queue items to play out.
     pub fn enqueue_front(&mut self, entry: QueueEntry) -> bool {
-        if self.is_track_queued_or_loaded(entry.track.id) { return false; }
+        if self.is_track_queued_or_loaded(entry.track.id) {
+            return false;
+        }
         self.queue.insert(0, entry);
         true
     }
-    pub fn clear_queue(&mut self) { self.queue.clear(); }
+    pub fn clear_queue(&mut self) {
+        self.queue.clear();
+    }
     pub fn export_history(&self) -> usize {
         let count = self.history.len();
-        if count == 0 { return 0; }
+        if count == 0 {
+            return 0;
+        }
         let dir = dirs::home_dir().unwrap_or_default().join(".mixr");
         std::fs::create_dir_all(&dir).ok();
         let date = chrono::Local::now().format("%Y-%m-%d").to_string();
 
         // Text format
-        let mut text = format!("mixr history — {}\n", chrono::Local::now().format("%Y-%m-%d %H:%M"));
+        let mut text = format!(
+            "mixr history — {}\n",
+            chrono::Local::now().format("%Y-%m-%d %H:%M")
+        );
         text.push_str(&"─".repeat(60));
         text.push('\n');
         for (i, entry) in self.history.iter().enumerate() {
-            let bpm = entry.track.bpm.map(|b| format!("{:.0} BPM", b)).unwrap_or("?".into());
+            let bpm = entry
+                .track
+                .bpm
+                .map(|b| format!("{:.0} BPM", b))
+                .unwrap_or("?".into());
             let key = entry.track.key.as_deref().unwrap_or("?");
-            text.push_str(&format!("{:>3}. {} - {}  {} / {}\n", i + 1, entry.track.artist_name(), entry.track.full_title(), bpm, key));
+            text.push_str(&format!(
+                "{:>3}. {} - {}  {} / {}\n",
+                i + 1,
+                entry.track.artist_name(),
+                entry.track.full_title(),
+                bpm,
+                key
+            ));
         }
 
         // JSON format
-        let entries: Vec<serde_json::Value> = self.history.iter().map(|e| {
-            serde_json::json!({
-                "artist": e.track.artist_name(),
-                "title": e.track.full_title(),
-                "bpm": e.track.bpm,
-                "key": e.track.key,
+        let entries: Vec<serde_json::Value> = self
+            .history
+            .iter()
+            .map(|e| {
+                serde_json::json!({
+                    "artist": e.track.artist_name(),
+                    "title": e.track.full_title(),
+                    "bpm": e.track.bpm,
+                    "key": e.track.key,
+                })
             })
-        }).collect();
+            .collect();
         let json = serde_json::to_string_pretty(&entries).unwrap_or("[]".into());
 
         std::fs::write(dir.join(format!("history-{date}.txt")), &text).ok();
@@ -1242,17 +1389,24 @@ impl MixEngine {
     }
 
     pub fn smart_shuffle(&mut self) {
-        if self.queue.len() <= 1 { return; }
+        if self.queue.len() <= 1 {
+            return;
+        }
         let s = self.audio_state.lock().unwrap_or_else(|e| e.into_inner());
         let (playing, incoming) = match s.playing_deck {
             DeckId::A => (&s.deck_a, &s.deck_b),
             DeckId::B => (&s.deck_b, &s.deck_a),
         };
-        let start_bpm = playing.beat_grid.map(|g| g.bpm)
+        let start_bpm = playing
+            .beat_grid
+            .map(|g| g.bpm)
             .or(incoming.beat_grid.map(|g| g.bpm))
             .or(self.queue.first().and_then(|e| e.track.bpm))
             .unwrap_or(128.0);
-        let start_key = playing.track.as_ref().and_then(|t| t.key.clone())
+        let start_key = playing
+            .track
+            .as_ref()
+            .and_then(|t| t.key.clone())
             .or(incoming.track.as_ref().and_then(|t| t.key.clone()));
         drop(s);
 
@@ -1262,7 +1416,9 @@ impl MixEngine {
         let mut cur_key = start_key;
 
         while !remaining.is_empty() {
-            let best_idx = remaining.iter().enumerate()
+            let best_idx = remaining
+                .iter()
+                .enumerate()
                 .min_by(|(_, a), (_, b)| {
                     let sa = shuffle_score(&a.track, cur_bpm, cur_key.as_deref());
                     let sb = shuffle_score(&b.track, cur_bpm, cur_key.as_deref());
@@ -1286,7 +1442,14 @@ impl MixEngine {
         }
     }
 
-    pub fn play_track(&mut self, samples: Vec<f32>, sample_rate: u32, analysis: super::analyzer::AnalysisResult, track: BeatportTrack, start_time: f64) {
+    pub fn play_track(
+        &mut self,
+        samples: Vec<f32>,
+        sample_rate: u32,
+        analysis: super::analyzer::AnalysisResult,
+        track: BeatportTrack,
+        start_time: f64,
+    ) {
         let detected_bpm = analysis.beat_grid.bpm;
         let beatport_bpm = track.bpm.unwrap_or(0.0);
         tracing::info!(
@@ -1307,7 +1470,9 @@ impl MixEngine {
             let mut s = self.audio_state.lock().unwrap_or_else(|e| e.into_inner());
             let old = std::mem::take(&mut s.playing_mut().samples);
             s.playing_mut().load(samples, sample_rate, analysis, track);
-            if start_time > 0.0 { s.playing_mut().seek(start_time); }
+            if start_time > 0.0 {
+                s.playing_mut().seek(start_time);
+            }
             s.playing_mut().play();
             s.state = EngineState::Playing;
             old
@@ -1318,7 +1483,14 @@ impl MixEngine {
         self.next_track_requested = false;
     }
 
-    pub fn load_incoming(&mut self, samples: Vec<f32>, sample_rate: u32, analysis: super::analyzer::AnalysisResult, track: BeatportTrack, start_time: f64) {
+    pub fn load_incoming(
+        &mut self,
+        samples: Vec<f32>,
+        sample_rate: u32,
+        analysis: super::analyzer::AnalysisResult,
+        track: BeatportTrack,
+        start_time: f64,
+    ) {
         let detected_bpm = analysis.beat_grid.bpm;
         let beatport_bpm = track.bpm.unwrap_or(0.0);
         tracing::info!(
@@ -1340,7 +1512,9 @@ impl MixEngine {
             }
             let old = std::mem::take(&mut s.incoming_mut().samples);
             s.incoming_mut().load(samples, sample_rate, analysis, track);
-            if start_time > 0.0 { s.incoming_mut().seek(start_time); }
+            if start_time > 0.0 {
+                s.incoming_mut().seek(start_time);
+            }
             // Don't reset next_track_requested here — incoming is loaded, no more
             // tracks needed until crossfade completes and decks swap.
             tracing::info!("Incoming deck loaded, ready for crossfade");
@@ -1374,7 +1548,9 @@ impl MixEngine {
     /// Returns `None` if there's no snapshot or a rewind is in flight.
     pub fn request_rewind(&self) -> Option<RewindOutcome> {
         let mut s = self.audio_state.lock().unwrap_or_else(|e| e.into_inner());
-        if s.pending_rewind.is_some() { return None; }
+        if s.pending_rewind.is_some() {
+            return None;
+        }
         let snap = s.last_mix_snapshot.clone()?;
 
         // Block mid-mix rewind. Restarting a crossfade on top of one
@@ -1397,8 +1573,7 @@ impl MixEngine {
                 DeckId::B => s.deck_b.track.as_ref().map(|t| t.id),
             }
         };
-        let in_place_possible =
-            track_on(snap.playing_deck) == Some(snap.playing_track.id)
+        let in_place_possible = track_on(snap.playing_deck) == Some(snap.playing_track.id)
             && track_on(snap.playing_deck.other()) == Some(snap.incoming_track.id);
 
         if in_place_possible {
@@ -1444,27 +1619,45 @@ impl MixEngine {
 
         // Normal playback: rate nudge
         let is_crossfading = s.state == EngineState::Crossfading;
-        let deck_id = if is_crossfading { s.playing_deck.other() } else { s.playing_deck };
+        let deck_id = if is_crossfading {
+            s.playing_deck.other()
+        } else {
+            s.playing_deck
+        };
 
         // Capture the *commanded* rate, not the in-flight slewed value —
         // so revert restores the pre-nudge target even if the audio
         // thread hasn't fully settled to it yet.
         let current_rate = match deck_id {
-            DeckId::A => { if !s.deck_a.playing { return None; } s.deck_a.rate_target }
-            DeckId::B => { if !s.deck_b.playing { return None; } s.deck_b.rate_target }
+            DeckId::A => {
+                if !s.deck_a.playing {
+                    return None;
+                }
+                s.deck_a.rate_target
+            }
+            DeckId::B => {
+                if !s.deck_b.playing {
+                    return None;
+                }
+                s.deck_b.rate_target
+            }
         };
 
         let base_rate = s.nudge_base_rate.unwrap_or(current_rate);
         let pct = direction as f64 * config.nudge_percent as f64;
 
         match deck_id {
-            DeckId::A => { Mixer::nudge_rate(&mut s.deck_a, base_rate, pct); }
-            DeckId::B => { Mixer::nudge_rate(&mut s.deck_b, base_rate, pct); }
+            DeckId::A => {
+                Mixer::nudge_rate(&mut s.deck_a, base_rate, pct);
+            }
+            DeckId::B => {
+                Mixer::nudge_rate(&mut s.deck_b, base_rate, pct);
+            }
         }
         s.nudge_base_rate = Some(base_rate);
         let was_active = s.nudge_revert_at.is_some();
         s.nudge_revert_at = Some(
-            std::time::Instant::now() + std::time::Duration::from_millis(NUDGE_HOLD_WINDOW_MS)
+            std::time::Instant::now() + std::time::Duration::from_millis(NUDGE_HOLD_WINDOW_MS),
         );
         // Once the user starts nudging during a mix, auto rate-
         // correction stays out for the rest of the mix. Cleared at
@@ -1530,7 +1723,11 @@ impl MixEngine {
     pub fn set_channel_fader(&self, is_a: bool, level: f32) {
         let mut s = self.audio_state.lock().unwrap_or_else(|e| e.into_inner());
         let v = level.clamp(0.0, 1.0);
-        if is_a { s.channel_fader_a = v; } else { s.channel_fader_b = v; }
+        if is_a {
+            s.channel_fader_a = v;
+        } else {
+            s.channel_fader_b = v;
+        }
         suppress_train_wreck_during_user_override(&mut s);
     }
 
@@ -1542,7 +1739,9 @@ impl MixEngine {
     /// rails. Idempotent — no-op if the mode is already set.
     pub fn set_manual_mix(&self, on: bool) {
         let mut s = self.audio_state.lock().unwrap_or_else(|e| e.into_inner());
-        if s.manual_mix == on { return; }
+        if s.manual_mix == on {
+            return;
+        }
         s.manual_mix = on;
         tracing::info!("Manual mix mode: {on}");
     }
@@ -1591,7 +1790,9 @@ impl MixEngine {
         });
         tracing::info!(
             "Crossfader sweep: {:+.2} → {target:+.2} over {} bars ({:.1}s)",
-            s.crossfader_pos, bars, dur.as_secs_f64()
+            s.crossfader_pos,
+            bars,
+            dur.as_secs_f64()
         );
     }
 
@@ -1632,7 +1833,9 @@ impl MixEngine {
     /// incoming deck is loaded. Idempotent.
     pub fn set_quick_mix(&self, on: bool) {
         let mut s = self.audio_state.lock().unwrap_or_else(|e| e.into_inner());
-        if s.quick_mix == on { return; }
+        if s.quick_mix == on {
+            return;
+        }
         s.quick_mix = on;
         tracing::info!("Quick mix mode: {on}");
     }
@@ -1649,7 +1852,9 @@ impl MixEngine {
     pub fn preview_deck(&self, is_a: bool) -> bool {
         let mut s = self.audio_state.lock().unwrap_or_else(|e| e.into_inner());
         let deck = if is_a { &mut s.deck_a } else { &mut s.deck_b };
-        if !deck.is_loaded() { return false; }
+        if !deck.is_loaded() {
+            return false;
+        }
         deck.playing = true;
         // save_fader_once guards against a second preview_deck()
         // without an intervening stop overwriting the original fader
@@ -1662,8 +1867,15 @@ impl MixEngine {
             let cur = s.channel_fader_b;
             s.channel_fader_b = save_fader_once(&mut s.preview_saved_fader_b, cur);
         }
-        s.monitor_source = if is_a { MonitorSource::DeckA } else { MonitorSource::DeckB };
-        tracing::info!("Preview: deck {} on monitor bus", if is_a { "A" } else { "B" });
+        s.monitor_source = if is_a {
+            MonitorSource::DeckA
+        } else {
+            MonitorSource::DeckB
+        };
+        tracing::info!(
+            "Preview: deck {} on monitor bus",
+            if is_a { "A" } else { "B" }
+        );
         true
     }
 
@@ -1704,7 +1916,9 @@ impl MixEngine {
     pub fn play_deck(&self, is_a: bool) -> bool {
         let mut s = self.audio_state.lock().unwrap_or_else(|e| e.into_inner());
         let deck = if is_a { &mut s.deck_a } else { &mut s.deck_b };
-        if !deck.is_loaded() { return false; }
+        if !deck.is_loaded() {
+            return false;
+        }
         deck.playing = true;
         // play_deck takes the deck live on main: restore the saved
         // fader (preview→play handoff) or default to 1.0 if no
@@ -1729,9 +1943,15 @@ impl MixEngine {
     pub fn set_eq(&self, is_a: bool, low: Option<f32>, mid: Option<f32>, high: Option<f32>) {
         let mut s = self.audio_state.lock().unwrap_or_else(|e| e.into_inner());
         let deck = if is_a { &mut s.deck_a } else { &mut s.deck_b };
-        if let Some(v) = low { Mixer::set_eq_low(deck, v); }
-        if let Some(v) = mid { Mixer::set_eq_mid(deck, v); }
-        if let Some(v) = high { Mixer::set_eq_high(deck, v); }
+        if let Some(v) = low {
+            Mixer::set_eq_low(deck, v);
+        }
+        if let Some(v) = mid {
+            Mixer::set_eq_mid(deck, v);
+        }
+        if let Some(v) = high {
+            Mixer::set_eq_high(deck, v);
+        }
         suppress_train_wreck_during_user_override(&mut s);
     }
 
@@ -1779,7 +1999,11 @@ impl MixEngine {
             Mixer::loop_beats(d, beats);
             s.pending_loop = None;
         } else {
-            s.pending_loop = Some(PendingLoopOp::Activate { deck_id, beats, fire_at });
+            s.pending_loop = Some(PendingLoopOp::Activate {
+                deck_id,
+                beats,
+                fire_at,
+            });
             tracing::info!(
                 "Quantized loop scheduled: {beats:.0} beats, fire_at={fire_at:.3}s (in {:.0}ms)",
                 (fire_at - now) * 1000.0,
@@ -1797,7 +2021,9 @@ impl MixEngine {
             let d = if is_a { &s.deck_a } else { &s.deck_b };
             (d.loop_active, d.beat_grid, d.current_time())
         };
-        if !active { return; }
+        if !active {
+            return;
+        }
         let qon = s.quantize_on;
         let qbeats = s.quantize_beats;
         let Some(grid) = grid else {
@@ -1830,7 +2056,11 @@ impl MixEngine {
     pub fn loop_toggle_playing(&self, beats: f64) {
         let s = self.audio_state.lock().unwrap_or_else(|e| e.into_inner());
         let is_a = s.playing_deck == DeckId::A;
-        let active = if is_a { s.deck_a.loop_active } else { s.deck_b.loop_active };
+        let active = if is_a {
+            s.deck_a.loop_active
+        } else {
+            s.deck_b.loop_active
+        };
         drop(s);
         if active {
             self.loop_release(is_a);
@@ -1895,7 +2125,9 @@ impl MixEngine {
         let mut s = self.audio_state.lock().unwrap_or_else(|e| e.into_inner());
         let deck_id = if is_a { DeckId::A } else { DeckId::B };
         let deck = if is_a { &s.deck_a } else { &s.deck_b };
-        let Some(target) = deck.cues[slot] else { return; };
+        let Some(target) = deck.cues[slot] else {
+            return;
+        };
         let target_time = target as f64 / deck.sample_rate as f64;
         Self::schedule_or_seek_jump(&mut s, deck_id, target_time);
     }
@@ -1931,8 +2163,6 @@ impl MixEngine {
         }
     }
 
-
-
     /// Snapshot of audio-callback timings (rolling window of recent callbacks).
     pub fn profile_stats(&self) -> super::profiler::ProfileStats {
         let s = self.audio_state.lock().unwrap_or_else(|e| e.into_inner());
@@ -1943,11 +2173,12 @@ impl MixEngine {
     /// Skipped entirely when the profiler is disabled — avoids logging stale
     /// zero stats from before the most recent enable.
     pub fn maybe_log_profile(&self) {
-        if !profiler_enabled() { return; }
+        if !profiler_enabled() {
+            return;
+        }
         let mut s = self.audio_state.lock().unwrap_or_else(|e| e.into_inner());
         s.profiler.maybe_log();
     }
-
 
     /// Switch the pitch-stretch engine on both decks.
     pub fn set_pitch_stretch_engine(&self, engine: super::pitch_stretch::PitchStretchEngine) {
@@ -1972,8 +2203,13 @@ impl MixEngine {
     /// not Crossfading. Returns true if a bail was applied.
     pub fn bail_crossfade(&self) -> bool {
         let mut s = self.audio_state.lock().unwrap_or_else(|e| e.into_inner());
-        if s.state != EngineState::Crossfading { return false; }
-        if matches!(s.transition_type, super::transition::TransitionType::EchoOut) {
+        if s.state != EngineState::Crossfading {
+            return false;
+        }
+        if matches!(
+            s.transition_type,
+            super::transition::TransitionType::EchoOut
+        ) {
             return false; // already on EchoOut, nothing to bail to
         }
         s.transition_type = super::transition::TransitionType::EchoOut;
@@ -1983,7 +2219,10 @@ impl MixEngine {
         if !s.incoming().playing && s.incoming().is_loaded() {
             s.incoming_mut().play();
         }
-        tracing::warn!("Crossfade bailed → EchoOut at progress {:.0}%", s.crossfade_progress * 100.0);
+        tracing::warn!(
+            "Crossfade bailed → EchoOut at progress {:.0}%",
+            s.crossfade_progress * 100.0
+        );
         true
     }
 
@@ -2012,17 +2251,33 @@ impl MixEngine {
     }
 
     /// Preview a track from first_beat for 4 bars with metronome. Doesn't interrupt main playback.
-    pub fn preview_track(&self, samples: Vec<f32>, sample_rate: u32, analysis: super::analyzer::AnalysisResult) {
+    pub fn preview_track(
+        &self,
+        samples: Vec<f32>,
+        sample_rate: u32,
+        analysis: super::analyzer::AnalysisResult,
+    ) {
         // Build the new deck outside the lock to avoid allocating under contention
         let first_beat = analysis.beat_grid.first_beat_time;
         let bar_interval = analysis.beat_grid.bar_interval();
         let stop_time = first_beat + bar_interval * 16.0; // 16 bars
 
         let dummy = crate::beatport::models::BeatportTrack {
-            id: 0, title: "Preview".into(), mix_name: None, artists: vec![],
-            bpm: Some(analysis.beat_grid.bpm), key: None, duration: None,
-            label_id: None, label_name: None, genre_id: None, genre_name: None,
-            genre_slug: None, release_id: None, release_date: None, remixers: vec![],
+            id: 0,
+            title: "Preview".into(),
+            mix_name: None,
+            artists: vec![],
+            bpm: Some(analysis.beat_grid.bpm),
+            key: None,
+            duration: None,
+            label_id: None,
+            label_name: None,
+            genre_id: None,
+            genre_name: None,
+            genre_slug: None,
+            release_id: None,
+            release_date: None,
+            remixers: vec![],
             local_path: None,
         };
 
@@ -2079,9 +2334,15 @@ impl MixEngine {
         let any_playing = a_on || b_on || p_on;
 
         if any_playing {
-            if a_on { Mixer::pause(&mut s.deck_a); }
-            if b_on { Mixer::pause(&mut s.deck_b); }
-            if p_on && let Some(ref mut p) = s.preview { Mixer::pause(p); }
+            if a_on {
+                Mixer::pause(&mut s.deck_a);
+            }
+            if b_on {
+                Mixer::pause(&mut s.deck_b);
+            }
+            if p_on && let Some(ref mut p) = s.preview {
+                Mixer::pause(p);
+            }
             tracing::info!("Pause: a={a_on} b={b_on} preview={p_on}");
         } else {
             // Resume previously-paused decks first; if nothing was
@@ -2090,9 +2351,23 @@ impl MixEngine {
             // session-resume case where decks are loaded + stopped
             // (not paused) and pressing P would otherwise no-op.
             let mut resumed = (false, false, false);
-            if s.deck_a.paused { Mixer::play(&mut s.deck_a); s.deck_a.paused = false; resumed.0 = true; }
-            if s.deck_b.paused { Mixer::play(&mut s.deck_b); s.deck_b.paused = false; resumed.1 = true; }
-            if let Some(ref mut p) = s.preview && p.paused { Mixer::play(p); p.paused = false; resumed.2 = true; }
+            if s.deck_a.paused {
+                Mixer::play(&mut s.deck_a);
+                s.deck_a.paused = false;
+                resumed.0 = true;
+            }
+            if s.deck_b.paused {
+                Mixer::play(&mut s.deck_b);
+                s.deck_b.paused = false;
+                resumed.1 = true;
+            }
+            if let Some(ref mut p) = s.preview
+                && p.paused
+            {
+                Mixer::play(p);
+                p.paused = false;
+                resumed.2 = true;
+            }
             if !resumed.0 && !resumed.1 && !resumed.2 {
                 let pd = s.playing_deck;
                 let deck = match pd {
@@ -2106,7 +2381,12 @@ impl MixEngine {
                     return;
                 }
             }
-            tracing::info!("Resume: a={} b={} preview={}", resumed.0, resumed.1, resumed.2);
+            tracing::info!(
+                "Resume: a={} b={} preview={}",
+                resumed.0,
+                resumed.1,
+                resumed.2
+            );
         }
     }
 
@@ -2145,13 +2425,15 @@ impl MixEngine {
             let deck = if is_a { &s.deck_a } else { &s.deck_b };
             (deck.playing, deck.rate_target)
         };
-        if !playing { return; }
+        if !playing {
+            return;
+        }
         let base_rate = s.nudge_base_rate.unwrap_or(current_rate);
         let deck = if is_a { &mut s.deck_a } else { &mut s.deck_b };
         Mixer::nudge_rate(deck, base_rate, pct);
         s.nudge_base_rate = Some(base_rate);
         s.nudge_revert_at = Some(
-            std::time::Instant::now() + std::time::Duration::from_millis(NUDGE_HOLD_WINDOW_MS)
+            std::time::Instant::now() + std::time::Duration::from_millis(NUDGE_HOLD_WINDOW_MS),
         );
         s.user_overrode_this_mix = true;
     }
@@ -2162,7 +2444,9 @@ impl MixEngine {
     pub fn play_pause_deck(&self, is_a: bool) {
         let mut s = self.audio_state.lock().unwrap_or_else(|e| e.into_inner());
         let deck = if is_a { &mut s.deck_a } else { &mut s.deck_b };
-        if !deck.is_loaded() { return; }
+        if !deck.is_loaded() {
+            return;
+        }
         deck.playing = !deck.playing;
     }
 
@@ -2175,8 +2459,11 @@ impl MixEngine {
 
     pub fn set_deck_rate(&self, is_a: bool, rate: f64) {
         let mut s = self.audio_state.lock().unwrap_or_else(|e| e.into_inner());
-        if is_a { Mixer::set_rate(&mut s.deck_a, rate); }
-        else    { Mixer::set_rate(&mut s.deck_b, rate); }
+        if is_a {
+            Mixer::set_rate(&mut s.deck_a, rate);
+        } else {
+            Mixer::set_rate(&mut s.deck_b, rate);
+        }
     }
 
     /// Re-analyze the playing deck's in-memory samples with the given
@@ -2188,7 +2475,9 @@ impl MixEngine {
     pub fn reanalyze_playing(&self, engine: crate::config::AnalyzerEngine) -> Option<f64> {
         let mut s = self.audio_state.lock().unwrap_or_else(|e| e.into_inner());
         let deck = s.playing_mut();
-        if deck.samples.is_empty() { return None; }
+        if deck.samples.is_empty() {
+            return None;
+        }
         let bpm_hint = deck.track.as_ref().and_then(|t| t.bpm);
         let sr = deck.sample_rate;
         // Clone samples out since analyze_samples_pub takes a slice and
@@ -2222,7 +2511,10 @@ impl MixEngine {
         let deck = s.playing_mut();
         if let Some(ref mut grid) = deck.beat_grid {
             grid.first_beat_time += ms / 1000.0;
-            tracing::info!("Grid shifted by {ms:+.1}ms → first_beat={:.3}s", grid.first_beat_time);
+            tracing::info!(
+                "Grid shifted by {ms:+.1}ms → first_beat={:.3}s",
+                grid.first_beat_time
+            );
         }
     }
 
@@ -2238,7 +2530,11 @@ impl MixEngine {
     pub fn shift_grid_active_beats(&self, beats: i32) {
         let mut s = self.audio_state.lock().unwrap_or_else(|e| e.into_inner());
         let is_crossfading = s.state == EngineState::Crossfading;
-        let deck_id = if is_crossfading { s.playing_deck.other() } else { s.playing_deck };
+        let deck_id = if is_crossfading {
+            s.playing_deck.other()
+        } else {
+            s.playing_deck
+        };
         let deck = match deck_id {
             DeckId::A => &mut s.deck_a,
             DeckId::B => &mut s.deck_b,
@@ -2247,7 +2543,10 @@ impl MixEngine {
             let beat_ms = grid.beat_interval() * 1000.0;
             let shift_ms = beats as f64 * beat_ms;
             grid.first_beat_time += shift_ms / 1000.0;
-            tracing::info!("Grid beat-shift ({deck_id:?}): {beats:+} beat(s) = {shift_ms:+.0}ms → first_beat={:.3}s", grid.first_beat_time);
+            tracing::info!(
+                "Grid beat-shift ({deck_id:?}): {beats:+} beat(s) = {shift_ms:+.0}ms → first_beat={:.3}s",
+                grid.first_beat_time
+            );
         }
         // Treat beat shifts as a manual phase override too.
         s.user_overrode_this_mix = true;
@@ -2256,7 +2555,11 @@ impl MixEngine {
     pub fn shift_grid_active(&self, ms: f64) {
         let mut s = self.audio_state.lock().unwrap_or_else(|e| e.into_inner());
         let is_crossfading = s.state == EngineState::Crossfading;
-        let deck_id = if is_crossfading { s.playing_deck.other() } else { s.playing_deck };
+        let deck_id = if is_crossfading {
+            s.playing_deck.other()
+        } else {
+            s.playing_deck
+        };
         let shifted = {
             let deck = match deck_id {
                 DeckId::A => &mut s.deck_a,
@@ -2264,9 +2567,14 @@ impl MixEngine {
             };
             if let Some(ref mut grid) = deck.beat_grid {
                 grid.first_beat_time += ms / 1000.0;
-                tracing::info!("Grid shift ({deck_id:?}): {ms:+.1}ms → first_beat={:.3}s", grid.first_beat_time);
+                tracing::info!(
+                    "Grid shift ({deck_id:?}): {ms:+.1}ms → first_beat={:.3}s",
+                    grid.first_beat_time
+                );
                 true
-            } else { false }
+            } else {
+                false
+            }
         };
         // Grid shift is an explicit user phase override — block the
         // auto rate-correction for the rest of this mix.
@@ -2293,7 +2601,9 @@ impl MixEngine {
         // Store as start offset for the incoming deck
         let mut s = self.audio_state.lock().unwrap_or_else(|e| e.into_inner());
         let deck = s.incoming_mut();
-        if deck.samples.is_empty() { return; }
+        if deck.samples.is_empty() {
+            return;
+        }
         deck.position = time * deck.sample_rate as f64;
         tracing::info!("Mix-in point set to {time:.1}s");
     }
@@ -2305,7 +2615,9 @@ impl MixEngine {
         let mut s = self.audio_state.lock().unwrap_or_else(|e| e.into_inner());
         let deck_id = s.playing_deck;
         let deck = s.playing();
-        if !deck.playing { return; }
+        if !deck.playing {
+            return;
+        }
         let bpm = deck.beat_grid.map(|g| g.bpm).unwrap_or(128.0);
         let bar_dur = 60.0 / bpm * 4.0;
         // Source-time of the bar boundary the jump will fire from
@@ -2315,8 +2627,8 @@ impl MixEngine {
         } else {
             deck.current_time()
         };
-        let target_time = (leave_at + bars as f64 * bar_dur)
-            .clamp(0.0, (deck.duration() - 1.0).max(0.0));
+        let target_time =
+            (leave_at + bars as f64 * bar_dur).clamp(0.0, (deck.duration() - 1.0).max(0.0));
         Self::schedule_or_seek_jump(&mut s, deck_id, target_time);
     }
 
@@ -2333,7 +2645,10 @@ impl MixEngine {
             tracing::info!("Jump (no quantize) → {target_time:.3}s");
             return;
         }
-        let Some(g) = deck.beat_grid else { deck.seek(target_time); return; };
+        let Some(g) = deck.beat_grid else {
+            deck.seek(target_time);
+            return;
+        };
         let now = deck.current_time();
         let fire_at = Self::next_quantize_boundary(&g, now, s.quantize_beats);
         // Lookahead: if we're within ~30ms of the boundary, fire now —
@@ -2344,7 +2659,11 @@ impl MixEngine {
             tracing::info!("Quantized jump (lookahead) → {target_time:.3}s");
             s.pending_jump = None;
         } else {
-            s.pending_jump = Some(PendingJump { deck_id, target_time, fire_at });
+            s.pending_jump = Some(PendingJump {
+                deck_id,
+                target_time,
+                fire_at,
+            });
             tracing::info!(
                 "Quantized jump scheduled: fire_at={fire_at:.3}s (in {:.0}ms) → {target_time:.3}s",
                 (fire_at - now) * 1000.0,
@@ -2366,7 +2685,10 @@ impl MixEngine {
         let mut s = self.audio_state.lock().unwrap_or_else(|e| e.into_inner());
         s.quantize_on = on;
         s.quantize_beats = beats.max(0.001);
-        if !on { s.pending_jump = None; s.pending_loop = None; }
+        if !on {
+            s.pending_jump = None;
+            s.pending_loop = None;
+        }
     }
 
     /// Physical-deck API for manual mode: jump deck A or B by ±N beats,
@@ -2381,8 +2703,11 @@ impl MixEngine {
             let delta = beats as f64 * g.beat_interval();
             let new_t = (deck.current_time() + delta).max(0.0);
             deck.seek(new_t);
-            tracing::info!("Deck {} jump {beats:+} beats → {:.3}s",
-                if is_a { "A" } else { "B" }, new_t);
+            tracing::info!(
+                "Deck {} jump {beats:+} beats → {:.3}s",
+                if is_a { "A" } else { "B" },
+                new_t
+            );
         }
     }
 
@@ -2392,8 +2717,11 @@ impl MixEngine {
         let mut s = self.audio_state.lock().unwrap_or_else(|e| e.into_inner());
         let deck = if is_a { &mut s.deck_a } else { &mut s.deck_b };
         deck.seek(target_seconds.max(0.0));
-        tracing::info!("Deck {} seek → {:.3}s",
-            if is_a { "A" } else { "B" }, target_seconds);
+        tracing::info!(
+            "Deck {} seek → {:.3}s",
+            if is_a { "A" } else { "B" },
+            target_seconds
+        );
     }
 
     /// Seek named helpers. Returns the seconds value that was sought to,
@@ -2404,15 +2732,20 @@ impl MixEngine {
         let analysis = deck.analysis.as_ref()?;
         let target = match label {
             "start" | "first_beat" => deck.beat_grid.map(|g| g.first_beat_time).unwrap_or(0.0),
-            "drop" => analysis.phrases.iter()
+            "drop" => analysis
+                .phrases
+                .iter()
                 .find(|p| matches!(p.phrase_type, super::analyzer::PhraseType::Drop))
                 .map(|p| p.start_time)?,
             "middle" => deck.duration() * 0.5,
             _ => return None,
         };
         deck.seek(target.max(0.0));
-        tracing::info!("Deck {} seek to '{label}' → {:.3}s",
-            if is_a { "A" } else { "B" }, target);
+        tracing::info!(
+            "Deck {} seek to '{label}' → {:.3}s",
+            if is_a { "A" } else { "B" },
+            target
+        );
         Some(target)
     }
 
@@ -2420,7 +2753,9 @@ impl MixEngine {
 
     pub fn teleport(&self, config: &AppConfig) {
         let mut s = self.audio_state.lock().unwrap_or_else(|e| e.into_inner());
-        if s.state != EngineState::Playing { return; }
+        if s.state != EngineState::Playing {
+            return;
+        }
         let grid = s.playing().beat_grid;
         let now = s.playing().current_time();
         let bpm = grid.map(|g| g.bpm).unwrap_or(128.0);
@@ -2469,16 +2804,27 @@ impl MixEngine {
             let candidate = g.first_beat_time + next * phrase_dur;
             // If we're <30 ms from the next phrase boundary, just hit
             // it now (would otherwise wait a full 4 bars to advance).
-            if candidate - now < 0.030 { now } else { candidate }
+            if candidate - now < 0.030 {
+                now
+            } else {
+                candidate
+            }
         } else {
             now
         };
 
-        let label = if s.incoming_loaded_not_playing() { "incoming ready" } else { "waiting for download" };
+        let label = if s.incoming_loaded_not_playing() {
+            "incoming ready"
+        } else {
+            "waiting for download"
+        };
         if fire_at <= now + 0.05 {
             s.playing_mut().seek(target);
             s.pending_teleport = None;
-            tracing::info!("Teleported to {target:.1}s ({:.0}s before end, {label})", duration - target);
+            tracing::info!(
+                "Teleported to {target:.1}s ({:.0}s before end, {label})",
+                duration - target
+            );
         } else {
             s.pending_teleport = Some(PendingTeleport { fire_at, target });
             tracing::info!(
@@ -2560,7 +2906,10 @@ impl MixEngine {
             if now >= p.fire_at {
                 s.playing_mut().seek(p.target);
                 s.pending_teleport = None;
-                tracing::info!("Teleport fired → {:.3}s (musical cut on phrase boundary)", p.target);
+                tracing::info!(
+                    "Teleport fired → {:.3}s (musical cut on phrase boundary)",
+                    p.target
+                );
             }
         }
 
@@ -2585,7 +2934,11 @@ impl MixEngine {
         // Same idea for loop activate / release.
         if let Some(p) = s.pending_loop {
             match p {
-                PendingLoopOp::Activate { deck_id, beats, fire_at } => {
+                PendingLoopOp::Activate {
+                    deck_id,
+                    beats,
+                    fire_at,
+                } => {
                     let now = match deck_id {
                         DeckId::A => s.deck_a.current_time(),
                         DeckId::B => s.deck_b.current_time(),
@@ -2639,20 +2992,21 @@ impl MixEngine {
         // (i.e. no key events for NUDGE_HOLD_WINDOW_MS — the user
         // released the key).
         if let (Some(revert_at), Some(base)) = (s.nudge_revert_at, s.nudge_base_rate)
-            && std::time::Instant::now() >= revert_at {
-                let deck_id = if s.state == EngineState::Crossfading {
-                    s.playing_deck.other()
-                } else {
-                    s.playing_deck
-                };
-                match deck_id {
-                    DeckId::A => Mixer::set_rate(&mut s.deck_a, base),
-                    DeckId::B => Mixer::set_rate(&mut s.deck_b, base),
-                }
-                s.nudge_base_rate = None;
-                s.nudge_revert_at = None;
-                tracing::info!("Nudge end: rate restored (deck {deck_id:?})");
+            && std::time::Instant::now() >= revert_at
+        {
+            let deck_id = if s.state == EngineState::Crossfading {
+                s.playing_deck.other()
+            } else {
+                s.playing_deck
+            };
+            match deck_id {
+                DeckId::A => Mixer::set_rate(&mut s.deck_a, base),
+                DeckId::B => Mixer::set_rate(&mut s.deck_b, base),
             }
+            s.nudge_base_rate = None;
+            s.nudge_revert_at = None;
+            tracing::info!("Nudge end: rate restored (deck {deck_id:?})");
+        }
 
         match s.state {
             EngineState::Idle => {
@@ -2688,13 +3042,16 @@ impl MixEngine {
                 // Skip any queued items whose track_id matches the currently-playing track —
                 // happens when e.g. a queueall lands the same track in both positions, which
                 // previously caused "ANOTR → ANOTR" self-mixes.
-                if !s.incoming().is_loaded() && !self.queue.is_empty() && !self.next_track_requested {
+                if !s.incoming().is_loaded() && !self.queue.is_empty() && !self.next_track_requested
+                {
                     let playing_id = s.playing().track.as_ref().map(|t| t.id);
                     // Drain duplicates from the front of the queue.
                     while let Some(front) = self.queue.first() {
                         if playing_id.is_some() && Some(front.track.id) == playing_id {
                             self.queue.remove(0);
-                        } else { break; }
+                        } else {
+                            break;
+                        }
                     }
                     if let Some(entry) = (!self.queue.is_empty()).then(|| self.queue.remove(0)) {
                         self.next_track_requested = true;
@@ -2714,20 +3071,24 @@ impl MixEngine {
                     let duration = s.playing().duration();
                     let phrase_trigger = if config.smart_mix_out {
                         s.playing().analysis.as_ref().and_then(|a| {
-                        // Find the last Outro or Breakdown phrase that starts
-                        // after our current position and before the track ends.
-                        // Prefer Outro over Breakdown.
-                        let outro = a.phrases.iter().rev()
-                            .find(|p| p.phrase_type == super::analyzer::PhraseType::Outro
-                                && p.start_time > current_time
-                                && p.start_time < duration);
-                        let breakdown = a.phrases.iter().rev()
-                            .find(|p| p.phrase_type == super::analyzer::PhraseType::Breakdown
-                                && p.start_time > current_time
-                                && p.start_time < duration);
-                        outro.or(breakdown).map(|p| p.start_time)
-                    })
-                    } else { None };
+                            // Find the last Outro or Breakdown phrase that starts
+                            // after our current position and before the track ends.
+                            // Prefer Outro over Breakdown.
+                            let outro = a.phrases.iter().rev().find(|p| {
+                                p.phrase_type == super::analyzer::PhraseType::Outro
+                                    && p.start_time > current_time
+                                    && p.start_time < duration
+                            });
+                            let breakdown = a.phrases.iter().rev().find(|p| {
+                                p.phrase_type == super::analyzer::PhraseType::Breakdown
+                                    && p.start_time > current_time
+                                    && p.start_time < duration
+                            });
+                            outro.or(breakdown).map(|p| p.start_time)
+                        })
+                    } else {
+                        None
+                    };
 
                     let recomputed = if let Some(pt) = phrase_trigger {
                         pt
@@ -2756,15 +3117,19 @@ impl MixEngine {
                     // instead of the usual ~4 min. Still quantizes to
                     // the nearest downbeat below.
                     let quick_fire = s.quick_mix
-                        && s.playing().beat_grid
+                        && s.playing()
+                            .beat_grid
                             .map(|g| g.bar_index(s.playing().current_time()))
-                            .unwrap_or(0) >= s.quick_mix_bars as i64
+                            .unwrap_or(0)
+                            >= s.quick_mix_bars as i64
                         && s.incoming_loaded_not_playing();
 
                     // Start crossfade — quantize to nearest downbeat (bar_phase ≈ 0)
                     // Use trigger_time for phrase-aware firing, fall back to time-remaining check.
-                    let phrase_fire = current_time >= trigger_time && s.incoming_loaded_not_playing();
-                    let time_remaining_fire = time_remaining <= xfade_dur + bar_dur && s.incoming_loaded_not_playing();
+                    let phrase_fire =
+                        current_time >= trigger_time && s.incoming_loaded_not_playing();
+                    let time_remaining_fire =
+                        time_remaining <= xfade_dur + bar_dur && s.incoming_loaded_not_playing();
                     // User-override gate: if the user has been touching
                     // controls during the playing track, don't surprise-
                     // fire a mix. They get to finish their performance
@@ -2772,15 +3137,24 @@ impl MixEngine {
                     // or let the track run out. Cleared on next mix start.
                     let auto_blocked = s.user_paused_auto;
                     if !auto_blocked && (quick_fire || phrase_fire || time_remaining_fire) {
-                        let bar_phase = s.playing().beat_grid
+                        let bar_phase = s
+                            .playing()
+                            .beat_grid
                             .map(|g| g.bar_phase(s.playing().current_time()))
                             .unwrap_or(0.0);
                         if !(0.02..=0.98).contains(&bar_phase) {
                             s.start_crossfade();
                             if quick_fire {
-                                tracing::info!("Quick-mix fired at {:.1}s", s.playing().current_time());
+                                tracing::info!(
+                                    "Quick-mix fired at {:.1}s",
+                                    s.playing().current_time()
+                                );
                             } else if phrase_trigger.is_some() {
-                                tracing::info!("Phrase-triggered crossfade at {:.1}s (trigger={:.1}s)", current_time, trigger_time);
+                                tracing::info!(
+                                    "Phrase-triggered crossfade at {:.1}s (trigger={:.1}s)",
+                                    current_time,
+                                    trigger_time
+                                );
                             }
                         }
                     }
@@ -2790,11 +3164,17 @@ impl MixEngine {
                 let is_paused = s.playing().paused;
                 if is_loaded && !is_playing && !is_paused {
                     if let Some(track) = s.playing().track.clone() {
-                        self.history.push(HistoryEntry { track, mix_score: None });
+                        self.history.push(HistoryEntry {
+                            track,
+                            mix_score: None,
+                        });
                     }
                     if s.incoming().is_loaded() {
                         let old = s.playing_deck;
-                        let old_samples = match old { DeckId::A => s.deck_a.unload(), DeckId::B => s.deck_b.unload() };
+                        let old_samples = match old {
+                            DeckId::A => s.deck_a.unload(),
+                            DeckId::B => s.deck_b.unload(),
+                        };
                         deferred_samples.push(old_samples);
                         s.playing_deck = s.playing_deck.other();
                         s.playing_mut().play();
@@ -2828,7 +3208,9 @@ impl MixEngine {
                 let (p_peaks, i_peaks) = if near_checkpoint && s.transition_type.use_phase_sync() {
                     let sr = s.playing().sample_rate as usize;
                     let bin = (sr / 1000).max(1);
-                    let beat_ms = s.playing().beat_grid
+                    let beat_ms = s
+                        .playing()
+                        .beat_grid
                         .map(|g| (g.beat_interval() * 1000.0) as usize)
                         .unwrap_or(469);
                     let p_start = (s.playing().current_time() * sr as f64) as usize;
@@ -2839,13 +3221,23 @@ impl MixEngine {
                         let ps = p_start + ms * bin;
                         let pe = (ps + bin).min(s.playing().samples.len());
                         pp.push(if pe > ps && pe <= s.playing().samples.len() {
-                            s.playing().samples[ps..pe].iter().map(|v| v.abs()).fold(0.0f32, f32::max)
-                        } else { 0.0 });
+                            s.playing().samples[ps..pe]
+                                .iter()
+                                .map(|v| v.abs())
+                                .fold(0.0f32, f32::max)
+                        } else {
+                            0.0
+                        });
                         let is = i_start + ms * bin;
                         let ie = (is + bin).min(s.incoming().samples.len());
                         ip.push(if ie > is && ie <= s.incoming().samples.len() {
-                            s.incoming().samples[is..ie].iter().map(|v| v.abs()).fold(0.0f32, f32::max)
-                        } else { 0.0 });
+                            s.incoming().samples[is..ie]
+                                .iter()
+                                .map(|v| v.abs())
+                                .fold(0.0f32, f32::max)
+                        } else {
+                            0.0
+                        });
                     }
                     (pp, ip)
                 } else {
@@ -2905,7 +3297,9 @@ impl MixEngine {
                     } else {
                         snap.crossfade_progress
                     }
-                } else if let (Some(ctrl), Some(start_t)) = (&ctrl_taken, snap.crossfade_start_playing_time) {
+                } else if let (Some(ctrl), Some(start_t)) =
+                    (&ctrl_taken, snap.crossfade_start_playing_time)
+                {
                     let duration = ctrl.duration();
                     let source_elapsed = (snap.playing_time - start_t).max(0.0);
                     let elapsed = source_elapsed / snap.playing_rate;
@@ -2917,7 +3311,10 @@ impl MixEngine {
                 // Phase offset computation (pure math on BeatGrid + positions)
                 let offset_ms = if snap.transition_uses_phase_sync {
                     match (&snap.playing_grid, &snap.incoming_grid) {
-                        (Some(pg), Some(ig)) => BeatGrid::phase_offset(pg, snap.playing_time, ig, snap.incoming_time) * 1000.0,
+                        (Some(pg), Some(ig)) => {
+                            BeatGrid::phase_offset(pg, snap.playing_time, ig, snap.incoming_time)
+                                * 1000.0
+                        }
                         _ => 0.0,
                     }
                 } else {
@@ -2934,7 +3331,10 @@ impl MixEngine {
                     && ((new_progress > 0.24 && new_progress < 0.26)
                         || (new_progress > 0.74 && new_progress < 0.76))
                 {
-                    let n = snap.playing_beat_peaks.len().min(snap.incoming_beat_peaks.len());
+                    let n = snap
+                        .playing_beat_peaks
+                        .len()
+                        .min(snap.incoming_beat_peaks.len());
                     if n > 10 {
                         let mut sum_pp = 0.0f64;
                         let mut sum_ip = 0.0f64;
@@ -2981,7 +3381,8 @@ impl MixEngine {
                 let manual_stalled = snap.manual_mix && {
                     match snap.last_crossfader_move {
                         Some(t) => t.elapsed().as_secs_f64() > MANUAL_STALL_SECS,
-                        None => snap.crossfade_start
+                        None => snap
+                            .crossfade_start
                             .map(|t| t.elapsed().as_secs_f64() > MANUAL_STALL_SECS)
                             .unwrap_or(false),
                     }
@@ -3011,9 +3412,10 @@ impl MixEngine {
                 // (nudge or grid shift). No more fighting the user
                 // mid-crossfade. Resets on the next start_crossfade.
                 if let Some(corrected_rate) = rate_correction_result
-                    && !s.user_overrode_this_mix {
-                        Mixer::set_rate(s.incoming_mut(), corrected_rate);
-                    }
+                    && !s.user_overrode_this_mix
+                {
+                    Mixer::set_rate(s.incoming_mut(), corrected_rate);
+                }
 
                 // Record phase sample for mix quality scoring
                 if snap.transition_uses_phase_sync
@@ -3045,7 +3447,8 @@ impl MixEngine {
                     && !matches!(s.train_wreck_mode, crate::config::TrainWreckMode::Off)
                     && s.mix_phase_samples.len() >= WRECK_WINDOW_TICKS
                 {
-                    let tail = &s.mix_phase_samples[s.mix_phase_samples.len() - WRECK_WINDOW_TICKS..];
+                    let tail =
+                        &s.mix_phase_samples[s.mix_phase_samples.len() - WRECK_WINDOW_TICKS..];
                     let n = tail.len() as f64;
                     let rms = (tail.iter().map(|x| x * x).sum::<f64>() / n).sqrt();
                     if rms > WRECK_RMS_THRESHOLD_MS {
@@ -3067,7 +3470,10 @@ impl MixEngine {
                                 "Train wreck detected: rolling RMS {rms:.1}ms > {WRECK_RMS_THRESHOLD_MS}ms (Detect mode — no action)",
                             );
                         }
-                        events.push(EngineEvent::TrainWreckDetected { rms_ms: rms, bailed: bail });
+                        events.push(EngineEvent::TrainWreckDetected {
+                            rms_ms: rms,
+                            bailed: bail,
+                        });
                     }
                 }
 
@@ -3107,12 +3513,16 @@ impl MixEngine {
                         Some(70u8)
                     } else {
                         let n = s.mix_phase_samples.len() as f64;
-                        let rms = (s.mix_phase_samples.iter().map(|x| x*x).sum::<f64>() / n).sqrt();
+                        let rms =
+                            (s.mix_phase_samples.iter().map(|x| x * x).sum::<f64>() / n).sqrt();
                         let s0 = ((15.0 - rms.min(15.0)) * (100.0 / 15.0)).round() as i32;
                         Some(s0.clamp(0, 100) as u8)
                     };
                     if let Some(track) = s.playing().track.clone() {
-                        self.history.push(HistoryEntry { track: track.clone(), mix_score: score });
+                        self.history.push(HistoryEntry {
+                            track: track.clone(),
+                            mix_score: score,
+                        });
                         let bpm = s.playing().beat_grid.map(|g| g.bpm).unwrap_or(0.0);
                         crate::ipc::write_event(&serde_json::json!({
                             "kind": "crossfade_complete",
@@ -3156,16 +3566,30 @@ fn camelot_key_dist(from: &str, to: &str) -> f64 {
     fn parse(k: &str) -> Option<(i32, u8)> {
         let k = k.trim();
         let l = *k.as_bytes().last()?;
-        if l != b'A' && l != b'B' { return None; }
-        k[..k.len()-1].parse().ok().map(|n| (n, l))
+        if l != b'A' && l != b'B' {
+            return None;
+        }
+        k[..k.len() - 1].parse().ok().map(|n| (n, l))
     }
-    let (fn_, fl) = match parse(from) { Some(v) => v, None => return 6.0 };
-    let (tn, tl) = match parse(to) { Some(v) => v, None => return 6.0 };
-    if fn_ == tn && fl == tl { return 0.0; }
-    if fn_ == tn { return 1.0; }
+    let (fn_, fl) = match parse(from) {
+        Some(v) => v,
+        None => return 6.0,
+    };
+    let (tn, tl) = match parse(to) {
+        Some(v) => v,
+        None => return 6.0,
+    };
+    if fn_ == tn && fl == tl {
+        return 0.0;
+    }
+    if fn_ == tn {
+        return 1.0;
+    }
     let d = (fn_ - tn).unsigned_abs() as i32;
     let nd = d.min(12 - d);
-    if fl == tl && nd == 1 { return 1.0; }
+    if fl == tl && nd == 1 {
+        return 1.0;
+    }
     nd as f64 + if fl == tl { 0.0 } else { 1.0 }
 }
 
@@ -3235,8 +3659,13 @@ pub(crate) fn forward_safe_delta(
     }
 }
 
-pub fn auto_crossfade_bars(track: &BeatportTrack, analysis: Option<&super::analyzer::AnalysisResult>) -> u32 {
-    let g = track.genre_slug.as_deref()
+pub fn auto_crossfade_bars(
+    track: &BeatportTrack,
+    analysis: Option<&super::analyzer::AnalysisResult>,
+) -> u32 {
+    let g = track
+        .genre_slug
+        .as_deref()
         .filter(|s| !s.is_empty())
         .or(track.genre_name.as_deref())
         .unwrap_or("")
@@ -3247,38 +3676,63 @@ pub fn auto_crossfade_bars(track: &BeatportTrack, analysis: Option<&super::analy
     // catch-all, otherwise tech-house would always hit the 16-tier via
     // the substring "house" rather than the 16-tier via "tech-house".
     const GENRE_TIERS: &[(&[&str], u32)] = &[
-        (&[
-            "progressive-house", "progressive",
-            "minimal-deep-tech", "minimal",
-            "melodic-house-and-techno", "melodic",
-            "afro-house", "afro",
-            "techno-peak-time-driving",
-            "techno-raw-deep-hypnotic",
-            "organic-house",
-        ], 32),
-        (&[
-            "techno",         // generic techno catch-all
-            "tech-house",
-            "deep-house",
-            "electronica",
-            "indie-dance",
-        ], 16),
-        (&[
-            "house",          // generic house
-            "nu-disco", "disco", "funk",
-            "trance",
-            "bass-house",
-        ], 8),
-        (&[
-            "drum-bass", "dnb", "breakbeat", "breaks",
-            "dubstep", "drumstep",
-            "trap", "future-bass",
-        ], 4),
-        (&[
-            "hip-hop", "hip hop", "r-b", "pop", "reggae", "dancehall",
-        ], 2),
+        (
+            &[
+                "progressive-house",
+                "progressive",
+                "minimal-deep-tech",
+                "minimal",
+                "melodic-house-and-techno",
+                "melodic",
+                "afro-house",
+                "afro",
+                "techno-peak-time-driving",
+                "techno-raw-deep-hypnotic",
+                "organic-house",
+            ],
+            32,
+        ),
+        (
+            &[
+                "techno", // generic techno catch-all
+                "tech-house",
+                "deep-house",
+                "electronica",
+                "indie-dance",
+            ],
+            16,
+        ),
+        (
+            &[
+                "house", // generic house
+                "nu-disco",
+                "disco",
+                "funk",
+                "trance",
+                "bass-house",
+            ],
+            8,
+        ),
+        (
+            &[
+                "drum-bass",
+                "dnb",
+                "breakbeat",
+                "breaks",
+                "dubstep",
+                "drumstep",
+                "trap",
+                "future-bass",
+            ],
+            4,
+        ),
+        (
+            &["hip-hop", "hip hop", "r-b", "pop", "reggae", "dancehall"],
+            2,
+        ),
     ];
-    let base: u32 = GENRE_TIERS.iter()
+    let base: u32 = GENRE_TIERS
+        .iter()
         .find(|(slugs, _)| slugs.iter().any(|k| g.contains(k)))
         .map(|&(_, bars)| bars)
         .unwrap_or(16); // sensible default when genre is unknown
@@ -3292,14 +3746,15 @@ pub fn auto_crossfade_bars(track: &BeatportTrack, analysis: Option<&super::analy
     // 360s track with only 3 detected phrases gives avg=120s and
     // always bumps up regardless of arrangement. Per-window
     // intervals reflect the real phrase period.
-    
 
     if let Some(a) = analysis {
         if a.phrases.len() >= 3 {
             // Single-pass fold: avoids the intermediate Vec for window
             // intervals. Off-RT (called once per crossfade), but keeps
             // the tick loop alloc-free as a matter of policy.
-            let (sum, count) = a.phrases.windows(2)
+            let (sum, count) = a
+                .phrases
+                .windows(2)
                 .map(|w| w[1].start_time - w[0].start_time)
                 .filter(|&d| d > 0.0)
                 .fold((0.0_f64, 0_usize), |(s, n), d| (s + d, n + 1));
@@ -3309,14 +3764,35 @@ pub fn auto_crossfade_bars(track: &BeatportTrack, analysis: Option<&super::analy
                 let avg_phrase = sum / count as f64;
                 if avg_phrase > 45.0 {
                     // Bump up one tier (2 → 4 → 8 → 16 → 32 → 64)
-                    match base { 2 => 4, 4 => 8, 8 => 16, 16 => 32, 32 => 64, _ => base }
+                    match base {
+                        2 => 4,
+                        4 => 8,
+                        8 => 16,
+                        16 => 32,
+                        32 => 64,
+                        _ => base,
+                    }
                 } else if avg_phrase < 18.0 {
                     // Bump down one tier (64 → 32 → 16 → 8 → 4 → 2 → 0)
-                    match base { 2 => 0, 4 => 2, 8 => 4, 16 => 8, 32 => 16, 64 => 32, _ => base }
-                } else { base }
+                    match base {
+                        2 => 0,
+                        4 => 2,
+                        8 => 4,
+                        16 => 8,
+                        32 => 16,
+                        64 => 32,
+                        _ => base,
+                    }
+                } else {
+                    base
+                }
             }
-        } else { base }
-    } else { base }
+        } else {
+            base
+        }
+    } else {
+        base
+    }
 }
 
 pub(crate) fn glide_target_rate(start_rate: f64, progress: f64) -> f64 {
@@ -3361,18 +3837,25 @@ mod tests {
         // The previous linear law gave 1+1=2 at center → audible +3 dB
         // loudness bump mid-crossfade. sqrt taper compensates.
         let (a, b) = xf_gains(0.0);
-        assert!((a * a + b * b - 1.0).abs() < 1e-6,
-            "center crossfader: {a}² + {b}² = {} (expected 1.0)", a * a + b * b);
+        assert!(
+            (a * a + b * b - 1.0).abs() < 1e-6,
+            "center crossfader: {a}² + {b}² = {} (expected 1.0)",
+            a * a + b * b
+        );
     }
 
     #[test]
     fn crossfader_endpoints_are_full_or_silent() {
         let (a, b) = xf_gains(-1.0);
-        assert!((a - 1.0).abs() < 1e-6 && b.abs() < 1e-6,
-            "fader=-1 → A full, B silent: got A={a} B={b}");
+        assert!(
+            (a - 1.0).abs() < 1e-6 && b.abs() < 1e-6,
+            "fader=-1 → A full, B silent: got A={a} B={b}"
+        );
         let (a, b) = xf_gains(1.0);
-        assert!(a.abs() < 1e-6 && (b - 1.0).abs() < 1e-6,
-            "fader=+1 → A silent, B full: got A={a} B={b}");
+        assert!(
+            a.abs() < 1e-6 && (b - 1.0).abs() < 1e-6,
+            "fader=+1 → A silent, B full: got A={a} B={b}"
+        );
     }
 
     #[test]
@@ -3383,8 +3866,10 @@ mod tests {
             let pos = i as f32 / 100.0;
             let (a, b) = xf_gains(pos);
             let sum_sq = a * a + b * b;
-            assert!((sum_sq - 1.0).abs() < 1e-5,
-                "constant-power broke at pos={pos}: sum²={sum_sq}");
+            assert!(
+                (sum_sq - 1.0).abs() < 1e-5,
+                "constant-power broke at pos={pos}: sum²={sum_sq}"
+            );
         }
     }
 
@@ -3477,8 +3962,10 @@ mod tests {
             let (a, _) = xf_gains_with_faders(pos, fader, 1.0);
             let (a_unity, _) = xf_gains_with_faders(pos, 1.0, 1.0);
             let ratio = a / a_unity;
-            assert!((ratio - fader).abs() < 1e-6,
-                "fader={fader}: expected gain ratio {fader}, got {ratio}");
+            assert!(
+                (ratio - fader).abs() < 1e-6,
+                "fader={fader}: expected gain ratio {fader}, got {ratio}"
+            );
         }
     }
 
@@ -3493,8 +3980,10 @@ mod tests {
             let (a, b) = xf_gains_with_faders(pos, fader, fader);
             let sum_sq = a * a + b * b;
             let expected = fader * fader;
-            assert!((sum_sq - expected).abs() < 1e-5,
-                "pos={pos}: sum²={sum_sq} expected {expected}");
+            assert!(
+                (sum_sq - expected).abs() < 1e-5,
+                "pos={pos}: sum²={sum_sq} expected {expected}"
+            );
         }
     }
 
@@ -3576,7 +4065,10 @@ mod tests {
                     DeckId::A => p >= prev - 1e-9,
                     DeckId::B => p <= prev + 1e-9,
                 };
-                assert!(mono, "deck={deck:?} pos={pos} broke monotonicity: {prev} → {p}");
+                assert!(
+                    mono,
+                    "deck={deck:?} pos={pos} broke monotonicity: {prev} → {p}"
+                );
                 prev = p;
             }
         }
@@ -3614,10 +4106,14 @@ mod tests {
         for &r in &rates {
             let start = glide_target_rate(r, 0.0);
             let end = glide_target_rate(r, 1.0);
-            assert!((start - r).abs() < 1e-12,
-                "discontinuity at p=0 for r={r}: got {start}");
-            assert!((end - 1.0).abs() < 1e-12,
-                "endpoint drift at p=1 for r={r}: got {end}");
+            assert!(
+                (start - r).abs() < 1e-12,
+                "discontinuity at p=0 for r={r}: got {start}"
+            );
+            assert!(
+                (end - 1.0).abs() < 1e-12,
+                "endpoint drift at p=1 for r={r}: got {end}"
+            );
         }
     }
 
@@ -3628,8 +4124,10 @@ mod tests {
         let s = 0.943;
         let mid_linear = s + 0.5 * (1.0 - s);
         let mid_eased = glide_target_rate(s, 0.5);
-        assert!(mid_eased > mid_linear,
-            "midpoint eased ({mid_eased}) should be ahead of linear ({mid_linear})");
+        assert!(
+            mid_eased > mid_linear,
+            "midpoint eased ({mid_eased}) should be ahead of linear ({mid_linear})"
+        );
     }
 
     #[test]
@@ -3643,7 +4141,10 @@ mod tests {
     fn limiter_softknee_passthrough_below_07() {
         for &x in &[-0.69, -0.5, -0.1, 0.0, 0.1, 0.5, 0.69] {
             let y = apply_limiter(x, LimiterMode::SoftKnee);
-            assert!((y - x).abs() < 1e-6, "soft knee altered passthrough: x={x} y={y}");
+            assert!(
+                (y - x).abs() < 1e-6,
+                "soft knee altered passthrough: x={x} y={y}"
+            );
         }
     }
 
@@ -3654,7 +4155,11 @@ mod tests {
             let y = apply_limiter(x, LimiterMode::SoftKnee);
             assert!(y > 0.0 && y < 1.001, "x={x} y={y} exceeded ceiling");
             let y_neg = apply_limiter(-x, LimiterMode::SoftKnee);
-            assert!(y_neg < 0.0 && y_neg > -1.001, "x={} y={y_neg} exceeded floor", -x);
+            assert!(
+                y_neg < 0.0 && y_neg > -1.001,
+                "x={} y={y_neg} exceeded floor",
+                -x
+            );
         }
     }
 
@@ -3664,7 +4169,11 @@ mod tests {
         let mut last = -2.0f32;
         for i in -300..=300 {
             let y = apply_limiter(i as f32 / 100.0, LimiterMode::SoftKnee);
-            assert!(y + 1e-6 >= last, "non-monotonic at x={}: y={y} < last={last}", i as f32 / 100.0);
+            assert!(
+                y + 1e-6 >= last,
+                "non-monotonic at x={}: y={y} < last={last}",
+                i as f32 / 100.0
+            );
             last = y;
         }
     }
@@ -3737,9 +4246,7 @@ mod tests {
         // 0ms RMS → 100, 5ms → 67, 10ms → 33, 15ms → 0, 25ms → 0 (clamped).
         // Pin the math; old formula used a 50ms ceiling which scored
         // 8ms RMS at 84/100 (audibly bad mixes were called "good").
-        let score = |rms: f64| -> i32 {
-            ((15.0 - rms.min(15.0)) * (100.0 / 15.0)).round() as i32
-        };
+        let score = |rms: f64| -> i32 { ((15.0 - rms.min(15.0)) * (100.0 / 15.0)).round() as i32 };
         assert_eq!(score(0.0), 100);
         assert_eq!(score(5.0), 67);
         assert_eq!(score(10.0), 33);
@@ -3771,7 +4278,10 @@ mod tests {
         // Beat interval at 120 BPM = 0.5s. 1-beat quantize means each
         // boundary is at 0, 0.5, 1.0, 1.5… A `time` strictly between
         // boundaries should land on the next one.
-        let g = super::super::beat_grid::BeatGrid { bpm: 120.0, first_beat_time: 0.0 };
+        let g = super::super::beat_grid::BeatGrid {
+            bpm: 120.0,
+            first_beat_time: 0.0,
+        };
         let nb = MixEngine::next_quantize_boundary(&g, 0.25, 1.0);
         assert!((nb - 0.5).abs() < 1e-6, "expected 0.5, got {nb}");
         let nb = MixEngine::next_quantize_boundary(&g, 0.6, 1.0);
@@ -3783,7 +4293,10 @@ mod tests {
         // Pressing exactly on a boundary must NOT return the current
         // boundary (otherwise lookahead never fires) — should jump to
         // the NEXT one. Epsilon-protected ceil() in the impl.
-        let g = super::super::beat_grid::BeatGrid { bpm: 120.0, first_beat_time: 0.0 };
+        let g = super::super::beat_grid::BeatGrid {
+            bpm: 120.0,
+            first_beat_time: 0.0,
+        };
         let nb = MixEngine::next_quantize_boundary(&g, 0.5, 1.0);
         assert!(nb > 0.5 + 1e-6, "expected to advance past 0.5, got {nb}");
         assert!((nb - 1.0).abs() < 1e-3, "should land near 1.0, got {nb}");
@@ -3792,7 +4305,10 @@ mod tests {
     #[test]
     fn next_quantize_boundary_sub_beat_resolution() {
         // 1/4 beat at 120 BPM = 0.125s spacing.
-        let g = super::super::beat_grid::BeatGrid { bpm: 120.0, first_beat_time: 0.0 };
+        let g = super::super::beat_grid::BeatGrid {
+            bpm: 120.0,
+            first_beat_time: 0.0,
+        };
         let nb = MixEngine::next_quantize_boundary(&g, 0.05, 0.25);
         assert!((nb - 0.125).abs() < 1e-6, "expected 0.125, got {nb}");
     }
@@ -3800,7 +4316,10 @@ mod tests {
     #[test]
     fn next_quantize_boundary_offset_grid() {
         // Grid with first_beat_time != 0: boundaries shift by that offset.
-        let g = super::super::beat_grid::BeatGrid { bpm: 120.0, first_beat_time: 0.1 };
+        let g = super::super::beat_grid::BeatGrid {
+            bpm: 120.0,
+            first_beat_time: 0.1,
+        };
         let nb = MixEngine::next_quantize_boundary(&g, 0.0, 1.0);
         assert!((nb - 0.1).abs() < 1e-6, "expected 0.1, got {nb}");
         let nb = MixEngine::next_quantize_boundary(&g, 0.2, 1.0);
@@ -3817,7 +4336,10 @@ mod tests {
         assert!((t.fader_position(0.0) - 0.0).abs() < 1e-6);
         // Midpoint of sweep (progress 0.2) → sin(π/4) ≈ 0.707.
         let mid = t.fader_position(0.2);
-        assert!((mid - std::f64::consts::FRAC_1_SQRT_2).abs() < 1e-6, "expected ~0.707, got {mid}");
+        assert!(
+            (mid - std::f64::consts::FRAC_1_SQRT_2).abs() < 1e-6,
+            "expected ~0.707, got {mid}"
+        );
         assert!((t.fader_position(0.4) - 1.0).abs() < 1e-6);
         // After 40% it holds at 1.
         assert!((t.fader_position(0.5) - 1.0).abs() < 1e-6);
@@ -3848,13 +4370,19 @@ mod tests {
     fn phrases_at(start_times: &[f64]) -> super::super::analyzer::AnalysisResult {
         use super::super::analyzer::{AnalysisResult, Phrase, PhraseType};
         AnalysisResult {
-            beat_grid: super::super::beat_grid::BeatGrid { bpm: 128.0, first_beat_time: 0.0 },
+            beat_grid: super::super::beat_grid::BeatGrid {
+                bpm: 128.0,
+                first_beat_time: 0.0,
+            },
             rms_loudness: 0.0,
-            phrases: start_times.iter().map(|&t| Phrase {
-                start_time: t,
-                energy: 0.5,
-                phrase_type: PhraseType::Buildup,
-            }).collect(),
+            phrases: start_times
+                .iter()
+                .map(|&t| Phrase {
+                    start_time: t,
+                    energy: 0.5,
+                    phrase_type: PhraseType::Buildup,
+                })
+                .collect(),
             waveform_peaks: vec![],
             first_audio: 0.0,
         }
@@ -4001,5 +4529,4 @@ mod tests {
         let t = make_track(Some("DRUM-BASS"));
         assert_eq!(auto_crossfade_bars(&t, None), 4);
     }
-
 }

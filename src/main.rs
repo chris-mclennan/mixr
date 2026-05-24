@@ -3,24 +3,24 @@ mod beatport;
 mod claude;
 mod config;
 mod favorites;
-mod ipc;
 mod hid;
+mod ipc;
 mod library_import;
 mod local_library;
 mod log;
 mod midi;
-mod usb_libraries;
 mod platform;
 mod session;
 mod tui;
+mod usb_libraries;
 
 use anyhow::Result;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyModifiers},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use ratatui::{prelude::*, Terminal};
+use ratatui::{Terminal, prelude::*};
 use std::io;
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -96,7 +96,8 @@ impl CliArgs {
             // Positional URL after --webview-host. Parsed by hand
             // because the `value` helper above only catches `--flag value`
             // form, not direct positional after a known flag.
-            webview_host_url: args.iter()
+            webview_host_url: args
+                .iter()
                 .position(|a| a == "--webview-host")
                 .and_then(|i| args.get(i + 1))
                 .filter(|v| !v.starts_with("--"))
@@ -135,7 +136,9 @@ async fn main() -> Result<()> {
             Ok(content) => println!("{content}"),
             Err(_) => {
                 // Try status.json
-                let path2 = dirs::home_dir().unwrap_or_default().join(".mixr/status.json");
+                let path2 = dirs::home_dir()
+                    .unwrap_or_default()
+                    .join(".mixr/status.json");
                 match std::fs::read_to_string(&path2) {
                     Ok(content) => println!("{content}"),
                     Err(_) => println!("No status available (is mixr running?)"),
@@ -185,7 +188,12 @@ async fn main() -> Result<()> {
             for (i, t) in tracks.iter().enumerate() {
                 let bpm = t.bpm.map(|b| format!("{:.0}", b)).unwrap_or("?".into());
                 let key = t.key.as_deref().unwrap_or("?");
-                println!("{:>3}. {} - {}  {bpm} BPM / {key}", i + 1, t.artist_name(), t.full_title());
+                println!(
+                    "{:>3}. {} - {}  {bpm} BPM / {key}",
+                    i + 1,
+                    t.artist_name(),
+                    t.full_title()
+                );
             }
             println!("\n{} favorites", tracks.len());
         }
@@ -208,7 +216,9 @@ async fn main() -> Result<()> {
     // for the redirect to dj.beatport.com/home?code=..., prints the
     // captured code on stdout, exits. Doesn't return on macOS.
     if args.webview_host {
-        let url = args.webview_host_url.as_deref()
+        let url = args
+            .webview_host_url
+            .as_deref()
             .ok_or_else(|| anyhow::anyhow!("--webview-host needs an authorize URL"))?;
         beatport::webview_host::run(url)?;
         return Ok(());
@@ -288,7 +298,9 @@ async fn main() -> Result<()> {
 
     tracing::info!(
         "Config: bpmMode={:?}, quality={:?}, crossfadeBars={}",
-        config.bpm_mode, config.audio_quality, config.crossfade_bars
+        config.bpm_mode,
+        config.audio_quality,
+        config.crossfade_bars
     );
 
     // Native/integrated mode under tmnl: render into a TestBackend and
@@ -326,7 +338,11 @@ async fn main() -> Result<()> {
     // Restore terminal — disable mouse before leaving alt-screen so
     // the parent shell doesn't get spammed with mouse codes.
     disable_raw_mode()?;
-    execute!(terminal.backend_mut(), DisableMouseCapture, LeaveAlternateScreen)?;
+    execute!(
+        terminal.backend_mut(),
+        DisableMouseCapture,
+        LeaveAlternateScreen
+    )?;
     terminal.show_cursor()?;
 
     if let Err(e) = result {
@@ -378,8 +394,9 @@ async fn acquire_auth() -> Result<beatport::auth::StoredAuth> {
 
     let captured = tokio::task::spawn_blocking(move || {
         beatport::webview_client::capture_oauth_code(&authorize_url)
-    }).await
-        .map_err(|e| anyhow::anyhow!("WebView capture task panicked: {e}"))??;
+    })
+    .await
+    .map_err(|e| anyhow::anyhow!("WebView capture task panicked: {e}"))??;
 
     let auth = beatport::auth::exchange_code(&captured.code, &pkce.verifier, &client_id).await?;
     Ok(auth)
@@ -407,7 +424,9 @@ async fn run_app(
         if event::poll(Duration::from_millis(16))? {
             match event::read()? {
                 Event::Key(key) => {
-                    if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
+                    if key.code == KeyCode::Char('c')
+                        && key.modifiers.contains(KeyModifiers::CONTROL)
+                    {
                         break;
                     }
                     app.handle_key(key);
@@ -507,4 +526,3 @@ Files:
   ~/.mixr/command            Remote control (JSON)"#
     );
 }
-

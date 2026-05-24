@@ -12,7 +12,9 @@ use std::time::Duration;
 fn main() {
     let input = midir::MidiInput::new("mixr-capture").expect("midir init");
     let ports = input.ports();
-    let port = ports.first().expect("no MIDI input ports — connect a controller in computer mode");
+    let port = ports
+        .first()
+        .expect("no MIDI input ports — connect a controller in computer mode");
     let name = input.port_name(port).unwrap_or_else(|_| "?".into());
     eprintln!("Capturing from: {name}");
     eprintln!("Move faders / knobs / press buttons. Captures for 60s. Ctrl+C to stop.\n");

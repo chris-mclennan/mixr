@@ -47,15 +47,16 @@ impl BeatGrid {
 
     /// Phase offset in seconds between two grids (beat-level).
     /// Positive = grid_a is ahead of grid_b.
-    pub fn phase_offset(
-        grid_a: &BeatGrid, time_a: f64,
-        grid_b: &BeatGrid, time_b: f64,
-    ) -> f64 {
+    pub fn phase_offset(grid_a: &BeatGrid, time_a: f64, grid_b: &BeatGrid, time_b: f64) -> f64 {
         let phase_a = grid_a.phase(time_a);
         let phase_b = grid_b.phase(time_b);
         let mut delta = phase_a - phase_b;
-        if delta > 0.5 { delta -= 1.0; }
-        if delta < -0.5 { delta += 1.0; }
+        if delta > 0.5 {
+            delta -= 1.0;
+        }
+        if delta < -0.5 {
+            delta += 1.0;
+        }
         delta * grid_a.beat_interval()
     }
 
@@ -76,15 +77,16 @@ impl BeatGrid {
     /// This is what `phase_offset` misses: two decks can be beat-aligned
     /// (same within-beat phase) but off by 1–3 beats in the bar — the
     /// classic "everything locks but the 1s don't hit together" trap.
-    pub fn bar_offset_beats(
-        grid_a: &BeatGrid, time_a: f64,
-        grid_b: &BeatGrid, time_b: f64,
-    ) -> i32 {
+    pub fn bar_offset_beats(grid_a: &BeatGrid, time_a: f64, grid_b: &BeatGrid, time_b: f64) -> i32 {
         let a = grid_a.beat_in_bar(time_a) as i32;
         let b = grid_b.beat_in_bar(time_b) as i32;
         let mut delta = b - a;
-        if delta > 2 { delta -= 4; }
-        if delta < -2 { delta += 4; }
+        if delta > 2 {
+            delta -= 4;
+        }
+        if delta < -2 {
+            delta += 4;
+        }
         delta
     }
 
@@ -94,8 +96,10 @@ impl BeatGrid {
     /// Stays within ±2 beats of source time, so a "+3 beats" correction
     /// becomes a "−1 beat" seek.
     pub fn bar_aligned_seek_offset(
-        grid_a: &BeatGrid, time_a: f64,
-        grid_b: &BeatGrid, time_b: f64,
+        grid_a: &BeatGrid,
+        time_a: f64,
+        grid_b: &BeatGrid,
+        time_b: f64,
     ) -> f64 {
         Self::bar_offset_beats(grid_a, time_a, grid_b, time_b) as f64 * grid_a.beat_interval()
     }
@@ -110,14 +114,14 @@ impl BeatGrid {
     /// preview, quick-mix offset). Older code assumed `current_phase
     /// == 0`, which left a residual equal to the incoming's existing
     /// within-beat offset.
-    pub fn phase_align_advance(
-        target_phase: f64,
-        current_phase: f64,
-        beat_interval: f64,
-    ) -> f64 {
+    pub fn phase_align_advance(target_phase: f64, current_phase: f64, beat_interval: f64) -> f64 {
         let mut delta = target_phase - current_phase;
-        if delta >  0.5 { delta -= 1.0; }
-        if delta < -0.5 { delta += 1.0; }
+        if delta > 0.5 {
+            delta -= 1.0;
+        }
+        if delta < -0.5 {
+            delta += 1.0;
+        }
         delta * beat_interval
     }
 }
@@ -127,7 +131,10 @@ mod tests {
     use super::*;
 
     fn g(bpm: f64, fbt: f64) -> BeatGrid {
-        BeatGrid { bpm, first_beat_time: fbt }
+        BeatGrid {
+            bpm,
+            first_beat_time: fbt,
+        }
     }
 
     #[test]
@@ -170,7 +177,10 @@ mod tests {
     fn phase_offset_identical_grids_is_zero() {
         let grid = g(128.0, 1.0);
         let off = BeatGrid::phase_offset(&grid, 10.0, &grid, 10.0);
-        assert!(off.abs() < 1e-9, "identical grids should give 0.0, got {off}");
+        assert!(
+            off.abs() < 1e-9,
+            "identical grids should give 0.0, got {off}"
+        );
     }
 
     #[test]
@@ -181,8 +191,11 @@ mod tests {
         for &bpm in &[90.0_f64, 128.0, 150.0, 180.0] {
             let grid = g(bpm, 0.0);
             let off = BeatGrid::phase_offset(&grid, 1.0, &grid, 0.995);
-            assert!((off - 0.005).abs() < 1e-6,
-                "bpm={bpm}: expected +5ms, got {} ms", off * 1000.0);
+            assert!(
+                (off - 0.005).abs() < 1e-6,
+                "bpm={bpm}: expected +5ms, got {} ms",
+                off * 1000.0
+            );
         }
     }
 
@@ -192,7 +205,12 @@ mod tests {
         // units, so the returned offset magnitude must be ≤ half a beat of
         // grid_a. Verify across mismatched BPM pairs — this is the guarantee
         // the rate_correction controller depends on to stay stable.
-        let pairs = [(90.0_f64, 128.0), (128.0, 150.0), (150.0, 90.0), (128.0, 180.0)];
+        let pairs = [
+            (90.0_f64, 128.0),
+            (128.0, 150.0),
+            (150.0, 90.0),
+            (128.0, 180.0),
+        ];
         for (a, b) in pairs {
             let grid_a = g(a, 0.0);
             let grid_b = g(b, 0.123); // arbitrary offset
@@ -202,8 +220,11 @@ mod tests {
                 let t = step as f64 * bar_a / 40.0;
                 let off = BeatGrid::phase_offset(&grid_a, t, &grid_b, t);
                 let half_beat_a = grid_a.beat_interval() * 0.5 + 1e-9;
-                assert!(off.abs() <= half_beat_a,
-                    "a={a} b={b} t={t}: |off|={} > half_beat_a={half_beat_a}", off.abs());
+                assert!(
+                    off.abs() <= half_beat_a,
+                    "a={a} b={b} t={t}: |off|={} > half_beat_a={half_beat_a}",
+                    off.abs()
+                );
             }
         }
     }
@@ -217,11 +238,15 @@ mod tests {
             for step in -50..500 {
                 let t = step as f64 * 0.037; // irregular step to avoid lucky multiples
                 let p = grid.phase(t);
-                assert!((0.0..1.0).contains(&p) || (p - 1.0).abs() < 1e-9,
-                    "bpm={bpm} t={t}: phase={p} out of [0,1)");
+                assert!(
+                    (0.0..1.0).contains(&p) || (p - 1.0).abs() < 1e-9,
+                    "bpm={bpm} t={t}: phase={p} out of [0,1)"
+                );
                 let bp = grid.bar_phase(t);
-                assert!((0.0..1.0).contains(&bp) || (bp - 1.0).abs() < 1e-9,
-                    "bpm={bpm} t={t}: bar_phase={bp} out of [0,1)");
+                assert!(
+                    (0.0..1.0).contains(&bp) || (bp - 1.0).abs() < 1e-9,
+                    "bpm={bpm} t={t}: bar_phase={bp} out of [0,1)"
+                );
             }
         }
     }
@@ -276,7 +301,10 @@ mod tests {
         assert!(adv.abs() < 1e-12, "matching phases must give 0, got {adv}");
         // Also true mid-beat: both at phase 0.42.
         let adv = BeatGrid::phase_align_advance(0.42, 0.42, 0.5);
-        assert!(adv.abs() < 1e-12, "matching mid-beat phases must give 0, got {adv}");
+        assert!(
+            adv.abs() < 1e-12,
+            "matching mid-beat phases must give 0, got {adv}"
+        );
     }
 
     #[test]
@@ -288,15 +316,19 @@ mod tests {
         let interval = 60.0 / 128.0; // ≈0.469s
         let adv = BeatGrid::phase_align_advance(0.0, 0.6, interval);
         let expected = 0.4 * interval; // forward (shorter than -0.6 backward)
-        assert!((adv - expected).abs() < 1e-9,
-            "playing=0, incoming=0.6 → expected {expected}, got {adv}");
+        assert!(
+            (adv - expected).abs() < 1e-9,
+            "playing=0, incoming=0.6 → expected {expected}, got {adv}"
+        );
 
         // Mirror: incoming at 0.3, playing at 0.0 → backward 0.3 (shorter
         // than forward 0.7).
         let adv = BeatGrid::phase_align_advance(0.0, 0.3, interval);
         let expected = -0.3 * interval;
-        assert!((adv - expected).abs() < 1e-9,
-            "playing=0, incoming=0.3 → expected {expected}, got {adv}");
+        assert!(
+            (adv - expected).abs() < 1e-9,
+            "playing=0, incoming=0.3 → expected {expected}, got {adv}"
+        );
     }
 
     #[test]
@@ -306,12 +338,16 @@ mod tests {
         let interval = 0.5;
         let adv = BeatGrid::phase_align_advance(0.95, 0.05, interval);
         // delta = 0.9 → wraps to −0.1
-        assert!((adv - (-0.1 * interval)).abs() < 1e-9,
-            "0.9 delta should resolve as −0.1, got {adv}");
+        assert!(
+            (adv - (-0.1 * interval)).abs() < 1e-9,
+            "0.9 delta should resolve as −0.1, got {adv}"
+        );
         // Symmetric: −0.9 delta wraps to +0.1.
         let adv = BeatGrid::phase_align_advance(0.05, 0.95, interval);
-        assert!((adv - (0.1 * interval)).abs() < 1e-9,
-            "−0.9 delta should resolve as +0.1, got {adv}");
+        assert!(
+            (adv - (0.1 * interval)).abs() < 1e-9,
+            "−0.9 delta should resolve as +0.1, got {adv}"
+        );
     }
 
     #[test]
@@ -324,8 +360,11 @@ mod tests {
                 let target = target_x100 as f64 / 100.0;
                 let current = current_x100 as f64 / 100.0;
                 let adv = BeatGrid::phase_align_advance(target, current, interval);
-                assert!(adv.abs() <= interval * 0.5 + 1e-9,
-                    "target={target} current={current}: |adv|={} > half-beat", adv.abs());
+                assert!(
+                    adv.abs() <= interval * 0.5 + 1e-9,
+                    "target={target} current={current}: |adv|={} > half-beat",
+                    adv.abs()
+                );
             }
         }
     }
@@ -340,10 +379,15 @@ mod tests {
         // raw advance IS negative (so the engine's fallback fires).
         let interval = 60.0 / 128.0; // 0.469s
         let adv = BeatGrid::phase_align_advance(0.94, 0.0, interval);
-        assert!(adv < 0.0,
-            "shortest path for target=0.94 current=0.0 should be backward, got {adv}");
-        assert!((adv - (-0.06 * interval)).abs() < 1e-6,
-            "expected -0.06 * interval = {}, got {adv}", -0.06 * interval);
+        assert!(
+            adv < 0.0,
+            "shortest path for target=0.94 current=0.0 should be backward, got {adv}"
+        );
+        assert!(
+            (adv - (-0.06 * interval)).abs() < 1e-6,
+            "expected -0.06 * interval = {}, got {adv}",
+            -0.06 * interval
+        );
         // The forward alternative (what the engine uses when backward
         // would go past buffer start) is advance + beat_interval.
         let forward = adv + interval;
@@ -359,11 +403,16 @@ mod tests {
         let t_a = 3.17; // arbitrary
         let t_b = 7.89;
         let offset = BeatGrid::bar_aligned_seek_offset(&grid, t_a, &grid, t_b);
-        assert_eq!(grid.beat_in_bar(t_a + offset), grid.beat_in_bar(t_b),
-            "after applying seek offset, beat_in_bar must match");
+        assert_eq!(
+            grid.beat_in_bar(t_a + offset),
+            grid.beat_in_bar(t_b),
+            "after applying seek offset, beat_in_bar must match"
+        );
         // Offset must be within ±2 beats of source time.
-        assert!(offset.abs() <= 2.0 * grid.beat_interval() + 1e-9,
-            "offset {offset} exceeds ±2 beats");
+        assert!(
+            offset.abs() <= 2.0 * grid.beat_interval() + 1e-9,
+            "offset {offset} exceeds ±2 beats"
+        );
     }
 
     #[test]
@@ -378,8 +427,14 @@ mod tests {
         let t = 1.0;
         let phase = BeatGrid::phase_offset(&grid, t, &grid, t + 2.0 * bi);
         let bar = BeatGrid::bar_offset_beats(&grid, t, &grid, t + 2.0 * bi);
-        assert!(phase.abs() < 1e-9, "beats line up, phase should be 0; got {phase}");
-        assert!(bar != 0, "bars don't line up, bar_offset should be nonzero; got {bar}");
+        assert!(
+            phase.abs() < 1e-9,
+            "beats line up, phase should be 0; got {phase}"
+        );
+        assert!(
+            bar != 0,
+            "bars don't line up, bar_offset should be nonzero; got {bar}"
+        );
     }
 
     #[test]
@@ -392,8 +447,11 @@ mod tests {
             let bar = grid.bar_interval();
             // Exactly on bar 3 — must return bar 4.
             let nd = grid.next_downbeat(3.0 * bar);
-            assert!((nd - 4.0 * bar).abs() < 1e-6,
-                "bpm={bpm}: expected {}, got {nd}", 4.0 * bar);
+            assert!(
+                (nd - 4.0 * bar).abs() < 1e-6,
+                "bpm={bpm}: expected {}, got {nd}",
+                4.0 * bar
+            );
         }
     }
 
@@ -415,7 +473,10 @@ mod tests {
         // gb at 2.0s: beat_in_bar = ((2.0 - 0.3) / 0.462) % 4 = 3.68 % 4 = 3.68 → floor = 3
         let shift = BeatGrid::bar_offset_beats(&ga, 2.0, &gb, 2.0);
         // delta = b(3) - a(0) = 3 → wraps to -1
-        assert_eq!(shift, -1, "cross-BPM bar offset should use each grid's own interval");
+        assert_eq!(
+            shift, -1,
+            "cross-BPM bar offset should use each grid's own interval"
+        );
     }
 
     #[test]
@@ -435,10 +496,15 @@ mod tests {
         for target_pct in 51..100 {
             let target = target_pct as f64 / 100.0;
             let adv = BeatGrid::phase_align_advance(target, 0.0, interval);
-            assert!(adv < 0.0, "target={target}: shortest path should be negative");
+            assert!(
+                adv < 0.0,
+                "target={target}: shortest path should be negative"
+            );
             let forward = adv + interval;
-            assert!((forward - target * interval).abs() < 1e-9,
-                "target={target}: advance+interval should equal target*interval");
+            assert!(
+                (forward - target * interval).abs() < 1e-9,
+                "target={target}: advance+interval should equal target*interval"
+            );
         }
     }
 
@@ -454,7 +520,10 @@ mod tests {
         let fallback = raw + grid.bar_interval();
         assert!(fallback > 0.0, "fallback must be positive, got {fallback}");
         // After fallback seek, beat_in_bar should match.
-        assert_eq!(grid.beat_in_bar(i_time + fallback), grid.beat_in_bar(p_time),
-            "fallback seek must land on the same beat_in_bar");
+        assert_eq!(
+            grid.beat_in_bar(i_time + fallback),
+            grid.beat_in_bar(p_time),
+            "fallback seek must land on the same beat_in_bar"
+        );
     }
 }

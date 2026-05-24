@@ -47,7 +47,9 @@ pub fn decode_to_mono_bytes(bytes: Vec<u8>, ext_hint: Option<&str>) -> Result<(V
     let cursor = std::io::Cursor::new(bytes);
     let mss = MediaSourceStream::new(Box::new(cursor), Default::default());
     let mut hint = Hint::new();
-    if let Some(ext) = ext_hint { hint.with_extension(ext); }
+    if let Some(ext) = ext_hint {
+        hint.with_extension(ext);
+    }
     decode_from_mss(mss, hint)
 }
 
@@ -66,11 +68,16 @@ pub fn decode_to_mono(path: &Path) -> Result<(Vec<f32>, u32)> {
 
 fn decode_from_mss(mss: MediaSourceStream, hint: Hint) -> Result<(Vec<f32>, u32)> {
     let probed = symphonia::default::get_probe().format(
-        &hint, mss, &FormatOptions::default(), &MetadataOptions::default(),
+        &hint,
+        mss,
+        &FormatOptions::default(),
+        &MetadataOptions::default(),
     )?;
 
     let mut format = probed.format;
-    let track = format.default_track().ok_or_else(|| anyhow::anyhow!("no audio track"))?;
+    let track = format
+        .default_track()
+        .ok_or_else(|| anyhow::anyhow!("no audio track"))?;
     let sample_rate = track.codec_params.sample_rate.unwrap_or(44100);
     let channels = track.codec_params.channels.map(|c| c.count()).unwrap_or(2);
     let track_id = track.id;
@@ -86,7 +93,9 @@ fn decode_from_mss(mss: MediaSourceStream, hint: Hint) -> Result<(Vec<f32>, u32)
             Err(symphonia::core::errors::Error::IoError(_)) => break,
             Err(e) => return Err(e.into()),
         };
-        if packet.track_id() != track_id { continue; }
+        if packet.track_id() != track_id {
+            continue;
+        }
 
         let decoded = decoder.decode(&packet)?;
         let spec = *decoded.spec();
@@ -118,7 +127,7 @@ fn decode_from_mss(mss: MediaSourceStream, hint: Hint) -> Result<(Vec<f32>, u32)
 /// onsets in the low band from hi-hat energy in the high band, improving
 /// BPM detection accuracy over broadband RMS energy difference.
 fn spectral_flux_onsets(samples: &[f32], sample_rate: u32) -> Vec<f32> {
-    let hop_size = sample_rate as usize / 20;  // 50ms hop
+    let hop_size = sample_rate as usize / 20; // 50ms hop
     let window_size = sample_rate as usize / 10; // 100ms window
 
     // Moving-average filter: approximate low-pass at cutoff ≈ sr / (2 * width).
@@ -178,10 +187,14 @@ fn spectral_flux_onsets(samples: &[f32], sample_rate: u32) -> Vec<f32> {
             band_energy[3] += high * high;
         }
         let n = window_size as f64;
-        for e in &mut band_energy { *e /= n; }
+        for e in &mut band_energy {
+            *e /= n;
+        }
 
         // Spectral flux: sum of positive energy differences across bands
-        let sf: f64 = band_energy.iter().zip(prev_band_energy.iter())
+        let sf: f64 = band_energy
+            .iter()
+            .zip(prev_band_energy.iter())
             .map(|(curr, prev)| (curr - prev).max(0.0))
             .sum();
         flux.push(sf as f32);
@@ -195,12 +208,16 @@ fn detect_bpm(samples: &[f32], sample_rate: u32) -> f64 {
     let hop_size = sample_rate as usize / 20;
 
     let onsets = spectral_flux_onsets(samples, sample_rate);
-    if onsets.len() < 4 { return 128.0; }
+    if onsets.len() < 4 {
+        return 128.0;
+    }
 
     let min_lag = (sample_rate as f64 * 60.0 / 200.0 / hop_size as f64) as usize;
     let max_lag = (sample_rate as f64 * 60.0 / 60.0 / hop_size as f64) as usize;
     let max_lag = max_lag.min(onsets.len() / 2);
-    if min_lag >= max_lag { return 128.0; }
+    if min_lag >= max_lag {
+        return 128.0;
+    }
 
     let sr = sample_rate as f64;
     let hop = hop_size as f64;
@@ -212,7 +229,9 @@ fn detect_bpm(samples: &[f32], sample_rate: u32) -> f64 {
     for lag in min_lag..=max_lag {
         let n = onsets.len() - lag;
         let mut corr = 0.0f64;
-        for i in 0..n { corr += onsets[i] as f64 * onsets[i + lag] as f64; }
+        for i in 0..n {
+            corr += onsets[i] as f64 * onsets[i + lag] as f64;
+        }
         corr /= n as f64;
         // Gaussian tempo prior centered at 128 BPM — biases toward the
         // most common electronic music tempo and helps disambiguate
@@ -220,17 +239,28 @@ fn detect_bpm(samples: &[f32], sample_rate: u32) -> f64 {
         let candidate_bpm = 60.0 * sr / (lag as f64 * hop);
         let weight = (-0.5 * ((candidate_bpm - tempo_prior_bpm) / sigma).powi(2)).exp();
         let weighted_corr = corr * weight;
-        if weighted_corr > best_corr { best_corr = weighted_corr; best_lag = lag; }
+        if weighted_corr > best_corr {
+            best_corr = weighted_corr;
+            best_lag = lag;
+        }
     }
 
     let beat_interval = best_lag as f64 * hop_size as f64 / sample_rate as f64;
-    if beat_interval > 0.0 { 60.0 / beat_interval } else { 128.0 }
+    if beat_interval > 0.0 {
+        60.0 / beat_interval
+    } else {
+        128.0
+    }
 }
 
 fn normalize_bpm(bpm: f64) -> f64 {
     let mut b = bpm;
-    while b < 80.0 { b *= 2.0; }
-    while b > 200.0 { b /= 2.0; }
+    while b < 80.0 {
+        b *= 2.0;
+    }
+    while b > 200.0 {
+        b /= 2.0;
+    }
     b
 }
 
@@ -253,7 +283,9 @@ fn stratum_detect_bpm(samples: &[f32], sample_rate: u32) -> Option<f64> {
 }
 
 #[cfg(not(feature = "stratum"))]
-fn stratum_detect_bpm(_samples: &[f32], _sample_rate: u32) -> Option<f64> { None }
+fn stratum_detect_bpm(_samples: &[f32], _sample_rate: u32) -> Option<f64> {
+    None
+}
 
 fn resolve_bpm(
     samples: &[f32],
@@ -271,9 +303,7 @@ fn resolve_bpm(
                 normalize_bpm(detect_bpm(samples, sample_rate))
             }
         }
-        crate::config::AnalyzerEngine::Builtin => {
-            normalize_bpm(detect_bpm(samples, sample_rate))
-        }
+        crate::config::AnalyzerEngine::Builtin => normalize_bpm(detect_bpm(samples, sample_rate)),
     };
 
     match hint {
@@ -298,7 +328,9 @@ fn resolve_bpm(
                 if is_harmonic {
                     (hint_norm, "hint (harmonic corrected)")
                 } else {
-                    tracing::warn!("BPM conflict: hint={hint_norm:.1}, detected={detected:.1} — using detected");
+                    tracing::warn!(
+                        "BPM conflict: hint={hint_norm:.1}, detected={detected:.1} — using detected"
+                    );
                     (detected, "detected (hint overridden)")
                 }
             }
@@ -312,12 +344,17 @@ fn resolve_bpm(
 /// Find first moment of any significant audio energy (skip leading silence).
 fn find_first_audio(samples: &[f32], sample_rate: u32) -> f64 {
     let window = sample_rate as usize / 100; // 10ms window
-    if window == 0 { return 0.0; }
+    if window == 0 {
+        return 0.0;
+    }
 
     // Noise floor: RMS of first 0.5s (or whatever's there)
     let noise_len = (sample_rate as usize / 2).min(samples.len());
     let noise_rms = if noise_len > 0 {
-        let sum: f64 = samples[..noise_len].iter().map(|s| (*s as f64) * (*s as f64)).sum();
+        let sum: f64 = samples[..noise_len]
+            .iter()
+            .map(|s| (*s as f64) * (*s as f64))
+            .sum();
         (sum / noise_len as f64).sqrt()
     } else {
         0.0
@@ -328,7 +365,10 @@ fn find_first_audio(samples: &[f32], sample_rate: u32) -> f64 {
     let mut i = 0;
     while i + window < samples.len() {
         let rms: f64 = {
-            let sum: f64 = samples[i..i + window].iter().map(|s| (*s as f64) * (*s as f64)).sum();
+            let sum: f64 = samples[i..i + window]
+                .iter()
+                .map(|s| (*s as f64) * (*s as f64))
+                .sum();
             (sum / window as f64).sqrt()
         };
         if rms > threshold {
@@ -351,34 +391,54 @@ fn find_first_audio(samples: &[f32], sample_rate: u32) -> f64 {
 pub(crate) fn find_first_beat(samples: &[f32], sample_rate: u32, bpm: f64) -> f64 {
     let sr = sample_rate as usize;
     let total_len = samples.len();
-    if total_len < 100 || bpm <= 0.0 { return 0.0; }
+    if total_len < 100 || bpm <= 0.0 {
+        return 0.0;
+    }
 
     let beat_samples = (60.0 / bpm * sr as f64) as usize;
-    if beat_samples == 0 { return 0.0; }
+    if beat_samples == 0 {
+        return 0.0;
+    }
 
     let scan_len = (sr * 15).min(total_len);
     let frame_size = sr / 1000; // 1ms
-    if frame_size == 0 { return 0.0; }
+    if frame_size == 0 {
+        return 0.0;
+    }
     let num_frames = scan_len / frame_size;
-    if num_frames < 4 { return 0.0; }
+    if num_frames < 4 {
+        return 0.0;
+    }
 
     let eps: f64 = 1e-10;
 
     // Log-energy per 1ms frame
-    let log_e: Vec<f64> = (0..num_frames).map(|i| {
-        let s = i * frame_size;
-        let e = (s + frame_size).min(scan_len);
-        let energy: f64 = samples[s..e].iter().map(|&x| (x as f64) * (x as f64)).sum::<f64>() / frame_size as f64;
-        10.0 * (energy + eps).log10()
-    }).collect();
+    let log_e: Vec<f64> = (0..num_frames)
+        .map(|i| {
+            let s = i * frame_size;
+            let e = (s + frame_size).min(scan_len);
+            let energy: f64 = samples[s..e]
+                .iter()
+                .map(|&x| (x as f64) * (x as f64))
+                .sum::<f64>()
+                / frame_size as f64;
+            10.0 * (energy + eps).log10()
+        })
+        .collect();
 
     // Half-wave rectified derivative (only rising = attacks)
-    let deriv: Vec<f64> = (1..num_frames).map(|i| (log_e[i] - log_e[i - 1]).max(0.0)).collect();
+    let deriv: Vec<f64> = (1..num_frames)
+        .map(|i| (log_e[i] - log_e[i - 1]).max(0.0))
+        .collect();
 
     // Threshold: median of positive derivatives × 3, min 15 dB
     let mut pos: Vec<f64> = deriv.iter().filter(|&&d| d > 0.5).copied().collect();
     pos.sort_by(|a, b| a.partial_cmp(b).unwrap());
-    let thresh = if pos.len() > 10 { (pos[pos.len() / 2] * 3.0).max(15.0) } else { 15.0 };
+    let thresh = if pos.len() > 10 {
+        (pos[pos.len() / 2] * 3.0).max(15.0)
+    } else {
+        15.0
+    };
 
     // Find first frame exceeding threshold
     let onset_frame = match deriv.iter().position(|&d| d >= thresh) {
@@ -403,14 +463,21 @@ pub(crate) fn find_first_beat(samples: &[f32], sample_rate: u32, bpm: f64) -> f6
         for candidate in search_start..search_end {
             // Sample-level refinement: find true transient within this frame
             let frame_start = candidate * frame_size;
-            let prev_start = if candidate > 0 { (candidate - 1) * frame_size } else { 0 };
+            let prev_start = if candidate > 0 {
+                (candidate - 1) * frame_size
+            } else {
+                0
+            };
             let frame_end = ((candidate + 1) * frame_size).min(scan_len);
 
-            let noise: f64 = samples[prev_start..frame_start.max(prev_start + 1)].iter()
-                .map(|&s| (s as f64).abs()).fold(0.0f64, f64::max);
+            let noise: f64 = samples[prev_start..frame_start.max(prev_start + 1)]
+                .iter()
+                .map(|&s| (s as f64).abs())
+                .fold(0.0f64, f64::max);
             let st = (noise * 4.0).max(0.001);
 
-            let sample_pos = samples[prev_start..frame_end].iter()
+            let sample_pos = samples[prev_start..frame_end]
+                .iter()
                 .position(|&s| (s as f64).abs() > st)
                 .map(|p| prev_start + p)
                 .unwrap_or(frame_start);
@@ -419,10 +486,16 @@ pub(crate) fn find_first_beat(samples: &[f32], sample_rate: u32, bpm: f64) -> f6
             let mut score = 0.0f64;
             for beat in 0..num_beats {
                 let f = candidate + beat * beat_frames;
-                if f >= deriv.len() { break; }
+                if f >= deriv.len() {
+                    break;
+                }
                 score += deriv[f];
-                if f > 0 { score += deriv[f - 1] * 0.3; }
-                if f + 1 < deriv.len() { score += deriv[f + 1] * 0.3; }
+                if f > 0 {
+                    score += deriv[f - 1] * 0.3;
+                }
+                if f + 1 < deriv.len() {
+                    score += deriv[f + 1] * 0.3;
+                }
             }
             if score > best_score {
                 best_score = score;
@@ -444,7 +517,9 @@ pub(crate) fn find_first_beat(samples: &[f32], sample_rate: u32, bpm: f64) -> f6
 /// Returns a feature vector per bar: [low_energy, mid_energy, high_energy, rms].
 fn compute_bar_features(samples: &[f32], sample_rate: u32, bpm: f64) -> Vec<[f64; 4]> {
     let bar_samples = ((60.0 / bpm) * 4.0 * sample_rate as f64) as usize;
-    if bar_samples == 0 { return Vec::new(); }
+    if bar_samples == 0 {
+        return Vec::new();
+    }
 
     let mut features = Vec::new();
     let mut offset = 0;
@@ -492,7 +567,9 @@ fn cosine_distance(a: &[f64; 4], b: &[f64; 4]) -> f64 {
     let dot: f64 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
     let mag_a: f64 = a.iter().map(|x| x * x).sum::<f64>().sqrt();
     let mag_b: f64 = b.iter().map(|x| x * x).sum::<f64>().sqrt();
-    if mag_a < 1e-10 || mag_b < 1e-10 { return 1.0; }
+    if mag_a < 1e-10 || mag_b < 1e-10 {
+        return 1.0;
+    }
     1.0 - (dot / (mag_a * mag_b))
 }
 
@@ -500,7 +577,9 @@ fn cosine_distance(a: &[f64; 4], b: &[f64; 4]) -> f64 {
 fn detect_phrases(samples: &[f32], sample_rate: u32, bpm: f64, _duration: f64) -> Vec<Phrase> {
     let features = compute_bar_features(samples, sample_rate, bpm);
     let n = features.len();
-    if n < 8 { return Vec::new(); }
+    if n < 8 {
+        return Vec::new();
+    }
 
     // Build self-similarity matrix (cosine distance)
     let mut sim = vec![vec![0.0f64; n]; n];
@@ -561,9 +640,11 @@ fn detect_phrases(samples: &[f32], sample_rate: u32, bpm: f64, _duration: f64) -
             // Use actual peak position — don't snap to bar multiples.
             // The novelty peak IS where the music changes.
             if let Some(&last) = boundaries.last()
-                && i > last + min_phrase_bars && i < n {
-                    boundaries.push(i);
-                }
+                && i > last + min_phrase_bars
+                && i < n
+            {
+                boundaries.push(i);
+            }
         }
     }
 
@@ -574,11 +655,21 @@ fn detect_phrases(samples: &[f32], sample_rate: u32, bpm: f64, _duration: f64) -
     for (idx, &bar_start) in boundaries.iter().enumerate() {
         let bar_end = boundaries.get(idx + 1).copied().unwrap_or(n);
         let segment_len = bar_end - bar_start;
-        if segment_len == 0 { continue; }
+        if segment_len == 0 {
+            continue;
+        }
 
         // Average energy and low-band energy for this segment
-        let seg_rms: f64 = features[bar_start..bar_end].iter().map(|f| f[3]).sum::<f64>() / segment_len as f64;
-        let seg_low: f64 = features[bar_start..bar_end].iter().map(|f| f[0]).sum::<f64>() / segment_len as f64;
+        let seg_rms: f64 = features[bar_start..bar_end]
+            .iter()
+            .map(|f| f[3])
+            .sum::<f64>()
+            / segment_len as f64;
+        let seg_low: f64 = features[bar_start..bar_end]
+            .iter()
+            .map(|f| f[0])
+            .sum::<f64>()
+            / segment_len as f64;
 
         // Energy trend (rising/falling)
         let first_half_rms: f64 = if segment_len > 1 {
@@ -679,7 +770,8 @@ fn analyze_samples(
     };
 
     let phrases = detect_phrases(samples, sample_rate, bpm, duration);
-    let phrase_summary: Vec<String> = phrases.iter()
+    let phrase_summary: Vec<String> = phrases
+        .iter()
         .map(|p| format!("{:?}@{:.0}s", p.phrase_type, p.start_time))
         .collect();
     tracing::info!(
@@ -691,17 +783,23 @@ fn analyze_samples(
     let rms = if !samples.is_empty() {
         let sum: f64 = samples.iter().map(|s| (*s as f64) * (*s as f64)).sum();
         (sum / samples.len() as f64).sqrt()
-    } else { 0.0 };
+    } else {
+        0.0
+    };
 
     let chunk_size = (samples.len() / 1000).max(1);
-    let waveform_peaks: Vec<f32> = samples.chunks(chunk_size)
+    let waveform_peaks: Vec<f32> = samples
+        .chunks(chunk_size)
         .map(|chunk| chunk.iter().map(|s| s.abs()).fold(0.0f32, f32::max))
         .collect();
 
     let _ = duration; // computed but not stored; available in raw samples for callers
     AnalysisResult {
-        beat_grid, rms_loudness: rms,
-        phrases, waveform_peaks, first_audio,
+        beat_grid,
+        rms_loudness: rms,
+        phrases,
+        waveform_peaks,
+        first_audio,
     }
 }
 
@@ -720,20 +818,32 @@ mod tests {
         const TOL_MS: f64 = 30.0;
 
         let cases: &[(&str, f64, f64)] = &[
-            ("/Users/chrismclennan/.mixr/cache/24508685.flac", 132.0, 0.107),
-            ("/Users/chrismclennan/.mixr/cache/26881899.flac", 140.0, 0.925),
+            (
+                "/Users/chrismclennan/.mixr/cache/24508685.flac",
+                132.0,
+                0.107,
+            ),
+            (
+                "/Users/chrismclennan/.mixr/cache/26881899.flac",
+                140.0,
+                0.925,
+            ),
         ];
         let mut ran_any = false;
         for (path, bpm, ground_truth) in cases {
             let p = std::path::Path::new(path);
-            if !p.exists() { continue; }
+            if !p.exists() {
+                continue;
+            }
             ran_any = true;
             let (samples, sr) = decode_to_mono(p).unwrap();
             let fb = find_first_beat(&samples, sr, *bpm);
             let err_ms = (fb - ground_truth) * 1000.0;
-            assert!(err_ms.abs() < TOL_MS,
+            assert!(
+                err_ms.abs() < TOL_MS,
                 "first-beat error {err_ms:.1}ms exceeds ±{TOL_MS}ms tolerance \
-                 ({path}, {bpm} BPM, detected={fb:.4}s, truth={ground_truth:.4}s)");
+                 ({path}, {bpm} BPM, detected={fb:.4}s, truth={ground_truth:.4}s)"
+            );
         }
         if !ran_any {
             eprintln!("test_first_beat_detection: no cached FLACs available, skipped");
@@ -753,7 +863,10 @@ mod tests {
                 let start = bar * bar_samples;
                 let end = (start + bar_samples).min(samples.len());
                 let rms: f64 = {
-                    let sum: f64 = samples[start..end].iter().map(|s| (*s as f64) * (*s as f64)).sum();
+                    let sum: f64 = samples[start..end]
+                        .iter()
+                        .map(|s| (*s as f64) * (*s as f64))
+                        .sum();
                     (sum / (end - start) as f64).sqrt()
                 };
                 let time = bar as f64 * bar_dur;
@@ -764,7 +877,12 @@ mod tests {
         // Phrase detection test
         if path1.exists() {
             let (samples, sr) = decode_to_mono(path1).unwrap();
-            let analysis = analyze_samples(&samples, sr, Some(132.0), crate::config::AnalyzerEngine::Builtin);
+            let analysis = analyze_samples(
+                &samples,
+                sr,
+                Some(132.0),
+                crate::config::AnalyzerEngine::Builtin,
+            );
             println!("\nDSP Phrases:");
             for p in &analysis.phrases {
                 println!("  {:?} @ {:.3}s", p.phrase_type, p.start_time);
@@ -773,7 +891,9 @@ mod tests {
 
             // AI phrase detection
             let rt = tokio::runtime::Runtime::new().unwrap();
-            match rt.block_on(crate::audio::ai_beat::detect_phrases_ai(&samples, sr, 132.0)) {
+            match rt.block_on(crate::audio::ai_beat::detect_phrases_ai(
+                &samples, sr, 132.0,
+            )) {
                 Ok(phrases) => {
                     println!("\nAI Phrases:");
                     for (time, label) in &phrases {
@@ -787,10 +907,19 @@ mod tests {
         // Grid validation test
         if path1.exists() {
             let (samples, sr) = decode_to_mono(path1).unwrap();
-            let analysis = analyze_samples(&samples, sr, Some(132.0), crate::config::AnalyzerEngine::Builtin);
+            let analysis = analyze_samples(
+                &samples,
+                sr,
+                Some(132.0),
+                crate::config::AnalyzerEngine::Builtin,
+            );
             let rt = tokio::runtime::Runtime::new().unwrap();
             match rt.block_on(crate::audio::ai_beat::validate_grid(
-                &samples, sr, analysis.beat_grid.bpm, analysis.beat_grid.first_beat_time, &analysis.phrases
+                &samples,
+                sr,
+                analysis.beat_grid.bpm,
+                analysis.beat_grid.first_beat_time,
+                &analysis.phrases,
             )) {
                 Ok(v) => println!("Grid validation: {}", v.details),
                 Err(e) => println!("Grid validation failed: {e}"),
@@ -803,7 +932,10 @@ mod tests {
             let fb = find_first_beat(&samples, sr, 132.0);
             let det_pos = (fb * sr as f64) as usize;
             if det_pos + 44 < samples.len() {
-                let peak: f32 = samples[det_pos..det_pos + 44].iter().map(|s| s.abs()).fold(0.0f32, f32::max);
+                let peak: f32 = samples[det_pos..det_pos + 44]
+                    .iter()
+                    .map(|s| s.abs())
+                    .fold(0.0f32, f32::max);
                 println!("At detected {fb:.4}s: peak={peak:.4}");
             }
         }
@@ -839,7 +971,10 @@ mod tests {
     #[test]
     fn normalize_bpm_identity_in_range() {
         for bpm in [80.0_f64, 128.0, 150.0, 200.0] {
-            assert!((normalize_bpm(bpm) - bpm).abs() < 1e-9, "bpm={bpm} should be unchanged");
+            assert!(
+                (normalize_bpm(bpm) - bpm).abs() < 1e-9,
+                "bpm={bpm} should be unchanged"
+            );
         }
     }
 
@@ -848,7 +983,9 @@ mod tests {
         let sr = 44100u32;
         let silent_samples = (0.5 * sr as f64) as usize;
         let mut samples = vec![0.0f32; silent_samples + sr as usize];
-        for s in &mut samples[silent_samples..] { *s = 0.5; }
+        for s in &mut samples[silent_samples..] {
+            *s = 0.5;
+        }
         let t = find_first_audio(&samples, sr);
         assert!((0.45..=0.55).contains(&t), "expected ~0.5s, got {t}s");
     }
@@ -867,8 +1004,10 @@ mod tests {
         let hint = 130.0;
         let triplet = detected * 1.5;
         let ratio = triplet / hint;
-        assert!((0.95..=1.05).contains(&ratio),
-            "85.7 * 1.5 / 130 = {ratio:.3}, should be within 4% tolerance");
+        assert!(
+            (0.95..=1.05).contains(&ratio),
+            "85.7 * 1.5 / 130 = {ratio:.3}, should be within 4% tolerance"
+        );
     }
 
     #[test]
@@ -877,8 +1016,10 @@ mod tests {
         let hint = 130.0;
         let doubled = detected * 2.0;
         let ratio = doubled / hint;
-        assert!((0.95..=1.05).contains(&ratio),
-            "65 * 2 / 130 = {ratio:.3}, should be within 4% tolerance");
+        assert!(
+            (0.95..=1.05).contains(&ratio),
+            "65 * 2 / 130 = {ratio:.3}, should be within 4% tolerance"
+        );
     }
 
     #[test]
@@ -893,13 +1034,19 @@ mod tests {
         let mut pos = 0;
         while pos < total {
             samples[pos] = 1.0;
-            if pos + 1 < total { samples[pos + 1] = 0.8; }
-            if pos + 2 < total { samples[pos + 2] = 0.5; }
+            if pos + 1 < total {
+                samples[pos + 1] = 0.8;
+            }
+            if pos + 2 < total {
+                samples[pos + 2] = 0.5;
+            }
             pos += beat_samples;
         }
         let detected = detect_bpm(&samples, sr);
         let normalized = normalize_bpm(detected);
-        assert!((normalized - 128.0).abs() < 6.0,
-            "expected ~128 BPM from synthetic signal, got {normalized} (raw {detected})");
+        assert!(
+            (normalized - 128.0).abs() < 6.0,
+            "expected ~128 BPM from synthetic signal, got {normalized} (raw {detected})"
+        );
     }
 }

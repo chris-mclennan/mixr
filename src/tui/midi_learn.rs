@@ -23,11 +23,11 @@
 //! current-bindings pane). `Esc` returns to the previous view.
 
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap},
-    Frame,
 };
 
 use crate::midi::{self, Action, MidiEvent};
@@ -53,8 +53,8 @@ pub fn render(
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(4),                        // captured pane (3 lines + summary)
-            Constraint::Min(8),                           // action picker
+            Constraint::Length(4), // captured pane (3 lines + summary)
+            Constraint::Min(8),    // action picker
             Constraint::Length(8.max(bindings.len() as u16 + 2).min(15)), // current bindings
         ])
         .split(inner);
@@ -63,7 +63,10 @@ pub fn render(
     // when we annotate every action row with its binding status.
     let map = midi::MidiMap::load();
     let actions = midi::all_actions();
-    let bound_count = actions.iter().filter(|a| map.event_for(a).is_some()).count();
+    let bound_count = actions
+        .iter()
+        .filter(|a| map.event_for(a).is_some())
+        .count();
     let total = actions.len();
 
     // ── Captured pane ───────────────────────────────────────────
@@ -74,16 +77,25 @@ pub fn render(
         }
         None => "Captured: (touch a control on your MIDI device)".to_string(),
     };
-    let summary = format!("Bound: {bound_count}/{total}    Unmapped: {}", total - bound_count);
+    let summary = format!(
+        "Bound: {bound_count}/{total}    Unmapped: {}",
+        total - bound_count
+    );
     let hint = "Pick an action ↑↓, Enter binds, U unbinds, Esc closes";
     let captured_widget = Paragraph::new(vec![
         Line::from(Span::styled(
             captured_text,
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
         )),
         Line::from(Span::styled(
             summary,
-            Style::default().fg(if total == bound_count { Color::Green } else { Color::Yellow }),
+            Style::default().fg(if total == bound_count {
+                Color::Green
+            } else {
+                Color::Yellow
+            }),
         )),
         Line::from(Span::styled(hint, Style::default().fg(Color::DarkGray))),
     ]);
@@ -93,11 +105,12 @@ pub fn render(
     // ✓ prefix = action has a MIDI binding; ○ = unmapped. Bound rows
     // also show the event next to the label so the user can see at a
     // glance which physical control fires each action.
-    let items: Vec<ListItem> = actions.iter()
+    let items: Vec<ListItem> = actions
+        .iter()
         .map(|a| {
             let (marker, color, suffix) = match map.event_for(a) {
                 Some(ev) => ("✓", Color::Green, format!("    [{}]", ev.label())),
-                None     => ("○", Color::DarkGray, String::new()),
+                None => ("○", Color::DarkGray, String::new()),
             };
             ListItem::new(Line::from(vec![
                 Span::styled(format!("{marker} "), Style::default().fg(color)),
@@ -110,7 +123,11 @@ pub fn render(
     list_state.select(Some(selected.min(actions.len().saturating_sub(1))));
     let list = List::new(items)
         .block(Block::default().title(" Actions ").borders(Borders::ALL))
-        .highlight_style(Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD))
+        .highlight_style(
+            Style::default()
+                .bg(Color::DarkGray)
+                .add_modifier(Modifier::BOLD),
+        )
         .highlight_symbol("▶ ");
     frame.render_stateful_widget(list, chunks[1], &mut list_state);
 
@@ -121,9 +138,10 @@ pub fn render(
             Style::default().fg(Color::DarkGray),
         ))]
     } else {
-        bindings.iter().map(|b| {
-            Line::from(format!("  {}  →  {}", b.event.label(), b.action.label()))
-        }).collect()
+        bindings
+            .iter()
+            .map(|b| Line::from(format!("  {}  →  {}", b.event.label(), b.action.label())))
+            .collect()
     };
     let bindings_widget = Paragraph::new(bindings_lines)
         .block(Block::default().title(" Bindings ").borders(Borders::ALL))

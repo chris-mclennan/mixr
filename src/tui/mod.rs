@@ -1,9 +1,9 @@
 pub mod app;
 pub mod blit;
 pub mod claude_screen;
-pub mod download;
 pub mod dashboard;
 mod dj_bridge;
+pub mod download;
 mod ipc_handler;
 mod keys;
 pub mod midi_learn;

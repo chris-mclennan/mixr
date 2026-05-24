@@ -38,8 +38,10 @@ impl DeviceId {
     /// `ioreg -p IOUSB` on a connected unit (see also the
     /// device-id helper below). Used as a marker until the
     /// controller arrives tomorrow.
-    pub const NUMARK_MIXSTREAM_PRO_GO_PLUS: DeviceId =
-        DeviceId { vendor: 0x15E4, product: 0x0000 };
+    pub const NUMARK_MIXSTREAM_PRO_GO_PLUS: DeviceId = DeviceId {
+        vendor: 0x15E4,
+        product: 0x0000,
+    };
 }
 
 /// One HID report from a device + the device that produced it.
@@ -104,9 +106,7 @@ fn run_listener(_state: Arc<Mutex<ListenerState>>) -> anyhow::Result<()> {
         let pid = dev.product_id();
         let name = dev.product_string().unwrap_or("?");
         let manufacturer = dev.manufacturer_string().unwrap_or("?");
-        tracing::debug!(
-            "HID device: {manufacturer} {name} (VID={vid:#06x} PID={pid:#06x})"
-        );
+        tracing::debug!("HID device: {manufacturer} {name} (VID={vid:#06x} PID={pid:#06x})");
     }
 
     // No decoders wired yet — return cleanly so the listener thread
@@ -121,9 +121,18 @@ mod tests {
 
     #[test]
     fn device_id_equality() {
-        let a = DeviceId { vendor: 0x1234, product: 0x5678 };
-        let b = DeviceId { vendor: 0x1234, product: 0x5678 };
-        let c = DeviceId { vendor: 0x1234, product: 0x9999 };
+        let a = DeviceId {
+            vendor: 0x1234,
+            product: 0x5678,
+        };
+        let b = DeviceId {
+            vendor: 0x1234,
+            product: 0x5678,
+        };
+        let c = DeviceId {
+            vendor: 0x1234,
+            product: 0x9999,
+        };
         assert_eq!(a, b);
         assert_ne!(a, c);
     }

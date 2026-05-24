@@ -55,10 +55,10 @@ pub struct DeckPlayer {
     /// Detects sharp increases in low-frequency energy between audio
     /// callbacks — pulses true on kick transients, independent of grid.
     pub kick_active: bool,
-    kick_lp: f32,         // single-pole LPF state for bass isolation
-    kick_prev_energy: f32,// previous buffer's low-band energy
-    kick_avg_delta: f32,  // running average of energy deltas for threshold
-    kick_hold: u32,       // hold counter (frames remaining to stay lit)
+    kick_lp: f32,          // single-pole LPF state for bass isolation
+    kick_prev_energy: f32, // previous buffer's low-band energy
+    kick_avg_delta: f32,   // running average of energy deltas for threshold
+    kick_hold: u32,        // hold counter (frames remaining to stay lit)
 
     /// 3-band EQ gains in dB. 0.0 = unity, -inf = kill.
     pub eq_low_db: f32,
@@ -96,8 +96,13 @@ pub struct DeckPlayer {
 /// Transposed-direct-form-II biquad. Coefficients recomputed on EQ change.
 #[derive(Default, Clone, Copy)]
 struct Biquad {
-    b0: f32, b1: f32, b2: f32, a1: f32, a2: f32,
-    z1: f32, z2: f32,
+    b0: f32,
+    b1: f32,
+    b2: f32,
+    a1: f32,
+    a2: f32,
+    z1: f32,
+    z2: f32,
 }
 
 impl Biquad {
@@ -109,7 +114,10 @@ impl Biquad {
         y
     }
 
-    fn reset(&mut self) { self.z1 = 0.0; self.z2 = 0.0; }
+    fn reset(&mut self) {
+        self.z1 = 0.0;
+        self.z2 = 0.0;
+    }
 
     /// RBJ low-shelf.
     fn low_shelf(fs: f32, fc: f32, gain_db: f32) -> Self {
@@ -117,15 +125,23 @@ impl Biquad {
         let w0 = 2.0 * std::f32::consts::PI * fc / fs;
         let (sn, cs) = w0.sin_cos();
         let s = 1.0; // shelf slope
-        let alpha = sn / 2.0 * ((a + 1.0/a) * (1.0/s - 1.0) + 2.0).sqrt();
+        let alpha = sn / 2.0 * ((a + 1.0 / a) * (1.0 / s - 1.0) + 2.0).sqrt();
         let two_sqrt_a_alpha = 2.0 * a.sqrt() * alpha;
         let a0 = (a + 1.0) + (a - 1.0) * cs + two_sqrt_a_alpha;
-        let b0 =  a * ((a + 1.0) - (a - 1.0) * cs + two_sqrt_a_alpha);
-        let b1 =  2.0 * a * ((a - 1.0) - (a + 1.0) * cs);
-        let b2 =  a * ((a + 1.0) - (a - 1.0) * cs - two_sqrt_a_alpha);
+        let b0 = a * ((a + 1.0) - (a - 1.0) * cs + two_sqrt_a_alpha);
+        let b1 = 2.0 * a * ((a - 1.0) - (a + 1.0) * cs);
+        let b2 = a * ((a + 1.0) - (a - 1.0) * cs - two_sqrt_a_alpha);
         let a1 = -2.0 * ((a - 1.0) + (a + 1.0) * cs);
         let a2 = (a + 1.0) + (a - 1.0) * cs - two_sqrt_a_alpha;
-        Self { b0: b0/a0, b1: b1/a0, b2: b2/a0, a1: a1/a0, a2: a2/a0, z1: 0.0, z2: 0.0 }
+        Self {
+            b0: b0 / a0,
+            b1: b1 / a0,
+            b2: b2 / a0,
+            a1: a1 / a0,
+            a2: a2 / a0,
+            z1: 0.0,
+            z2: 0.0,
+        }
     }
 
     /// RBJ high-shelf.
@@ -134,15 +150,23 @@ impl Biquad {
         let w0 = 2.0 * std::f32::consts::PI * fc / fs;
         let (sn, cs) = w0.sin_cos();
         let s = 1.0;
-        let alpha = sn / 2.0 * ((a + 1.0/a) * (1.0/s - 1.0) + 2.0).sqrt();
+        let alpha = sn / 2.0 * ((a + 1.0 / a) * (1.0 / s - 1.0) + 2.0).sqrt();
         let two_sqrt_a_alpha = 2.0 * a.sqrt() * alpha;
-        let a0 =  (a + 1.0) - (a - 1.0) * cs + two_sqrt_a_alpha;
-        let b0 =  a * ((a + 1.0) + (a - 1.0) * cs + two_sqrt_a_alpha);
+        let a0 = (a + 1.0) - (a - 1.0) * cs + two_sqrt_a_alpha;
+        let b0 = a * ((a + 1.0) + (a - 1.0) * cs + two_sqrt_a_alpha);
         let b1 = -2.0 * a * ((a - 1.0) + (a + 1.0) * cs);
-        let b2 =  a * ((a + 1.0) + (a - 1.0) * cs - two_sqrt_a_alpha);
-        let a1 =  2.0 * ((a - 1.0) - (a + 1.0) * cs);
+        let b2 = a * ((a + 1.0) + (a - 1.0) * cs - two_sqrt_a_alpha);
+        let a1 = 2.0 * ((a - 1.0) - (a + 1.0) * cs);
         let a2 = (a + 1.0) - (a - 1.0) * cs - two_sqrt_a_alpha;
-        Self { b0: b0/a0, b1: b1/a0, b2: b2/a0, a1: a1/a0, a2: a2/a0, z1: 0.0, z2: 0.0 }
+        Self {
+            b0: b0 / a0,
+            b1: b1 / a0,
+            b2: b2 / a0,
+            a1: a1 / a0,
+            a2: a2 / a0,
+            z1: 0.0,
+            z2: 0.0,
+        }
     }
 
     /// RBJ lowpass (Q=0.707).
@@ -156,7 +180,15 @@ impl Biquad {
         let b2 = b0;
         let a1 = -2.0 * cs;
         let a2 = 1.0 - alpha;
-        Self { b0: b0/a0, b1: b1/a0, b2: b2/a0, a1: a1/a0, a2: a2/a0, z1: 0.0, z2: 0.0 }
+        Self {
+            b0: b0 / a0,
+            b1: b1 / a0,
+            b2: b2 / a0,
+            a1: a1 / a0,
+            a2: a2 / a0,
+            z1: 0.0,
+            z2: 0.0,
+        }
     }
 
     /// RBJ highpass (Q=0.707).
@@ -170,7 +202,15 @@ impl Biquad {
         let b2 = b0;
         let a1 = -2.0 * cs;
         let a2 = 1.0 - alpha;
-        Self { b0: b0/a0, b1: b1/a0, b2: b2/a0, a1: a1/a0, a2: a2/a0, z1: 0.0, z2: 0.0 }
+        Self {
+            b0: b0 / a0,
+            b1: b1 / a0,
+            b2: b2 / a0,
+            a1: a1 / a0,
+            a2: a2 / a0,
+            z1: 0.0,
+            z2: 0.0,
+        }
     }
 
     /// RBJ peaking EQ (Q=1.0).
@@ -186,7 +226,15 @@ impl Biquad {
         let b2 = 1.0 - alpha * a;
         let a1 = -2.0 * cs;
         let a2 = 1.0 - alpha / a;
-        Self { b0: b0/a0, b1: b1/a0, b2: b2/a0, a1: a1/a0, a2: a2/a0, z1: 0.0, z2: 0.0 }
+        Self {
+            b0: b0 / a0,
+            b1: b1 / a0,
+            b2: b2 / a0,
+            a1: a1 / a0,
+            a2: a2 / a0,
+            z1: 0.0,
+            z2: 0.0,
+        }
     }
 }
 
@@ -232,7 +280,15 @@ impl DeckPlayer {
             eq_mid: Biquad::peaking(output_sample_rate as f32, 1000.0, 0.0),
             eq_high: Biquad::high_shelf(output_sample_rate as f32, 4000.0, 0.0),
             filter_pos: 0.0,
-            filter: Biquad { b0: 1.0, b1: 0.0, b2: 0.0, a1: 0.0, a2: 0.0, z1: 0.0, z2: 0.0 },
+            filter: Biquad {
+                b0: 1.0,
+                b1: 0.0,
+                b2: 0.0,
+                a1: 0.0,
+                a2: 0.0,
+                z1: 0.0,
+                z2: 0.0,
+            },
             loop_in: None,
             loop_out: None,
             loop_active: false,
@@ -259,7 +315,10 @@ impl DeckPlayer {
         // non-zero z1). Active LP/HP go through rebuild_biquad to
         // preserve z1/z2 across coefficient changes, avoiding clicks.
         if p.abs() < 0.01 {
-            self.filter = Biquad { b0: 1.0, ..Default::default() };
+            self.filter = Biquad {
+                b0: 1.0,
+                ..Default::default()
+            };
             return;
         }
         let new_filter = if p < 0.0 {
@@ -287,18 +346,33 @@ impl DeckPlayer {
 
     pub fn update_eq_low(&mut self) {
         let fs = self.output_sample_rate as f32;
-        Self::rebuild_biquad(&mut self.eq_low, Biquad::low_shelf(fs, 250.0, self.eq_low_db));
+        Self::rebuild_biquad(
+            &mut self.eq_low,
+            Biquad::low_shelf(fs, 250.0, self.eq_low_db),
+        );
     }
     pub fn update_eq_mid(&mut self) {
         let fs = self.output_sample_rate as f32;
-        Self::rebuild_biquad(&mut self.eq_mid, Biquad::peaking(fs, 1000.0, self.eq_mid_db));
+        Self::rebuild_biquad(
+            &mut self.eq_mid,
+            Biquad::peaking(fs, 1000.0, self.eq_mid_db),
+        );
     }
     pub fn update_eq_high(&mut self) {
         let fs = self.output_sample_rate as f32;
-        Self::rebuild_biquad(&mut self.eq_high, Biquad::high_shelf(fs, 4000.0, self.eq_high_db));
+        Self::rebuild_biquad(
+            &mut self.eq_high,
+            Biquad::high_shelf(fs, 4000.0, self.eq_high_db),
+        );
     }
 
-    pub fn load(&mut self, samples: Vec<f32>, sample_rate: u32, analysis: AnalysisResult, track: BeatportTrack) {
+    pub fn load(
+        &mut self,
+        samples: Vec<f32>,
+        sample_rate: u32,
+        analysis: AnalysisResult,
+        track: BeatportTrack,
+    ) {
         let bpm = analysis.beat_grid.bpm;
         self.samples = samples;
         self.sample_rate = sample_rate;
@@ -316,7 +390,9 @@ impl DeckPlayer {
         // Set delay time to 3/4 beat (dotted eighth feel)
         let beat_secs = if bpm > 0.0 { 60.0 / bpm } else { 0.5 };
         self.delay_samples = (beat_secs * 0.5 * self.output_sample_rate as f64) as usize;
-        self.delay_samples = self.delay_samples.min(self.delay_buffer.len().saturating_sub(1));
+        self.delay_samples = self
+            .delay_samples
+            .min(self.delay_buffer.len().saturating_sub(1));
         self.delay_wet = 0.0;
         self.delay_feedback = 0.50;
         self.delay_hp_prev = 0.0;
@@ -344,7 +420,9 @@ impl DeckPlayer {
         self.loop_out = None;
         self.loop_active = false;
         self.cues = [None; 4];
-        if let Some(ref mut p) = self.pitch_stretch { p.reset(); }
+        if let Some(ref mut p) = self.pitch_stretch {
+            p.reset();
+        }
     }
 
     /// Ratio to convert from output samples to source samples.
@@ -403,7 +481,8 @@ impl DeckPlayer {
     }
 
     pub fn seek(&mut self, time: f64) {
-        self.position = (time * self.sample_rate as f64).min((self.samples.len().saturating_sub(1)) as f64);
+        self.position =
+            (time * self.sample_rate as f64).min((self.samples.len().saturating_sub(1)) as f64);
     }
 
     /// Current playback time in seconds.
@@ -487,16 +566,26 @@ impl DeckPlayer {
                 // semantic gate, not the Option's variant alone.
                 #[allow(clippy::unnecessary_unwrap)]
                 let stretcher = self.pitch_stretch.as_mut().unwrap();
-                stretcher.process(&self.samples, self.position, &mut self.stretch_src, self.rate)
+                stretcher.process(
+                    &self.samples,
+                    self.position,
+                    &mut self.stretch_src,
+                    self.rate,
+                )
             };
             self.position += consumed;
-            if n_src + 2 < need { self.playing = false; }
+            if n_src + 2 < need {
+                self.playing = false;
+            }
 
             self.stretch_out.resize(output.len(), 0.0);
             let mut rp: f64 = 0.0;
             for slot in self.stretch_out.iter_mut() {
                 let idx = rp as usize;
-                if idx + 1 >= n_src { *slot = 0.0; continue; }
+                if idx + 1 >= n_src {
+                    *slot = 0.0;
+                    continue;
+                }
                 let frac = (rp - idx as f64) as f32;
                 *slot = self.stretch_src[idx] * (1.0 - frac) + self.stretch_src[idx + 1] * frac;
                 rp += resample;
@@ -508,7 +597,10 @@ impl DeckPlayer {
 
         for (frame_i, sample) in output.iter_mut().enumerate() {
             let raw = if stretched {
-                if frame_i >= self.stretch_out.len() { *sample = 0.0; break; }
+                if frame_i >= self.stretch_out.len() {
+                    *sample = 0.0;
+                    break;
+                }
                 self.stretch_out[frame_i]
             } else {
                 let idx = self.position as usize;
@@ -521,12 +613,15 @@ impl DeckPlayer {
                 self.samples[idx] * (1.0 - frac) + self.samples[idx + 1] * frac
             };
             // 3-band EQ (low-shelf → peaking mid → high-shelf) then filter sweep
-            let eq = self.eq_high.process(self.eq_mid.process(self.eq_low.process(raw)));
+            let eq = self
+                .eq_high
+                .process(self.eq_mid.process(self.eq_low.process(raw)));
             let filtered = self.filter.process(eq);
             let dry = filtered * self.volume;
 
             // Feed dry signal into delay buffer (post-fader send)
-            let delay_read = (self.delay_write_pos + self.delay_buffer.len() - self.delay_samples) % self.delay_buffer.len();
+            let delay_read = (self.delay_write_pos + self.delay_buffer.len() - self.delay_samples)
+                % self.delay_buffer.len();
             let delayed = self.delay_buffer[delay_read];
             // Only feed dry into delay when wet > 0 (echo is armed)
             let feed = if self.delay_wet > 0.0 { dry } else { 0.0 };
@@ -558,10 +653,11 @@ impl DeckPlayer {
             // Loop wrap: if active and position passes loop_out, jump back to loop_in
             if self.loop_active
                 && let (Some(lin), Some(lout)) = (self.loop_in, self.loop_out)
-                    && self.position >= lout as f64 {
-                        let overshoot = self.position - lout as f64;
-                        self.position = lin as f64 + overshoot;
-                    }
+                && self.position >= lout as f64
+            {
+                let overshoot = self.position - lout as f64;
+                self.position = lin as f64 + overshoot;
+            }
         }
 
         // Update metering
@@ -628,7 +724,9 @@ impl DeckPlayer {
         let fc_hp = 200.0 + 5800.0 * echo_life * echo_life;
         // LPF: 16000Hz → 2000Hz
         let fc_lp = 16000.0 - 14000.0 * echo_life * echo_life;
-        let alpha_hp = (1.0 / (1.0 + 2.0 * std::f64::consts::PI * fc_hp / self.output_sample_rate as f64)) as f32;
+        let alpha_hp = (1.0
+            / (1.0 + 2.0 * std::f64::consts::PI * fc_hp / self.output_sample_rate as f64))
+            as f32;
         // LPF alpha: dt / (rc + dt)
         let rc_lp = 1.0 / (2.0 * std::f64::consts::PI * fc_lp);
         let dt = 1.0 / self.output_sample_rate as f64;
@@ -643,7 +741,8 @@ impl DeckPlayer {
             // HPF: two-pole (12dB/octave)
             self.delay_hp_out = alpha_hp * (self.delay_hp_out + raw - self.delay_hp_prev);
             self.delay_hp_prev = raw;
-            self.delay_hp_out2 = alpha_hp * (self.delay_hp_out2 + self.delay_hp_out - self.delay_hp_prev2);
+            self.delay_hp_out2 =
+                alpha_hp * (self.delay_hp_out2 + self.delay_hp_out - self.delay_hp_prev2);
             self.delay_hp_prev2 = self.delay_hp_out;
 
             // LPF: two-pole (12dB/octave)
@@ -679,7 +778,10 @@ mod tests {
             let y = high.process(mid.process(low.process(x)));
             peak = peak.max(y.abs());
         }
-        assert!((peak - 1.0).abs() < 0.05, "peak={peak} — should be ~1.0 at unity gain");
+        assert!(
+            (peak - 1.0).abs() < 0.05,
+            "peak={peak} — should be ~1.0 at unity gain"
+        );
     }
 
     /// Low-shelf at −24 dB should strongly attenuate sub-bass content.
@@ -716,8 +818,11 @@ mod tests {
 
         // Position should have wrapped at least once (3x through a 20-sample loop).
         assert!(d.loop_in.is_some() && d.loop_out.is_some());
-        assert!(d.position >= 100.0 && d.position < 120.0,
-            "position {} should wrap back into [100,120)", d.position);
+        assert!(
+            d.position >= 100.0 && d.position < 120.0,
+            "position {} should wrap back into [100,120)",
+            d.position
+        );
     }
 
     /// Paused decks produce silence in read_echo, even if delay_wet > 0.
@@ -730,7 +835,10 @@ mod tests {
         d.paused = true;
         let mut out = [1.0f32; 64];
         d.read_echo(&mut out, 64, 0.5);
-        assert!(out.iter().all(|&s| s == 0.0), "echo should be zeroed when paused");
+        assert!(
+            out.iter().all(|&s| s == 0.0),
+            "echo should be zeroed when paused"
+        );
     }
 
     /// Stretcher-path regression guard: with a correct Stretcher impl,
@@ -744,7 +852,7 @@ mod tests {
     /// is the negative control so a regression here actually fails.
     #[test]
     fn stretcher_position_accounting_matches_written_times_rate() {
-        use super::super::pitch_stretch::{FakeStretcher, BrokenStretcher};
+        use super::super::pitch_stretch::{BrokenStretcher, FakeStretcher};
 
         // The deck grows `stretch_src` to `ceil(output.len() * resample) + 2`
         // and passes it to the stretcher; a correct stretcher fills the whole
@@ -767,10 +875,14 @@ mod tests {
             let mut out = vec![0.0_f32; out_len];
             d.fill_buffer(&mut out);
             let delta = d.position - before;
-            if rate == 1.0 { unity_delta = delta; }
+            if rate == 1.0 {
+                unity_delta = delta;
+            }
             let expected = unity_delta * rate;
-            assert!((delta - expected).abs() < 1e-6,
-                "correct stretcher at rate={rate}: expected Δ={expected}, got {delta}");
+            assert!(
+                (delta - expected).abs() < 1e-6,
+                "correct stretcher at rate={rate}: expected Δ={expected}, got {delta}"
+            );
         }
 
         // Negative control: with the broken stretcher, at non-unity rate
@@ -790,8 +902,10 @@ mod tests {
         // Broken stretcher reports consumed = written regardless of rate.
         // At rate=1.05 that's a ~5% drift per fill — the exact bug.
         let rate_scaled = unity_delta * 1.05;
-        assert!((delta - rate_scaled).abs() > 1.0,
-            "broken stretcher must diverge from rate-scaled expected {rate_scaled}, got Δ={delta}");
+        assert!(
+            (delta - rate_scaled).abs() > 1.0,
+            "broken stretcher must diverge from rate-scaled expected {rate_scaled}, got Δ={delta}"
+        );
     }
 
     /// unload() must return the deck to a neutral tone stack. Without
@@ -835,16 +949,26 @@ mod tests {
         }
         let z1_before = deck.eq_low.z1;
         let z2_before = deck.eq_low.z2;
-        assert!(z1_before.abs() + z2_before.abs() > 1e-6,
-            "biquad delay line was zero, can't verify state preservation");
+        assert!(
+            z1_before.abs() + z2_before.abs() > 1e-6,
+            "biquad delay line was zero, can't verify state preservation"
+        );
         // Bump again — triggers rebuild_biquad inside update_eq_low
         // with new coefficients but state must carry.
         deck.eq_low_db = -6.0;
         deck.update_eq_low();
-        assert!((deck.eq_low.z1 - z1_before).abs() < 1e-9,
-            "rebuild_biquad lost z1: {} vs {}", deck.eq_low.z1, z1_before);
-        assert!((deck.eq_low.z2 - z2_before).abs() < 1e-9,
-            "rebuild_biquad lost z2: {} vs {}", deck.eq_low.z2, z2_before);
+        assert!(
+            (deck.eq_low.z1 - z1_before).abs() < 1e-9,
+            "rebuild_biquad lost z1: {} vs {}",
+            deck.eq_low.z1,
+            z1_before
+        );
+        assert!(
+            (deck.eq_low.z2 - z2_before).abs() < 1e-9,
+            "rebuild_biquad lost z2: {} vs {}",
+            deck.eq_low.z2,
+            z2_before
+        );
     }
 
     #[test]
@@ -860,8 +984,10 @@ mod tests {
         for _ in 0..32 {
             deck.filter.process(0.5);
         }
-        assert!(deck.filter.z1.abs() + deck.filter.z2.abs() > 1e-6,
-            "LP filter delay state was zero, can't verify reset");
+        assert!(
+            deck.filter.z1.abs() + deck.filter.z2.abs() > 1e-6,
+            "LP filter delay state was zero, can't verify reset"
+        );
         // Switch to bypass.
         deck.filter_pos = 0.0;
         deck.update_filter();
@@ -870,7 +996,10 @@ mod tests {
         assert_eq!(deck.filter.z2, 0.0, "bypass z2 not cleared");
         // Identity check: y must equal x exactly with zero state.
         let y = deck.filter.process(0.42);
-        assert!((y - 0.42).abs() < 1e-6, "bypass should pass through, got {y}");
+        assert!(
+            (y - 0.42).abs() < 1e-6,
+            "bypass should pass through, got {y}"
+        );
     }
 
     #[test]
@@ -885,8 +1014,10 @@ mod tests {
         }
         let z1_before = deck.filter.z1;
         let z2_before = deck.filter.z2;
-        assert!(z1_before.abs() + z2_before.abs() > 1e-6,
-            "filter delay line was zero, can't verify state preservation");
+        assert!(
+            z1_before.abs() + z2_before.abs() > 1e-6,
+            "filter delay line was zero, can't verify state preservation"
+        );
         // Sweep to HP — different coefficients, but state must carry.
         deck.filter_pos = 0.5;
         deck.update_filter();

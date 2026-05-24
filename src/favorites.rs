@@ -88,15 +88,16 @@ impl FavoritesDB {
     }
 
     pub fn toggle(&mut self, track: &BeatportTrack) -> bool {
-        let added = if let std::collections::hash_map::Entry::Vacant(e) = self.favorites.entry(track.id) {
-            e.insert(FavoriteTrack::from(track));
-            self.save();
-            true
-        } else {
-            self.favorites.remove(&track.id);
-            self.save();
-            false
-        };
+        let added =
+            if let std::collections::hash_map::Entry::Vacant(e) = self.favorites.entry(track.id) {
+                e.insert(FavoriteTrack::from(track));
+                self.save();
+                true
+            } else {
+                self.favorites.remove(&track.id);
+                self.save();
+                false
+            };
         crate::ipc::write_event(&serde_json::json!({
             "kind": if added { "favorited" } else { "unfavorited" },
             "track_id": track.id,
@@ -107,6 +108,9 @@ impl FavoritesDB {
     }
 
     pub fn all_tracks(&self) -> Vec<BeatportTrack> {
-        self.favorites.values().map(|f| f.to_beatport_track()).collect()
+        self.favorites
+            .values()
+            .map(|f| f.to_beatport_track())
+            .collect()
     }
 }

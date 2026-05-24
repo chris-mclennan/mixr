@@ -15,7 +15,11 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 #[derive(Hash, Eq, PartialEq, Clone, Debug)]
-struct Key { kind: &'static str, channel: u8, control: u8 }
+struct Key {
+    kind: &'static str,
+    channel: u8,
+    control: u8,
+}
 
 /// Per-key event count + the last data bytes seen for that key.
 type KeyCounts = Arc<Mutex<HashMap<Key, (u32, Vec<u8>)>>>;
@@ -29,28 +33,50 @@ fn main() {
 
     let counts: KeyCounts = Arc::new(Mutex::new(HashMap::new()));
     let counts_cb = counts.clone();
-    let _conn = input.connect(&port, "mixr-one", move |_, msg, _| {
-        if msg.is_empty() { return; }
-        let status = msg[0];
-        let kind = status & 0xF0;
-        let channel = status & 0x0F;
-        let (label, control, val): (&'static str, u8, u8) = match kind {
-            0xB0 => ("CC", msg.get(1).copied().unwrap_or(0), msg.get(2).copied().unwrap_or(0)),
-            0x90 => {
-                let v = msg.get(2).copied().unwrap_or(0);
-                if v == 0 { ("NoteOff", msg.get(1).copied().unwrap_or(0), 0) }
-                else      { ("NoteOn",  msg.get(1).copied().unwrap_or(0), v) }
-            }
-            0x80 => ("NoteOff", msg.get(1).copied().unwrap_or(0), 0),
-            0xE0 => ("PitchBend", 0, msg.get(2).copied().unwrap_or(0)),
-            _ => return,
-        };
-        let key = Key { kind: label, channel, control };
-        let mut map = counts_cb.lock().unwrap();
-        let entry = map.entry(key).or_insert((0, Vec::new()));
-        entry.0 += 1;
-        if entry.1.len() < 4 { entry.1.push(val); }
-    }, ()).expect("connect");
+    let _conn = input
+        .connect(
+            &port,
+            "mixr-one",
+            move |_, msg, _| {
+                if msg.is_empty() {
+                    return;
+                }
+                let status = msg[0];
+                let kind = status & 0xF0;
+                let channel = status & 0x0F;
+                let (label, control, val): (&'static str, u8, u8) = match kind {
+                    0xB0 => (
+                        "CC",
+                        msg.get(1).copied().unwrap_or(0),
+                        msg.get(2).copied().unwrap_or(0),
+                    ),
+                    0x90 => {
+                        let v = msg.get(2).copied().unwrap_or(0);
+                        if v == 0 {
+                            ("NoteOff", msg.get(1).copied().unwrap_or(0), 0)
+                        } else {
+                            ("NoteOn", msg.get(1).copied().unwrap_or(0), v)
+                        }
+                    }
+                    0x80 => ("NoteOff", msg.get(1).copied().unwrap_or(0), 0),
+                    0xE0 => ("PitchBend", 0, msg.get(2).copied().unwrap_or(0)),
+                    _ => return,
+                };
+                let key = Key {
+                    kind: label,
+                    channel,
+                    control,
+                };
+                let mut map = counts_cb.lock().unwrap();
+                let entry = map.entry(key).or_insert((0, Vec::new()));
+                entry.0 += 1;
+                if entry.1.len() < 4 {
+                    entry.1.push(val);
+                }
+            },
+            (),
+        )
+        .expect("connect");
 
     std::thread::sleep(Duration::from_secs(30));
 
@@ -69,7 +95,11 @@ fn main() {
             "NoteOff" => format!("NoteOff   ch={:<2} note={:<3}", key.channel, key.control),
             other => format!("{other} ch={}", key.channel),
         };
-        let sample_str: String = samples.iter().map(|v| format!("{v}")).collect::<Vec<_>>().join(",");
+        let sample_str: String = samples
+            .iter()
+            .map(|v| format!("{v}"))
+            .collect::<Vec<_>>()
+            .join(",");
         eprintln!("  {label}   ({count:>4} events, sample values: {sample_str})");
     }
 }

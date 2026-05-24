@@ -31,37 +31,51 @@ const MAX_DEPTH: usize = 4;
 /// Scan the configured local-library directory. Returns tracks sorted
 /// by `Artist - Title`. Empty if the dir doesn't exist or is empty.
 pub fn scan_library(dir: &str) -> Vec<BeatportTrack> {
-    if dir.is_empty() { return Vec::new(); }
+    if dir.is_empty() {
+        return Vec::new();
+    }
     let root = Path::new(dir);
-    if !root.is_dir() { return Vec::new(); }
+    if !root.is_dir() {
+        return Vec::new();
+    }
 
     let mut paths = Vec::new();
     walk(root, 0, &mut paths);
     paths.sort();
 
-    let mut tracks: Vec<BeatportTrack> = paths.into_iter()
+    let mut tracks: Vec<BeatportTrack> = paths
+        .into_iter()
         .filter_map(|p| extract_track(&p))
         .collect();
     tracks.sort_by(|a, b| {
-        a.artist_name().to_lowercase()
+        a.artist_name()
+            .to_lowercase()
             .cmp(&b.artist_name().to_lowercase())
-            .then_with(|| a.full_title().to_lowercase()
-                .cmp(&b.full_title().to_lowercase()))
+            .then_with(|| {
+                a.full_title()
+                    .to_lowercase()
+                    .cmp(&b.full_title().to_lowercase())
+            })
     });
     tracks
 }
 
 fn walk(dir: &Path, depth: usize, out: &mut Vec<PathBuf>) {
-    if depth > MAX_DEPTH { return; }
-    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    if depth > MAX_DEPTH {
+        return;
+    }
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
     for entry in entries.flatten() {
         let path = entry.path();
         if path.is_dir() {
             walk(&path, depth + 1, out);
         } else if let Some(ext) = path.extension().and_then(|e| e.to_str())
-            && AUDIO_EXTS.iter().any(|x| x.eq_ignore_ascii_case(ext)) {
-                out.push(path);
-            }
+            && AUDIO_EXTS.iter().any(|x| x.eq_ignore_ascii_case(ext))
+        {
+            out.push(path);
+        }
     }
 }
 
@@ -74,9 +88,14 @@ fn extract_track(path: &Path) -> Option<BeatportTrack> {
     if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
         hint.with_extension(ext);
     }
-    let mut probed = symphonia::default::get_probe().format(
-        &hint, mss, &FormatOptions::default(), &MetadataOptions::default(),
-    ).ok()?;
+    let mut probed = symphonia::default::get_probe()
+        .format(
+            &hint,
+            mss,
+            &FormatOptions::default(),
+            &MetadataOptions::default(),
+        )
+        .ok()?;
 
     let mut format = probed.format;
     let mut title: Option<String> = None;
@@ -88,9 +107,25 @@ fn extract_track(path: &Path) -> Option<BeatportTrack> {
 
     let metadata_log = format.metadata();
     if let Some(rev) = metadata_log.current() {
-        read_tags(rev, &mut title, &mut artist, &mut album, &mut bpm, &mut key, &mut genre);
+        read_tags(
+            rev,
+            &mut title,
+            &mut artist,
+            &mut album,
+            &mut bpm,
+            &mut key,
+            &mut genre,
+        );
     } else if let Some(meta) = probed.metadata.get().as_ref().and_then(|m| m.current()) {
-        read_tags(meta, &mut title, &mut artist, &mut album, &mut bpm, &mut key, &mut genre);
+        read_tags(
+            meta,
+            &mut title,
+            &mut artist,
+            &mut album,
+            &mut bpm,
+            &mut key,
+            &mut genre,
+        );
     }
 
     // Track length from the format's first track's codec params.
@@ -101,7 +136,10 @@ fn extract_track(path: &Path) -> Option<BeatportTrack> {
     });
 
     // Filename fallback when tags are missing — strip extension.
-    let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("Untitled");
+    let filename = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("Untitled");
     let title = title.unwrap_or_else(|| filename.to_string());
     let artist = artist.unwrap_or_else(|| "Unknown".to_string());
 
@@ -109,7 +147,10 @@ fn extract_track(path: &Path) -> Option<BeatportTrack> {
         id: stable_path_id(path),
         title,
         mix_name: None,
-        artists: vec![BeatportTrackArtist { id: 0, name: artist }],
+        artists: vec![BeatportTrackArtist {
+            id: 0,
+            name: artist,
+        }],
         bpm,
         key,
         duration,
@@ -136,16 +177,23 @@ fn read_tags(
 ) {
     for tag in rev.tags() {
         let value = tag.value.to_string();
-        if value.is_empty() { continue; }
+        if value.is_empty() {
+            continue;
+        }
         match tag.std_key {
             Some(StandardTagKey::TrackTitle) => *title = Some(value),
             Some(StandardTagKey::Artist) | Some(StandardTagKey::AlbumArtist) => {
-                if artist.is_none() { *artist = Some(value); }
+                if artist.is_none() {
+                    *artist = Some(value);
+                }
             }
             Some(StandardTagKey::Album) => *album = Some(value),
             Some(StandardTagKey::Bpm) => {
                 if bpm.is_none()
-                    && let Ok(n) = value.parse::<f64>() { *bpm = Some(n); }
+                    && let Ok(n) = value.parse::<f64>()
+                {
+                    *bpm = Some(n);
+                }
             }
             Some(StandardTagKey::Genre) => *genre = Some(value),
             _ => {
@@ -190,7 +238,10 @@ mod tests {
         let id1 = stable_path_id(p);
         let id2 = stable_path_id(p);
         assert_eq!(id1, id2, "hash must be deterministic");
-        assert!(id1 < 0, "local IDs must be negative to avoid collision with Beatport IDs");
+        assert!(
+            id1 < 0,
+            "local IDs must be negative to avoid collision with Beatport IDs"
+        );
     }
 
     #[test]

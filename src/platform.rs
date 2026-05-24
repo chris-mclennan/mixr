@@ -14,23 +14,55 @@
 /// toast sender — so `platform.rs` has no knowledge of ratatui or tokio.
 pub fn install_rubberband(notify: impl Fn(&str) + Send) {
     let (cmd, args, label): (&str, &[&str], &str) = if cfg!(target_os = "macos") {
-        ("brew", &["install", "rubberband"], "brew install rubberband")
+        (
+            "brew",
+            &["install", "rubberband"],
+            "brew install rubberband",
+        )
     } else if cfg!(target_os = "linux") {
-        if std::process::Command::new("which").arg("apt").output()
-            .map(|o| o.status.success()).unwrap_or(false) {
-            ("sudo", &["apt", "install", "-y", "librubberband-dev"], "apt install librubberband-dev")
-        } else if std::process::Command::new("which").arg("dnf").output()
-            .map(|o| o.status.success()).unwrap_or(false) {
-            ("sudo", &["dnf", "install", "-y", "rubberband-devel"], "dnf install rubberband-devel")
-        } else if std::process::Command::new("which").arg("pacman").output()
-            .map(|o| o.status.success()).unwrap_or(false) {
-            ("sudo", &["pacman", "-S", "--noconfirm", "rubberband"], "pacman -S rubberband")
+        if std::process::Command::new("which")
+            .arg("apt")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+        {
+            (
+                "sudo",
+                &["apt", "install", "-y", "librubberband-dev"],
+                "apt install librubberband-dev",
+            )
+        } else if std::process::Command::new("which")
+            .arg("dnf")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+        {
+            (
+                "sudo",
+                &["dnf", "install", "-y", "rubberband-devel"],
+                "dnf install rubberband-devel",
+            )
+        } else if std::process::Command::new("which")
+            .arg("pacman")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+        {
+            (
+                "sudo",
+                &["pacman", "-S", "--noconfirm", "rubberband"],
+                "pacman -S rubberband",
+            )
         } else {
-            notify("No supported package manager found. Install librubberband-dev manually, then rerun ./run.sh");
+            notify(
+                "No supported package manager found. Install librubberband-dev manually, then rerun ./run.sh",
+            );
             return;
         }
     } else {
-        notify("Auto-install not supported on this OS. Install rubberband manually, then rerun ./run.sh");
+        notify(
+            "Auto-install not supported on this OS. Install rubberband manually, then rerun ./run.sh",
+        );
         return;
     };
 
@@ -39,10 +71,16 @@ pub fn install_rubberband(notify: impl Fn(&str) + Send) {
         Ok(o) if o.status.success() => notify("Install OK — rebuilding…"),
         Ok(o) => {
             let err = String::from_utf8_lossy(&o.stderr);
-            notify(&format!("Install failed: {}", err.lines().next().unwrap_or("unknown")));
+            notify(&format!(
+                "Install failed: {}",
+                err.lines().next().unwrap_or("unknown")
+            ));
             return;
         }
-        Err(e) => { notify(&format!("Command not found: {e}")); return; }
+        Err(e) => {
+            notify(&format!("Command not found: {e}"));
+            return;
+        }
     }
 
     // Rebuild with the feature flag so the restart picks up RubberBand.
@@ -61,7 +99,10 @@ pub fn install_rubberband(notify: impl Fn(&str) + Send) {
         }
         Ok(o) => {
             let err = String::from_utf8_lossy(&o.stderr);
-            notify(&format!("Rebuild failed: {}", err.lines().last().unwrap_or("unknown")));
+            notify(&format!(
+                "Rebuild failed: {}",
+                err.lines().last().unwrap_or("unknown")
+            ));
         }
         Err(e) => notify(&format!("cargo not found: {e}")),
     }

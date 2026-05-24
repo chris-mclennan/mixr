@@ -11,7 +11,7 @@ env:
 
 jobs:
   check:
-    name: build · test · clippy
+    name: fmt · build · test · clippy
     # macOS is the primary target; the default build needs no extra system
     # libraries here (no GPL features, platform-native audio/MIDI/WebView).
     runs-on: macos-latest
@@ -34,12 +34,19 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy
+          components: clippy, rustfmt
 
       - name: Cache
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: mixr-rs
+
+      # Added 2026-05-24 when mixr-rs joined the family fmt policy
+      # (1603-diff one-pass apply). The hand-format era is over;
+      # future commits expected to be cargo fmt clean.
+      - name: fmt
+        working-directory: mixr-rs
+        run: cargo fmt --all --check
 
       - name: build
         working-directory: mixr-rs
@@ -49,11 +56,10 @@ jobs:
         working-directory: mixr-rs
         run: cargo test
 
-      # Hard-gated as of 2026-05 — the by-hand clippy pass landed in
-      # 0ce173d / fe07bdb (76 → 0 warnings). No cargo fmt or clippy --fix
-      # was used per the no-touch style policy; if a future commit
-      # introduces a new warning, this gate forces it to surface in PR
-      # review rather than silently accumulating.
+      # Hard-gated as of 2026-05-23 — the by-hand clippy pass landed in
+      # 0ce173d / fe07bdb (76 → 0 warnings). New warnings surface in
+      # PR review rather than silently accumulating. (`clippy --fix` is
+      # still off-limits; the fmt rule was lifted on 2026-05-24.)
       - name: clippy
         working-directory: mixr-rs
         run: cargo clippy --all-targets -- -D warnings

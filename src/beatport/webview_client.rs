@@ -5,7 +5,7 @@
 //! an error), and returns it. The child is a one-shot — it exits as
 //! soon as the redirect is observed, no long-running proxy.
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use std::io::{BufRead, BufReader};
 use std::process::{Command, Stdio};
 
@@ -32,7 +32,9 @@ pub fn discover_client_id() -> Result<String> {
         .stderr(Stdio::inherit())
         .spawn()?;
 
-    let stdout = child.stdout.take()
+    let stdout = child
+        .stdout
+        .take()
         .ok_or_else(|| anyhow!("child stdout missing"))?;
     let mut reader = BufReader::new(stdout);
     let mut line = String::new();
@@ -44,7 +46,8 @@ pub fn discover_client_id() -> Result<String> {
     if let Some(err) = json.get("error").and_then(|v| v.as_str()) {
         return Err(anyhow!("client_id discovery: {err}"));
     }
-    json.get("client_id").and_then(|v| v.as_str())
+    json.get("client_id")
+        .and_then(|v| v.as_str())
         .map(String::from)
         .ok_or_else(|| anyhow!("no client_id in discover response"))
 }
@@ -66,7 +69,9 @@ pub fn capture_oauth_code(authorize_url: &str) -> Result<CapturedCode> {
         .stderr(Stdio::inherit())
         .spawn()?;
 
-    let stdout = child.stdout.take()
+    let stdout = child
+        .stdout
+        .take()
         .ok_or_else(|| anyhow!("child stdout missing"))?;
     let mut reader = BufReader::new(stdout);
     let mut line = String::new();
@@ -80,7 +85,9 @@ pub fn capture_oauth_code(authorize_url: &str) -> Result<CapturedCode> {
     if let Some(err) = json.get("error").and_then(|v| v.as_str()) {
         return Err(anyhow!("OAuth capture: {err}"));
     }
-    let code = json.get("code").and_then(|v| v.as_str())
+    let code = json
+        .get("code")
+        .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow!("no code in capture response"))?
         .to_string();
     let state = json.get("state").and_then(|v| v.as_str()).map(String::from);

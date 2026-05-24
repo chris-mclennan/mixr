@@ -54,10 +54,13 @@ impl ClaudeAPI {
 
     /// Load API key from ~/.mixr/claude_key and construct a client.
     pub fn from_key_file() -> Result<Self> {
-        let path = dirs::home_dir().unwrap_or_default().join(".mixr/claude_key");
+        let path = dirs::home_dir()
+            .unwrap_or_default()
+            .join(".mixr/claude_key");
         let key = std::fs::read_to_string(&path)
             .map_err(|_| anyhow::anyhow!("No Claude API key at ~/.mixr/claude_key"))?
-            .trim().to_string();
+            .trim()
+            .to_string();
         Ok(Self::new(key))
     }
 
@@ -96,8 +99,10 @@ impl ClaudeAPI {
             let mut v = tools.to_vec();
             let last = v.len() - 1;
             if let Some(obj) = v[last].as_object_mut() {
-                obj.insert("cache_control".into(),
-                    serde_json::json!({ "type": "ephemeral" }));
+                obj.insert(
+                    "cache_control".into(),
+                    serde_json::json!({ "type": "ephemeral" }),
+                );
             }
             v
         };
@@ -128,8 +133,14 @@ impl ClaudeAPI {
         // prefix below the cacheable-size minimum).
         if let Some(u) = result.get("usage") {
             let input = u.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
-            let cache_read = u.get("cache_read_input_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
-            let cache_write = u.get("cache_creation_input_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+            let cache_read = u
+                .get("cache_read_input_tokens")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+            let cache_write = u
+                .get("cache_creation_input_tokens")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
             tracing::info!(
                 "Claude usage: input={input} cache_read={cache_read} cache_write={cache_write}"
             );
@@ -160,12 +171,16 @@ impl ClaudeAPI {
             }
         }
 
-        Ok(ToolResponse { text, tool_calls: calls })
+        Ok(ToolResponse {
+            text,
+            tool_calls: calls,
+        })
     }
 
     /// Post a raw JSON body to the Anthropic API. Used by ai_beat and other modules.
     pub async fn post(&self, body: &Value) -> Result<Value> {
-        let resp = self.client
+        let resp = self
+            .client
             .post(API_URL)
             .header("x-api-key", &self.api_key)
             .header("anthropic-version", "2023-06-01")
@@ -178,7 +193,11 @@ impl ClaudeAPI {
         let status = resp.status().as_u16();
         if status != 200 {
             let body_text = resp.text().await.unwrap_or_default();
-            return Err(ClaudeError::ApiError { status, body: body_text }.into());
+            return Err(ClaudeError::ApiError {
+                status,
+                body: body_text,
+            }
+            .into());
         }
 
         let json: Value = resp.json().await?;

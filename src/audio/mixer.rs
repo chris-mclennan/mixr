@@ -40,9 +40,10 @@ impl Mixer {
     /// Rate-match deck to a target BPM.
     pub fn match_bpm(deck: &mut DeckPlayer, target_bpm: f64) {
         if let Some(grid) = deck.beat_grid
-            && grid.bpm > 0.0 {
-                deck.rate_target = target_bpm / grid.bpm;
-            }
+            && grid.bpm > 0.0
+        {
+            deck.rate_target = target_bpm / grid.bpm;
+        }
     }
 
     // ── Volume ──
@@ -129,23 +130,25 @@ impl Mixer {
     pub fn loop_out(deck: &mut DeckPlayer) {
         let pos = deck.position as u64;
         if let Some(lin) = deck.loop_in
-            && pos > lin {
-                deck.loop_out = Some(pos);
-                deck.loop_active = true;
-            }
+            && pos > lin
+        {
+            deck.loop_out = Some(pos);
+            deck.loop_active = true;
+        }
     }
 
     /// Set a beat-aligned loop of N beats starting at current position.
     pub fn loop_beats(deck: &mut DeckPlayer, beats: f64) {
         if let Some(grid) = deck.beat_grid
-            && grid.bpm > 0.0 {
-                let beat_secs = 60.0 / grid.bpm;
-                let len = (beat_secs * beats * deck.sample_rate as f64) as u64;
-                let start = deck.position as u64;
-                deck.loop_in = Some(start);
-                deck.loop_out = Some(start + len);
-                deck.loop_active = true;
-            }
+            && grid.bpm > 0.0
+        {
+            let beat_secs = 60.0 / grid.bpm;
+            let len = (beat_secs * beats * deck.sample_rate as f64) as u64;
+            let start = deck.position as u64;
+            deck.loop_in = Some(start);
+            deck.loop_out = Some(start + len);
+            deck.loop_active = true;
+        }
     }
 
     /// Release the loop — playback continues past the out-point.
@@ -164,7 +167,6 @@ impl Mixer {
         }
     }
 
-
     /// Tap-nudge: multiply rate by (1 + percent/100). Returns the new rate.
     /// Caller is responsible for restoring the base rate after the nudge window.
     pub fn nudge_rate(deck: &mut DeckPlayer, base_rate: f64, percent: f64) -> f64 {
@@ -178,7 +180,9 @@ impl Mixer {
 mod tests {
     use super::*;
 
-    fn fresh_deck() -> DeckPlayer { DeckPlayer::new(48_000) }
+    fn fresh_deck() -> DeckPlayer {
+        DeckPlayer::new(48_000)
+    }
 
     #[test]
     fn set_volume_clamps_to_0_1() {
@@ -218,12 +222,17 @@ mod tests {
         // rate should be 132/128 = 1.03125.
         let mut d = fresh_deck();
         d.beat_grid = Some(crate::audio::beat_grid::BeatGrid {
-            bpm: 128.0, first_beat_time: 0.0,
+            bpm: 128.0,
+            first_beat_time: 0.0,
         });
         Mixer::match_bpm(&mut d, 132.0);
         // `match_bpm` writes `rate_target` now (audio thread slews
         // `rate` toward it). Verify the commanded ratio is right.
-        assert!((d.rate_target - 1.03125).abs() < 1e-6, "rate_target={}", d.rate_target);
+        assert!(
+            (d.rate_target - 1.03125).abs() < 1e-6,
+            "rate_target={}",
+            d.rate_target
+        );
     }
 
     #[test]

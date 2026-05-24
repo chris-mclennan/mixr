@@ -270,9 +270,19 @@ breaking changes are mostly in extension traits / cell constructors
 that mixr doesn't touch. Verified clean under default + `--features
 rubberband` + `--features timestretch` + `--features stratum`.
 
+**`cargo fmt`-cleaned the whole codebase (2026-05-24):** Reversed
+the prior hand-format policy — 1603 fmt diffs across 52 files
+applied in one pass. Future commits are expected to be fmt-clean;
+`./run.sh check` runs `cargo fmt --check` alongside clippy. The
+hand-format era ran from project inception → 2026-05-24; today's
+big `style:` commit shows up as the last touch on many files in
+`git blame`, which is the known cost of the policy change.
+Functional behaviour unchanged — 279 tests pass.
+
 **CI clippy gate tightened to `-D warnings` (2026-05-23):** Hard-gated
 after the by-hand clippy pass landed (0ce173d / fe07bdb — 76 → 0
-warnings, no `cargo fmt` and no `clippy --fix` used per the no-touch
-style policy). Any future commit that introduces a new warning
-surfaces in PR review rather than silently accumulating.
-`./run.sh check` runs the exact same invocation locally.
+warnings, no `cargo fmt` and no `clippy --fix` used per the (then-
+active) no-touch style policy). Any future commit that introduces
+a new warning surfaces in PR review rather than silently
+accumulating. `./run.sh check` runs the exact same invocation
+locally.

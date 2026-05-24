@@ -67,88 +67,97 @@ impl StreamDownloader {
         Ok(data.to_vec())
     }
 
-    fn download_hls<'a>(&'a self, manifest_url: &'a str) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<u8>>> + Send + 'a>> {
+    fn download_hls<'a>(
+        &'a self,
+        manifest_url: &'a str,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<u8>>> + Send + 'a>> {
         Box::pin(async move {
-        let manifest = self.fetch_string(manifest_url).await?;
-        let lines: Vec<&str> = manifest.lines().collect();
+            let manifest = self.fetch_string(manifest_url).await?;
+            let lines: Vec<&str> = manifest.lines().collect();
 
-        let base_url = &manifest_url[..manifest_url.rfind('/').unwrap_or(0) + 1];
+            let base_url = &manifest_url[..manifest_url.rfind('/').unwrap_or(0) + 1];
 
-        // Check for sub-playlist (master manifest)
-        for line in &lines {
-            let t = line.trim();
-            if t.is_empty() || t.starts_with('#') { continue; }
-            if t.contains(".m3u8") {
-                let sub_url = Self::resolve_url(t, base_url);
-                return self.download_hls(&sub_url).await;
+            // Check for sub-playlist (master manifest)
+            for line in &lines {
+                let t = line.trim();
+                if t.is_empty() || t.starts_with('#') {
+                    continue;
+                }
+                if t.contains(".m3u8") {
+                    let sub_url = Self::resolve_url(t, base_url);
+                    return self.download_hls(&sub_url).await;
+                }
             }
-        }
 
-        // Parse encryption key
-        let mut key_data: Option<Vec<u8>> = None;
-        let mut iv: Option<Vec<u8>> = None;
+            // Parse encryption key
+            let mut key_data: Option<Vec<u8>> = None;
+            let mut iv: Option<Vec<u8>> = None;
 
-        for line in &lines {
-            if let Some(rest) = line.strip_prefix("#EXT-X-KEY:") {
-                let attrs = Self::parse_hls_attributes(rest);
-                if attrs.get("METHOD").map(|s| s.as_str()) == Some("AES-128") {
-                    if let Some(key_uri) = attrs.get("URI") {
-                        let key_uri = key_uri.trim_matches('"');
-                        let key_url = Self::resolve_url(key_uri, base_url);
-                        let key = self.fetch_bytes(&key_url).await?;
-                        if key.len() == 16 {
-                            key_data = Some(key);
+            for line in &lines {
+                if let Some(rest) = line.strip_prefix("#EXT-X-KEY:") {
+                    let attrs = Self::parse_hls_attributes(rest);
+                    if attrs.get("METHOD").map(|s| s.as_str()) == Some("AES-128") {
+                        if let Some(key_uri) = attrs.get("URI") {
+                            let key_uri = key_uri.trim_matches('"');
+                            let key_url = Self::resolve_url(key_uri, base_url);
+                            let key = self.fetch_bytes(&key_url).await?;
+                            if key.len() == 16 {
+                                key_data = Some(key);
+                            }
                         }
-                    }
-                    if let Some(iv_hex) = attrs.get("IV") {
-                        iv = Some(Self::hex_to_bytes(iv_hex));
+                        if let Some(iv_hex) = attrs.get("IV") {
+                            iv = Some(Self::hex_to_bytes(iv_hex));
+                        }
                     }
                 }
             }
-        }
 
-        // Collect segment URLs
-        let segment_urls: Vec<String> = lines
-            .iter()
-            .filter(|l| {
-                let t = l.trim();
-                !t.is_empty() && !t.starts_with('#')
-            })
-            .map(|l| Self::resolve_url(l.trim(), base_url))
-            .collect();
+            // Collect segment URLs
+            let segment_urls: Vec<String> = lines
+                .iter()
+                .filter(|l| {
+                    let t = l.trim();
+                    !t.is_empty() && !t.starts_with('#')
+                })
+                .map(|l| Self::resolve_url(l.trim(), base_url))
+                .collect();
 
-        if segment_urls.is_empty() {
-            return Err(BeatportError::InvalidStreamUrl.into());
-        }
-
-        // Download and decrypt segments
-        let mut all_data = Vec::new();
-        for (i, seg_url) in segment_urls.iter().enumerate() {
-            let mut seg_data = self.fetch_bytes(seg_url).await?;
-
-            if let Some(ref key) = key_data {
-                let seg_iv = iv.clone().unwrap_or_else(|| Self::sequence_number_iv(i));
-                seg_data = Self::decrypt_aes128(&seg_data, key, &seg_iv)?;
+            if segment_urls.is_empty() {
+                return Err(BeatportError::InvalidStreamUrl.into());
             }
 
-            all_data.extend_from_slice(&seg_data);
-        }
+            // Download and decrypt segments
+            let mut all_data = Vec::new();
+            for (i, seg_url) in segment_urls.iter().enumerate() {
+                let mut seg_data = self.fetch_bytes(seg_url).await?;
 
-        Ok(all_data)
+                if let Some(ref key) = key_data {
+                    let seg_iv = iv.clone().unwrap_or_else(|| Self::sequence_number_iv(i));
+                    seg_data = Self::decrypt_aes128(&seg_data, key, &seg_iv)?;
+                }
+
+                all_data.extend_from_slice(&seg_data);
+            }
+
+            Ok(all_data)
         }) // Box::pin
     }
 
     // -- Network helpers --
 
     async fn fetch_string(&self, url: &str) -> Result<String> {
-        let req = self.client.get(url)
+        let req = self
+            .client
+            .get(url)
             .header("Origin", "https://dj.beatport.com")
             .header("Referer", "https://dj.beatport.com/");
         Ok(req.send().await?.text().await?)
     }
 
     async fn fetch_bytes(&self, url: &str) -> Result<Vec<u8>> {
-        let req = self.client.get(url)
+        let req = self
+            .client
+            .get(url)
             .header("Origin", "https://dj.beatport.com")
             .header("Referer", "https://dj.beatport.com/");
         Ok(req.send().await?.bytes().await?.to_vec())
@@ -227,7 +236,10 @@ impl StreamDownloader {
     }
 
     fn hex_to_bytes(hex: &str) -> Vec<u8> {
-        let hex = hex.strip_prefix("0x").or_else(|| hex.strip_prefix("0X")).unwrap_or(hex);
+        let hex = hex
+            .strip_prefix("0x")
+            .or_else(|| hex.strip_prefix("0X"))
+            .unwrap_or(hex);
         let hex = if !hex.len().is_multiple_of(2) {
             format!("0{hex}")
         } else {

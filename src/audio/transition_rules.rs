@@ -58,11 +58,31 @@ impl Condition {
     // changes that semantic — NaN inputs would skip the rule entirely.
     #[allow(clippy::neg_cmp_op_on_partial_ord)]
     pub fn matches(&self, ctx: &RuleContext) -> bool {
-        if let Some(v) = self.bpm_gap_pct_gt && !(ctx.bpm_gap_pct > v) { return false; }
-        if let Some(v) = self.bpm_gap_pct_lt && !(ctx.bpm_gap_pct < v) { return false; }
-        if let Some(v) = self.key_dist_eq && ctx.key_dist != v { return false; }
-        if let Some(v) = self.key_dist_lte && ctx.key_dist > v { return false; }
-        if let Some(v) = self.key_dist_gte && ctx.key_dist < v { return false; }
+        if let Some(v) = self.bpm_gap_pct_gt
+            && !(ctx.bpm_gap_pct > v)
+        {
+            return false;
+        }
+        if let Some(v) = self.bpm_gap_pct_lt
+            && !(ctx.bpm_gap_pct < v)
+        {
+            return false;
+        }
+        if let Some(v) = self.key_dist_eq
+            && ctx.key_dist != v
+        {
+            return false;
+        }
+        if let Some(v) = self.key_dist_lte
+            && ctx.key_dist > v
+        {
+            return false;
+        }
+        if let Some(v) = self.key_dist_gte
+            && ctx.key_dist < v
+        {
+            return false;
+        }
         if let Some(ref s) = self.last_transition_eq {
             match (parse_type(s), ctx.last_transition) {
                 (Some(a), Some(b)) if a == b => (),
@@ -70,16 +90,44 @@ impl Condition {
             }
         }
         if let Some(ref list) = self.last_transition_in {
-            let last = match ctx.last_transition { Some(t) => t, None => return false };
-            if !list.iter().any(|s| parse_type(s) == Some(last)) { return false; }
+            let last = match ctx.last_transition {
+                Some(t) => t,
+                None => return false,
+            };
+            if !list.iter().any(|s| parse_type(s) == Some(last)) {
+                return false;
+            }
         }
         if let Some([m, r]) = self.mix_count_mod
-            && (m == 0 || ctx.mix_count % m != r) { return false; }
-        if let Some(v) = self.energy_delta_gt && !(ctx.energy_delta > v) { return false; }
-        if let Some(v) = self.energy_delta_lt && !(ctx.energy_delta < v) { return false; }
-        if let Some(v) = self.phrase_is_drop && ctx.phrase_is_drop != v { return false; }
-        if let Some(v) = self.time_in_set_min_gt && (ctx.time_in_set_min <= v) { return false; }
-        if let Some(v) = self.time_in_set_min_lt && (ctx.time_in_set_min >= v) { return false; }
+            && (m == 0 || ctx.mix_count % m != r)
+        {
+            return false;
+        }
+        if let Some(v) = self.energy_delta_gt
+            && !(ctx.energy_delta > v)
+        {
+            return false;
+        }
+        if let Some(v) = self.energy_delta_lt
+            && !(ctx.energy_delta < v)
+        {
+            return false;
+        }
+        if let Some(v) = self.phrase_is_drop
+            && ctx.phrase_is_drop != v
+        {
+            return false;
+        }
+        if let Some(v) = self.time_in_set_min_gt
+            && (ctx.time_in_set_min <= v)
+        {
+            return false;
+        }
+        if let Some(v) = self.time_in_set_min_lt
+            && (ctx.time_in_set_min >= v)
+        {
+            return false;
+        }
         true
     }
 }
@@ -102,23 +150,35 @@ impl Action {
         match self {
             Self::Force(s) => parse_type(s),
             Self::Cycle { cycle } => {
-                if cycle.is_empty() { return None; }
+                if cycle.is_empty() {
+                    return None;
+                }
                 let idx = (ctx.mix_count as usize) % cycle.len();
                 parse_type(&cycle[idx])
             }
             Self::Weighted { weighted } => {
                 let total: f64 = weighted.iter().map(|(_, w)| w.max(0.0)).sum();
-                if total <= 0.0 { return None; }
+                if total <= 0.0 {
+                    return None;
+                }
                 // Deterministic hash from mix_count → [0, total).
                 let h = hash_u32(ctx.mix_count) as f64 / u32::MAX as f64 * total;
                 let mut acc = 0.0;
                 for (name, w) in weighted {
                     acc += w.max(0.0);
-                    if h <= acc { return parse_type(name); }
+                    if h <= acc {
+                        return parse_type(name);
+                    }
                 }
                 parse_type(&weighted.last()?.0)
             }
-            Self::Skip { skip } => if *skip { None } else { parse_type("BeatMatched") },
+            Self::Skip { skip } => {
+                if *skip {
+                    None
+                } else {
+                    parse_type("BeatMatched")
+                }
+            }
         }
     }
 }
@@ -141,62 +201,106 @@ impl Default for RuleConfig {
         // set doesn't feel like the same transition on every mix.
         // Rules evaluate top-down; first match with an enabled action wins.
         let w = |entries: &[(&str, f64)]| -> Action {
-            Action::Weighted { weighted: entries.iter().map(|(s, w)| (s.to_string(), *w)).collect() }
+            Action::Weighted {
+                weighted: entries.iter().map(|(s, w)| (s.to_string(), *w)).collect(),
+            }
         };
         Self {
             rules: vec![
                 // 1. Extreme BPM gap → EchoOut. Engine already forces
                 //    this at the 8% cutoff; here for declared intent.
                 Rule {
-                    when: Condition { bpm_gap_pct_gt: Some(8.0), ..Default::default() },
+                    when: Condition {
+                        bpm_gap_pct_gt: Some(8.0),
+                        ..Default::default()
+                    },
                     then: Action::Force("EchoOut".into()),
                 },
                 // 2. Early set (first 3 mixes, <10 min in) — stay safe,
                 //    heavy on BeatMatched so the opener feels locked-in.
                 Rule {
-                    when: Condition { time_in_set_min_lt: Some(10), ..Default::default() },
+                    when: Condition {
+                        time_in_set_min_lt: Some(10),
+                        ..Default::default()
+                    },
                     then: w(&[("BeatMatched", 3.0), ("BassSwap", 1.0)]),
                 },
                 // 3. Incoming lands on a Drop phrase → energy moment,
                 //    use LoopRoll to drive the tension, FilterSweep as
                 //    a quieter alternative when keys aren't matched.
                 Rule {
-                    when: Condition { phrase_is_drop: Some(true), key_dist_lte: Some(2), ..Default::default() },
+                    when: Condition {
+                        phrase_is_drop: Some(true),
+                        key_dist_lte: Some(2),
+                        ..Default::default()
+                    },
                     then: w(&[("LoopRoll", 2.0), ("FilterSweep", 1.0)]),
                 },
                 // 4. Big energy step-up → hard cut feel.
                 Rule {
-                    when: Condition { energy_delta_gt: Some(0.15), ..Default::default() },
+                    when: Condition {
+                        energy_delta_gt: Some(0.15),
+                        ..Default::default()
+                    },
                     then: w(&[("LoopRoll", 2.0), ("EchoOut", 1.0), ("FilterSweep", 1.0)]),
                 },
                 // 5. Streak-breakers: after 3-in-a-row of a type, pick
                 //    something else for variety (mix_count_mod cycles).
                 Rule {
-                    when: Condition { last_transition_eq: Some("BassSwap".into()), mix_count_mod: Some([3, 2]), ..Default::default() },
+                    when: Condition {
+                        last_transition_eq: Some("BassSwap".into()),
+                        mix_count_mod: Some([3, 2]),
+                        ..Default::default()
+                    },
                     then: w(&[("FilterSweep", 2.0), ("LoopRoll", 1.0)]),
                 },
                 Rule {
-                    when: Condition { last_transition_eq: Some("BeatMatched".into()), mix_count_mod: Some([3, 2]), ..Default::default() },
+                    when: Condition {
+                        last_transition_eq: Some("BeatMatched".into()),
+                        mix_count_mod: Some([3, 2]),
+                        ..Default::default()
+                    },
                     then: w(&[("BassSwap", 2.0), ("FilterSweep", 2.0), ("LoopRoll", 1.0)]),
                 },
                 Rule {
-                    when: Condition { last_transition_eq: Some("FilterSweep".into()), mix_count_mod: Some([3, 2]), ..Default::default() },
+                    when: Condition {
+                        last_transition_eq: Some("FilterSweep".into()),
+                        mix_count_mod: Some([3, 2]),
+                        ..Default::default()
+                    },
                     then: w(&[("BassSwap", 2.0), ("BeatMatched", 1.0), ("LoopRoll", 1.0)]),
                 },
                 // 6. Compatible keys (dist 0-1): BassSwap dominant, with
                 //    occasional BeatMatched / FilterSweep for flavor.
                 Rule {
-                    when: Condition { key_dist_lte: Some(1), ..Default::default() },
-                    then: w(&[("BassSwap", 4.0), ("BeatMatched", 1.0), ("FilterSweep", 1.0)]),
+                    when: Condition {
+                        key_dist_lte: Some(1),
+                        ..Default::default()
+                    },
+                    then: w(&[
+                        ("BassSwap", 4.0),
+                        ("BeatMatched", 1.0),
+                        ("FilterSweep", 1.0),
+                    ]),
                 },
                 // 7. Key distance 2: FilterSweep-leaning with variety.
                 Rule {
-                    when: Condition { key_dist_eq: Some(2), ..Default::default() },
-                    then: w(&[("FilterSweep", 3.0), ("BeatMatched", 2.0), ("LoopRoll", 1.0)]),
+                    when: Condition {
+                        key_dist_eq: Some(2),
+                        ..Default::default()
+                    },
+                    then: w(&[
+                        ("FilterSweep", 3.0),
+                        ("BeatMatched", 2.0),
+                        ("LoopRoll", 1.0),
+                    ]),
                 },
                 // 8. Key distance 3+: BeatMatched-dominant safe picks.
                 Rule {
-                    when: Condition { key_dist_gte: Some(3), ..Default::default() },
+                    when: Condition {
+                        key_dist_gte: Some(3),
+                        ..Default::default()
+                    },
                     then: w(&[("BeatMatched", 3.0), ("LoopRoll", 1.0)]),
                 },
             ],
@@ -218,11 +322,19 @@ impl RuleEngine {
         if let Ok(text) = std::fs::read_to_string(&path) {
             if let Ok(cfg) = serde_json::from_str::<RuleConfig>(&text) {
                 tracing::info!("Loaded transition rules from {}", path.display());
-                return Self { config: cfg, mix_count: 0, last_transition: None };
+                return Self {
+                    config: cfg,
+                    mix_count: 0,
+                    last_transition: None,
+                };
             }
             tracing::warn!("transitions.json exists but failed to parse — using defaults");
         }
-        let engine = Self { config: RuleConfig::default(), mix_count: 0, last_transition: None };
+        let engine = Self {
+            config: RuleConfig::default(),
+            mix_count: 0,
+            last_transition: None,
+        };
         let _ = engine.save();
         engine
     }
@@ -236,17 +348,29 @@ impl RuleEngine {
     /// Disabled types fall through to the next rule. Empty enabled-set
     /// means "all enabled".
     pub fn choose(&self, ctx: RuleContext, enabled: &[String]) -> TransitionType {
-        let is_ok = |t: TransitionType| enabled.is_empty() || enabled.iter().any(|s| parse_type(s) == Some(t));
+        let is_ok = |t: TransitionType| {
+            enabled.is_empty() || enabled.iter().any(|s| parse_type(s) == Some(t))
+        };
         for rule in &self.config.rules {
-            if !rule.when.matches(&ctx) { continue; }
+            if !rule.when.matches(&ctx) {
+                continue;
+            }
             if let Some(t) = rule.then.resolve(&ctx)
-                && is_ok(t) { return t; }
+                && is_ok(t)
+            {
+                return t;
+            }
         }
         let default = parse_type(&self.config.default).unwrap_or(TransitionType::BeatMatched);
-        if is_ok(default) { default }
+        if is_ok(default) {
+            default
+        }
         // Ultimate fallback: first enabled type, else BeatMatched.
-        else if let Some(first) = enabled.iter().find_map(|s| parse_type(s)) { first }
-        else { TransitionType::BeatMatched }
+        else if let Some(first) = enabled.iter().find_map(|s| parse_type(s)) {
+            first
+        } else {
+            TransitionType::BeatMatched
+        }
     }
 
     /// Called by the engine after a crossfade completes.
@@ -268,7 +392,9 @@ fn parse_type(s: &str) -> Option<TransitionType> {
 }
 
 fn rules_path() -> PathBuf {
-    dirs::home_dir().unwrap_or_default().join(".mixr/transitions.json")
+    dirs::home_dir()
+        .unwrap_or_default()
+        .join(".mixr/transitions.json")
 }
 
 /// Persist a `RuleConfig` to `~/.mixr/transitions.json`. Caller should
@@ -276,9 +402,10 @@ fn rules_path() -> PathBuf {
 /// would stall the audio callback.
 pub fn save_rules(cfg: &RuleConfig) -> std::io::Result<()> {
     let path = rules_path();
-    if let Some(parent) = path.parent() { std::fs::create_dir_all(parent)?; }
-    let json = serde_json::to_string_pretty(cfg)
-        .map_err(std::io::Error::other)?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let json = serde_json::to_string_pretty(cfg).map_err(std::io::Error::other)?;
     std::fs::write(path, json)
 }
 
@@ -295,7 +422,13 @@ mod tests {
     use super::*;
 
     fn ctx(bpm: f64, key: usize, last: Option<TransitionType>, n: u32) -> RuleContext {
-        RuleContext { bpm_gap_pct: bpm, key_dist: key, last_transition: last, mix_count: n, ..RuleContext::default() }
+        RuleContext {
+            bpm_gap_pct: bpm,
+            key_dist: key,
+            last_transition: last,
+            mix_count: n,
+            ..RuleContext::default()
+        }
     }
 
     #[test]
@@ -304,38 +437,65 @@ mod tests {
         // so any single mix_count might land on a "flavor" pick.
         // Distribute across many seeds and assert the mode matches
         // the intended tier's dominant choice.
-        let eng = RuleEngine { config: RuleConfig::default(), mix_count: 0, last_transition: None };
+        let eng = RuleEngine {
+            config: RuleConfig::default(),
+            mix_count: 0,
+            last_transition: None,
+        };
 
         // BPM mismatch → EchoOut (still Force).
-        assert_eq!(eng.choose(ctx(12.0, 99, None, 0), &[]), TransitionType::EchoOut);
+        assert_eq!(
+            eng.choose(ctx(12.0, 99, None, 0), &[]),
+            TransitionType::EchoOut
+        );
 
         // Sample-many across mix_count seeds, take the most common.
         fn mode(eng: &RuleEngine, base: RuleContext) -> TransitionType {
             let types = [
-                TransitionType::BeatMatched, TransitionType::EchoOut,
-                TransitionType::BassSwap, TransitionType::FilterSweep,
+                TransitionType::BeatMatched,
+                TransitionType::EchoOut,
+                TransitionType::BassSwap,
+                TransitionType::FilterSweep,
                 TransitionType::LoopRoll,
             ];
             let mut counts = [0u32; 5];
             // Use time_in_set high enough to skip the "early set" rule.
-            let mut c = base; c.time_in_set_min = 30;
+            let mut c = base;
+            c.time_in_set_min = 30;
             for i in 0..400u32 {
                 c.mix_count = i;
                 let picked = eng.choose(c, &[]);
                 for (idx, t) in types.iter().enumerate() {
-                    if *t == picked { counts[idx] += 1; break; }
+                    if *t == picked {
+                        counts[idx] += 1;
+                        break;
+                    }
                 }
             }
-            let best = counts.iter().enumerate().max_by_key(|(_, n)| **n).map(|(i, _)| i).unwrap();
+            let best = counts
+                .iter()
+                .enumerate()
+                .max_by_key(|(_, n)| **n)
+                .map(|(i, _)| i)
+                .unwrap();
             types[best]
         }
 
-        assert_eq!(mode(&eng, ctx(2.0, 1, None, 0)), TransitionType::BassSwap,
-            "compatible keys should favor BassSwap");
-        assert_eq!(mode(&eng, ctx(2.0, 2, None, 0)), TransitionType::FilterSweep,
-            "key distance 2 should favor FilterSweep");
-        assert_eq!(mode(&eng, ctx(2.0, 5, None, 0)), TransitionType::BeatMatched,
-            "far-key mixes should favor BeatMatched");
+        assert_eq!(
+            mode(&eng, ctx(2.0, 1, None, 0)),
+            TransitionType::BassSwap,
+            "compatible keys should favor BassSwap"
+        );
+        assert_eq!(
+            mode(&eng, ctx(2.0, 2, None, 0)),
+            TransitionType::FilterSweep,
+            "key distance 2 should favor FilterSweep"
+        );
+        assert_eq!(
+            mode(&eng, ctx(2.0, 5, None, 0)),
+            TransitionType::BeatMatched,
+            "far-key mixes should favor BeatMatched"
+        );
     }
 
     #[test]
@@ -344,12 +504,21 @@ mod tests {
         // breaker. Its Weighted action rolls FilterSweep / LoopRoll —
         // either is a valid break. Assert it's NOT BassSwap. Use
         // time_in_set_min=30 to skip the early-set rule.
-        let eng = RuleEngine { config: RuleConfig::default(), mix_count: 2, last_transition: Some(TransitionType::BassSwap) };
+        let eng = RuleEngine {
+            config: RuleConfig::default(),
+            mix_count: 2,
+            last_transition: Some(TransitionType::BassSwap),
+        };
         let mut c = ctx(2.0, 1, Some(TransitionType::BassSwap), 2);
         c.time_in_set_min = 30;
         let picked = eng.choose(c, &[]);
-        assert!(matches!(picked, TransitionType::FilterSweep | TransitionType::LoopRoll),
-            "BassSwap streak breaker must pick something other than BassSwap, got {picked:?}");
+        assert!(
+            matches!(
+                picked,
+                TransitionType::FilterSweep | TransitionType::LoopRoll
+            ),
+            "BassSwap streak breaker must pick something other than BassSwap, got {picked:?}"
+        );
     }
 
     #[test]
@@ -357,11 +526,17 @@ mod tests {
         let cfg = RuleConfig {
             rules: vec![Rule {
                 when: Condition::default(),
-                then: Action::Weighted { weighted: vec![("BassSwap".into(), 0.7), ("FilterSweep".into(), 0.3)] },
+                then: Action::Weighted {
+                    weighted: vec![("BassSwap".into(), 0.7), ("FilterSweep".into(), 0.3)],
+                },
             }],
             default: "BeatMatched".into(),
         };
-        let eng = RuleEngine { config: cfg, mix_count: 0, last_transition: None };
+        let eng = RuleEngine {
+            config: cfg,
+            mix_count: 0,
+            last_transition: None,
+        };
         let a = eng.choose(ctx(0.0, 0, None, 0), &[]);
         let b = eng.choose(ctx(0.0, 0, None, 0), &[]);
         assert_eq!(a, b);
@@ -376,22 +551,46 @@ mod tests {
             ..Default::default()
         };
         // Hits all three.
-        let c = RuleContext { energy_delta: 0.2, phrase_is_drop: true, time_in_set_min: 30, ..Default::default() };
+        let c = RuleContext {
+            energy_delta: 0.2,
+            phrase_is_drop: true,
+            time_in_set_min: 30,
+            ..Default::default()
+        };
         assert!(cond.matches(&c));
         // Energy too low.
-        let c = RuleContext { energy_delta: 0.05, phrase_is_drop: true, time_in_set_min: 30, ..Default::default() };
+        let c = RuleContext {
+            energy_delta: 0.05,
+            phrase_is_drop: true,
+            time_in_set_min: 30,
+            ..Default::default()
+        };
         assert!(!cond.matches(&c));
         // Not a drop.
-        let c = RuleContext { energy_delta: 0.2, phrase_is_drop: false, time_in_set_min: 30, ..Default::default() };
+        let c = RuleContext {
+            energy_delta: 0.2,
+            phrase_is_drop: false,
+            time_in_set_min: 30,
+            ..Default::default()
+        };
         assert!(!cond.matches(&c));
         // Past the time limit.
-        let c = RuleContext { energy_delta: 0.2, phrase_is_drop: true, time_in_set_min: 90, ..Default::default() };
+        let c = RuleContext {
+            energy_delta: 0.2,
+            phrase_is_drop: true,
+            time_in_set_min: 90,
+            ..Default::default()
+        };
         assert!(!cond.matches(&c));
     }
 
     #[test]
     fn disabled_transitions_are_skipped() {
-        let eng = RuleEngine { config: RuleConfig::default(), mix_count: 0, last_transition: None };
+        let eng = RuleEngine {
+            config: RuleConfig::default(),
+            mix_count: 0,
+            last_transition: None,
+        };
         // BassSwap would normally win for (matched BPM, key dist 1). With it
         // disabled, the FilterSweep/BeatMatched rules below should catch.
         let enabled = vec!["BeatMatched".into(), "FilterSweep".into(), "EchoOut".into()];
@@ -403,7 +602,10 @@ mod tests {
     fn mix_count_mod_zero_modulus_never_matches() {
         // `m == 0` would be a divide-by-zero; the guard returns false.
         // No test covered this; add one.
-        let cond = Condition { mix_count_mod: Some([0, 0]), ..Default::default() };
+        let cond = Condition {
+            mix_count_mod: Some([0, 0]),
+            ..Default::default()
+        };
         assert!(!cond.matches(&ctx(0.0, 0, None, 0)));
         assert!(!cond.matches(&ctx(0.0, 0, None, 5)));
     }
@@ -429,14 +631,36 @@ mod tests {
         let cfg = RuleConfig {
             rules: vec![Rule {
                 when: Condition::default(),
-                then: Action::Cycle { cycle: vec!["BassSwap".into(), "FilterSweep".into(), "BeatMatched".into()] },
+                then: Action::Cycle {
+                    cycle: vec![
+                        "BassSwap".into(),
+                        "FilterSweep".into(),
+                        "BeatMatched".into(),
+                    ],
+                },
             }],
             default: "BeatMatched".into(),
         };
-        let eng = RuleEngine { config: cfg, mix_count: 0, last_transition: None };
-        assert_eq!(eng.choose(ctx(0.0, 0, None, 0), &[]), TransitionType::BassSwap);
-        assert_eq!(eng.choose(ctx(0.0, 0, None, 1), &[]), TransitionType::FilterSweep);
-        assert_eq!(eng.choose(ctx(0.0, 0, None, 2), &[]), TransitionType::BeatMatched);
-        assert_eq!(eng.choose(ctx(0.0, 0, None, 3), &[]), TransitionType::BassSwap);
+        let eng = RuleEngine {
+            config: cfg,
+            mix_count: 0,
+            last_transition: None,
+        };
+        assert_eq!(
+            eng.choose(ctx(0.0, 0, None, 0), &[]),
+            TransitionType::BassSwap
+        );
+        assert_eq!(
+            eng.choose(ctx(0.0, 0, None, 1), &[]),
+            TransitionType::FilterSweep
+        );
+        assert_eq!(
+            eng.choose(ctx(0.0, 0, None, 2), &[]),
+            TransitionType::BeatMatched
+        );
+        assert_eq!(
+            eng.choose(ctx(0.0, 0, None, 3), &[]),
+            TransitionType::BassSwap
+        );
     }
 }

@@ -36,7 +36,7 @@
 //! 7. Store access_token + refresh_token. Use access_token as Bearer
 //!    on every API request via reqwest (no WebView, no CORS).
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use base64::Engine;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -69,7 +69,8 @@ impl PkcePair {
         let n1 = COUNTER.fetch_add(1, Ordering::Relaxed);
         let ts = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_nanos() as u64).unwrap_or(0);
+            .map(|d| d.as_nanos() as u64)
+            .unwrap_or(0);
         let n2 = std::process::id() as u64;
         // 6 × 16 hex chars = 96 hex = 48 bytes. URL-safe by virtue of
         // being [0-9a-f] only.
@@ -81,9 +82,11 @@ impl PkcePair {
         );
         let mut hasher = Sha256::new();
         hasher.update(verifier.as_bytes());
-        let challenge = base64::engine::general_purpose::URL_SAFE_NO_PAD
-            .encode(hasher.finalize());
-        Self { verifier, challenge }
+        let challenge = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(hasher.finalize());
+        Self {
+            verifier,
+            challenge,
+        }
     }
 
     /// Build the authorize URL the WebView should load. The
@@ -139,10 +142,7 @@ impl StoredAuth {
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
-                std::fs::set_permissions(
-                    &path,
-                    std::fs::Permissions::from_mode(0o600),
-                ).ok();
+                std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).ok();
             }
         }
     }
@@ -156,13 +156,16 @@ impl StoredAuth {
     /// of cushion). Doesn't validate the token actually works against
     /// Beatport — first API call will discover that.
     pub fn looks_live(&self) -> bool {
-        if self.access_token.is_none() { return false; }
+        if self.access_token.is_none() {
+            return false;
+        }
         match self.expires_at {
             None => true,
             Some(exp) => {
                 let now = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
-                    .map(|d| d.as_secs() as i64).unwrap_or(0);
+                    .map(|d| d.as_secs() as i64)
+                    .unwrap_or(0);
                 exp > now + 60
             }
         }
@@ -175,33 +178,42 @@ impl StoredAuth {
 /// hashed it into the challenge during /authorize.
 pub async fn exchange_code(code: &str, verifier: &str, client_id: &str) -> Result<StoredAuth> {
     let client = Client::builder().build()?;
-    let resp = client.post(TOKEN_URL)
+    let resp = client
+        .post(TOKEN_URL)
         .header("Content-Type", "application/x-www-form-urlencoded")
         .body(format!(
             "grant_type=authorization_code&code={}&redirect_uri={}\
              &client_id={}&code_verifier={}",
-            urlencode(code), urlencode(REDIRECT_URI), urlencode(client_id),
+            urlencode(code),
+            urlencode(REDIRECT_URI),
+            urlencode(client_id),
             urlencode(verifier),
         ))
-        .send().await?;
+        .send()
+        .await?;
 
     let status = resp.status();
     let body = resp.text().await?;
     if !status.is_success() {
-        return Err(anyhow!("token exchange failed: HTTP {status}: {}",
-            &body[..body.len().min(300)]));
+        return Err(anyhow!(
+            "token exchange failed: HTTP {status}: {}",
+            &body[..body.len().min(300)]
+        ));
     }
-    let json: serde_json::Value = serde_json::from_str(&body)
-        .map_err(|e| anyhow!("token response not JSON: {e}"))?;
+    let json: serde_json::Value =
+        serde_json::from_str(&body).map_err(|e| anyhow!("token response not JSON: {e}"))?;
 
-    let access_token = json["access_token"].as_str()
+    let access_token = json["access_token"]
+        .as_str()
         .ok_or_else(|| anyhow!("no access_token in token response"))?
         .to_string();
     let refresh_token = json["refresh_token"].as_str().map(String::from);
     let expires_at = json["expires_in"].as_i64().map(|secs| {
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs() as i64).unwrap_or(0) + secs
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0)
+            + secs
     });
 
     let stored = StoredAuth {
@@ -211,8 +223,10 @@ pub async fn exchange_code(code: &str, verifier: &str, client_id: &str) -> Resul
         client_id: Some(client_id.to_string()),
     };
     stored.save();
-    tracing::info!("Beatport: OAuth PKCE token exchange OK (refresh={})",
-        stored.refresh_token.is_some());
+    tracing::info!(
+        "Beatport: OAuth PKCE token exchange OK (refresh={})",
+        stored.refresh_token.is_some()
+    );
     Ok(stored)
 }
 
@@ -221,28 +235,36 @@ pub async fn exchange_code(code: &str, verifier: &str, client_id: &str) -> Resul
 /// avoids re-popping the WebView for sign-in.
 pub async fn refresh(refresh_token: &str, client_id: &str) -> Result<StoredAuth> {
     let client = Client::builder().build()?;
-    let resp = client.post(TOKEN_URL)
+    let resp = client
+        .post(TOKEN_URL)
         .header("Content-Type", "application/x-www-form-urlencoded")
         .body(format!(
             "grant_type=refresh_token&refresh_token={}&client_id={}",
-            urlencode(refresh_token), urlencode(client_id),
+            urlencode(refresh_token),
+            urlencode(client_id),
         ))
-        .send().await?;
+        .send()
+        .await?;
     let status = resp.status();
     if !status.is_success() {
         return Err(anyhow!("refresh failed: HTTP {status}"));
     }
     let json: serde_json::Value = resp.json().await?;
-    let access_token = json["access_token"].as_str()
+    let access_token = json["access_token"]
+        .as_str()
         .ok_or_else(|| anyhow!("no access_token in refresh response"))?
         .to_string();
-    let new_refresh = json["refresh_token"].as_str().map(String::from)
+    let new_refresh = json["refresh_token"]
+        .as_str()
+        .map(String::from)
         // Beatport may omit refresh_token on refresh — keep the old one
         .or_else(|| Some(refresh_token.to_string()));
     let expires_at = json["expires_in"].as_i64().map(|secs| {
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs() as i64).unwrap_or(0) + secs
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0)
+            + secs
     });
     let stored = StoredAuth {
         access_token: Some(access_token),
@@ -259,8 +281,9 @@ fn urlencode(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for b in s.bytes() {
         match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9'
-            | b'-' | b'_' | b'.' | b'~' => out.push(b as char),
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(b as char)
+            }
             _ => out.push_str(&format!("%{b:02X}")),
         }
     }
@@ -279,8 +302,7 @@ mod tests {
         let verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
         let mut hasher = Sha256::new();
         hasher.update(verifier.as_bytes());
-        let challenge = base64::engine::general_purpose::URL_SAFE_NO_PAD
-            .encode(hasher.finalize());
+        let challenge = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(hasher.finalize());
         assert_eq!(challenge, "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM");
     }
 
@@ -293,8 +315,7 @@ mod tests {
         assert!(pair.verifier.len() >= 43);
         let mut hasher = Sha256::new();
         hasher.update(pair.verifier.as_bytes());
-        let expected = base64::engine::general_purpose::URL_SAFE_NO_PAD
-            .encode(hasher.finalize());
+        let expected = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(hasher.finalize());
         assert_eq!(pair.challenge, expected);
     }
 
@@ -324,7 +345,8 @@ mod tests {
     fn looks_live_respects_expiry_with_cushion() {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs() as i64).unwrap_or(0);
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0);
         let expired = StoredAuth {
             access_token: Some("x".into()),
             expires_at: Some(now - 100),
@@ -334,7 +356,7 @@ mod tests {
 
         let about_to_expire = StoredAuth {
             access_token: Some("x".into()),
-            expires_at: Some(now + 30),  // less than 60s cushion
+            expires_at: Some(now + 30), // less than 60s cushion
             ..Default::default()
         };
         assert!(!about_to_expire.looks_live(), "<60s cushion → not live");

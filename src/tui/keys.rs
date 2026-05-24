@@ -3,15 +3,16 @@
 
 use crossterm::event::{KeyCode, KeyEvent};
 
-use crate::audio::engine::QueueEntry;
-use crate::beatport::catalog::{self, BrowseScreen, MenuAction};
 use super::app::{App, AppAction, ClickAction, DashFocus, ViewMode};
 use super::dashboard::CtrlSection;
+use crate::audio::engine::QueueEntry;
+use crate::beatport::catalog::{self, BrowseScreen, MenuAction};
 
 impl App {
     fn simulate_key(&mut self, code: crossterm::event::KeyCode) {
         self.handle_key(crossterm::event::KeyEvent::new(
-            code, crossterm::event::KeyModifiers::empty(),
+            code,
+            crossterm::event::KeyModifiers::empty(),
         ));
     }
 
@@ -29,9 +30,9 @@ impl App {
         match m.kind {
             // Scroll wheel = arrow keys in any view. Reuses every
             // existing list/menu nav handler for free.
-            MouseEventKind::ScrollUp    => self.simulate_key(KeyCode::Up),
-            MouseEventKind::ScrollDown  => self.simulate_key(KeyCode::Down),
-            MouseEventKind::ScrollLeft  => self.simulate_key(KeyCode::Left),
+            MouseEventKind::ScrollUp => self.simulate_key(KeyCode::Up),
+            MouseEventKind::ScrollDown => self.simulate_key(KeyCode::Down),
+            MouseEventKind::ScrollLeft => self.simulate_key(KeyCode::Left),
             MouseEventKind::ScrollRight => self.simulate_key(KeyCode::Right),
             MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
                 self.handle_mouse_click(m.column, m.row, m.modifiers);
@@ -50,12 +51,18 @@ impl App {
     /// the MIDI map flow for it. Otherwise no-op (right-click on
     /// non-bindable elements is silently ignored).
     pub(crate) fn handle_mouse_right_click(&mut self, col: u16, row: u16) {
-        let action = self.click_targets.iter().rev()
+        let action = self
+            .click_targets
+            .iter()
+            .rev()
             .find(|t| t.contains(col, row))
             .and_then(|t| t.midi_action.clone());
         if let Some(action) = action {
             self.toast.show(
-                &format!("Move a controller to bind: {} (Esc to cancel)", action.label()),
+                &format!(
+                    "Move a controller to bind: {} (Esc to cancel)",
+                    action.label()
+                ),
                 4.0,
             );
             // Clear the listener's last_event so we don't capture a
@@ -78,7 +85,10 @@ impl App {
     /// other targets (buttons, hot cues, list rows) ignore drag so
     /// they don't fire on every sub-pixel move.
     pub(crate) fn handle_mouse_drag(&mut self, col: u16, row: u16) {
-        let hit = self.click_targets.iter().rev()
+        let hit = self
+            .click_targets
+            .iter()
+            .rev()
             .find(|t| t.contains(col, row))
             .map(|t| t.action.clone());
         match hit {
@@ -88,7 +98,11 @@ impl App {
                 let pos = rel * 2.0 - 1.0;
                 self.engine.set_crossfader(pos);
             }
-            Some(ClickAction::SetVerticalRange { control, y_min, y_max }) => {
+            Some(ClickAction::SetVerticalRange {
+                control,
+                y_min,
+                y_max,
+            }) => {
                 self.apply_vertical_drag(control, row, y_min, y_max, false);
             }
             _ => {}
@@ -99,10 +113,18 @@ impl App {
     /// the widget bounds captured during the last render
     /// (`self.click_targets`) so we don't have to re-derive layout
     /// here. Falls through silently if the click missed everything.
-    pub(crate) fn handle_mouse_click(&mut self, col: u16, row: u16, mods: crossterm::event::KeyModifiers) {
+    pub(crate) fn handle_mouse_click(
+        &mut self,
+        col: u16,
+        row: u16,
+        mods: crossterm::event::KeyModifiers,
+    ) {
         // Walk targets in reverse so later (overlay) hits beat earlier
         // (background) ones.
-        let hit = self.click_targets.iter().rev()
+        let hit = self
+            .click_targets
+            .iter()
+            .rev()
             .find(|t| t.contains(col, row))
             .map(|t| t.action.clone());
         if let Some(action) = hit {
@@ -113,16 +135,20 @@ impl App {
             let shift = mods.contains(crossterm::event::KeyModifiers::SHIFT);
             if shift
                 && let ClickAction::SimulateKey(crossterm::event::KeyCode::Char(d)) = action
-                    && let Some(set_char) = match d {
-                        '1' => Some('!'), '2' => Some('@'), '3' => Some('#'), '4' => Some('$'),
-                        _ => None,
-                    } {
-                        self.handle_key(crossterm::event::KeyEvent::new(
-                            crossterm::event::KeyCode::Char(set_char),
-                            crossterm::event::KeyModifiers::SHIFT,
-                        ));
-                        return;
-                    }
+                && let Some(set_char) = match d {
+                    '1' => Some('!'),
+                    '2' => Some('@'),
+                    '3' => Some('#'),
+                    '4' => Some('$'),
+                    _ => None,
+                }
+            {
+                self.handle_key(crossterm::event::KeyEvent::new(
+                    crossterm::event::KeyCode::Char(set_char),
+                    crossterm::event::KeyModifiers::SHIFT,
+                ));
+                return;
+            }
             self.dispatch_click_action(action, col, row);
         }
     }
@@ -130,19 +156,28 @@ impl App {
     fn dispatch_click_action(&mut self, action: ClickAction, click_col: u16, click_row: u16) {
         match action {
             ClickAction::SetCrossfaderRange { x_min, x_max } => {
-                if x_max <= x_min { return; }
+                if x_max <= x_min {
+                    return;
+                }
                 let span = (x_max - x_min) as f32;
                 let rel = (click_col.saturating_sub(x_min) as f32 / span).clamp(0.0, 1.0);
                 let pos = rel * 2.0 - 1.0;
                 self.engine.set_crossfader(pos);
                 self.toast.show(&format!("Crossfader → {pos:+.2}"), 0.6);
             }
-            ClickAction::SetVerticalRange { control, y_min, y_max } => {
+            ClickAction::SetVerticalRange {
+                control,
+                y_min,
+                y_max,
+            } => {
                 self.apply_vertical_drag(control, click_row, y_min, y_max, true);
             }
             ClickAction::CycleJumpBars => {
                 let n = match self.config.jump_bars {
-                    4 => 8, 8 => 16, 16 => 32, _ => 4,
+                    4 => 8,
+                    8 => 16,
+                    16 => 32,
+                    _ => 4,
                 };
                 self.config.jump_bars = n;
                 self.config.save();
@@ -151,13 +186,20 @@ impl App {
             }
             ClickAction::LoopEngageDeck { is_a, beats } => {
                 self.engine.loop_engage_deck(is_a, beats);
-                self.toast.show(&format!("Deck {} loop {beats:.0} beats",
-                    if is_a {"A"} else {"B"}), 1.0);
+                self.toast.show(
+                    &format!(
+                        "Deck {} loop {beats:.0} beats",
+                        if is_a { "A" } else { "B" }
+                    ),
+                    1.0,
+                );
             }
             ClickAction::LoopOffDeck { is_a } => {
                 self.engine.loop_disengage_deck(is_a);
-                self.toast.show(&format!("Deck {} loop off",
-                    if is_a {"A"} else {"B"}), 0.8);
+                self.toast.show(
+                    &format!("Deck {} loop off", if is_a { "A" } else { "B" }),
+                    0.8,
+                );
             }
             ClickAction::SimulateKey(code) => self.simulate_key(code),
             ClickAction::FocusDashSection(section) => {
@@ -169,8 +211,8 @@ impl App {
                 // dashboard with Browse focus = handle_browse_enter,
                 // which loads/queues for track lists or pushes a
                 // sub-screen for menu items).
-                let was_focused = self.dash_focus == DashFocus::Browse
-                    && self.dash_browse_sel == idx;
+                let was_focused =
+                    self.dash_focus == DashFocus::Browse && self.dash_browse_sel == idx;
                 self.dash_focus = DashFocus::Browse;
                 self.dash_browse_sel = idx;
                 if was_focused {
@@ -217,7 +259,9 @@ impl App {
     ) {
         use crate::tui::app::RangeControl;
         use crate::tui::dashboard::CtrlSection;
-        if y_max <= y_min { return; }
+        if y_max <= y_min {
+            return;
+        }
         let span = (y_max - y_min) as f32;
         // Top of strip = max value, bottom = min value. Clamp in case
         // the drag wandered off the target edge.
@@ -232,18 +276,32 @@ impl App {
                 let is_a = matches!(control, RangeControl::TempoA);
                 self.engine.set_deck_rate(is_a, rate);
                 if is_click {
-                    self.dash_section = if is_a { CtrlSection::TempoA } else { CtrlSection::TempoB };
+                    self.dash_section = if is_a {
+                        CtrlSection::TempoA
+                    } else {
+                        CtrlSection::TempoB
+                    };
                     self.dash_focus = DashFocus::Controller;
-                    self.toast.show(&format!("Tempo {}: {:.3}×", if is_a { "A" } else { "B" }, rate), 0.6);
+                    self.toast.show(
+                        &format!("Tempo {}: {:.3}×", if is_a { "A" } else { "B" }, rate),
+                        0.6,
+                    );
                 }
             }
             RangeControl::VolumeA | RangeControl::VolumeB => {
                 let is_a = matches!(control, RangeControl::VolumeA);
                 self.engine.set_channel_fader(is_a, norm);
                 if is_click {
-                    self.dash_section = if is_a { CtrlSection::VolumeA } else { CtrlSection::VolumeB };
+                    self.dash_section = if is_a {
+                        CtrlSection::VolumeA
+                    } else {
+                        CtrlSection::VolumeB
+                    };
                     self.dash_focus = DashFocus::Controller;
-                    self.toast.show(&format!("Volume {}: {:.2}", if is_a { "A" } else { "B" }, norm), 0.6);
+                    self.toast.show(
+                        &format!("Volume {}: {:.2}", if is_a { "A" } else { "B" }, norm),
+                        0.6,
+                    );
                 }
             }
         }
@@ -281,8 +339,11 @@ impl App {
                 mix.rated = None;
                 mix.rated_at = None;
                 self.toast.show(
-                    if good { "Removed 👍 — entry unrated" }
-                    else    { "Removed 👎 — entry unrated" },
+                    if good {
+                        "Removed 👍 — entry unrated"
+                    } else {
+                        "Removed 👎 — entry unrated"
+                    },
                     1.5,
                 );
             }
@@ -294,12 +355,19 @@ impl App {
                 let mut entry = mix.entry.clone();
                 let now = chrono::Utc::now().timestamp();
                 entry.rated_at = Some(now);
-                if good { dj.rate_good(entry); } else { dj.rate_bad(entry); }
+                if good {
+                    dj.rate_good(entry);
+                } else {
+                    dj.rate_bad(entry);
+                }
                 mix.rated = Some(good);
                 mix.rated_at = Some(now);
                 self.toast.show(
-                    if good { "Mix re-rated: 👎 → 👍" }
-                    else    { "Mix re-rated: 👍 → 👎" },
+                    if good {
+                        "Mix re-rated: 👎 → 👍"
+                    } else {
+                        "Mix re-rated: 👍 → 👎"
+                    },
                     1.5,
                 );
             }
@@ -308,12 +376,19 @@ impl App {
                 let mut entry = mix.entry.clone();
                 let now = chrono::Utc::now().timestamp();
                 entry.rated_at = Some(now);
-                if good { dj.rate_good(entry); } else { dj.rate_bad(entry); }
+                if good {
+                    dj.rate_good(entry);
+                } else {
+                    dj.rate_bad(entry);
+                }
                 mix.rated = Some(good);
                 mix.rated_at = Some(now);
                 self.toast.show(
-                    if good { "Mix rated: 👍 saved to DJ memory" }
-                    else    { "Mix rated: 👎 saved to DJ memory" },
+                    if good {
+                        "Mix rated: 👍 saved to DJ memory"
+                    } else {
+                        "Mix rated: 👎 saved to DJ memory"
+                    },
                     1.5,
                 );
             }
@@ -325,7 +400,11 @@ impl App {
     pub(crate) fn toggle_favorite_track(&mut self, track: crate::beatport::models::BeatportTrack) {
         let added = self.favorites.toggle(&track);
         let name = format!("{} - {}", track.artist_name(), track.full_title());
-        let msg = if added { format!("★ {name}") } else { format!("Unfavorited: {name}") };
+        let msg = if added {
+            format!("★ {name}")
+        } else {
+            format!("Unfavorited: {name}")
+        };
         self.toast.show(&msg, 1.5);
     }
 
@@ -369,8 +448,18 @@ impl App {
         tokio::spawn(async move {
             let mut api = api.lock().await;
             match api.add_to_cart(track.id).await {
-                Ok(()) => { tx.send(crate::tui::app::AppAction::Toast(format!("🛒 Added to cart: {name}"))).ok(); }
-                Err(e) => { tx.send(crate::tui::app::AppAction::Toast(format!("Cart add failed: {e}"))).ok(); }
+                Ok(()) => {
+                    tx.send(crate::tui::app::AppAction::Toast(format!(
+                        "🛒 Added to cart: {name}"
+                    )))
+                    .ok();
+                }
+                Err(e) => {
+                    tx.send(crate::tui::app::AppAction::Toast(format!(
+                        "Cart add failed: {e}"
+                    )))
+                    .ok();
+                }
             }
         });
     }
@@ -405,7 +494,11 @@ impl App {
                                     self.toast.show(&format!("Save failed: {e}"), 3.0);
                                 } else {
                                     self.toast.show(
-                                        &format!("Bound: {} → {}", event.label(), pm.action.label()),
+                                        &format!(
+                                            "Bound: {} → {}",
+                                            event.label(),
+                                            pm.action.label()
+                                        ),
                                         2.0,
                                     );
                                 }
@@ -414,7 +507,8 @@ impl App {
                     } else {
                         // Y pressed before any event was captured — keep waiting.
                         self.pending_midi_map = Some(pm);
-                        self.toast.show("Move a controller first, then press Y", 1.5);
+                        self.toast
+                            .show("Move a controller first, then press Y", 1.5);
                     }
                 }
                 KeyCode::Esc | KeyCode::Char('n') | KeyCode::Char('N') => {
@@ -515,7 +609,9 @@ impl App {
             // focused. Capture a/b/Esc and dispatch.
             if self.dash_fav_picker {
                 match key.code {
-                    KeyCode::Esc => { self.dash_fav_picker = false; }
+                    KeyCode::Esc => {
+                        self.dash_fav_picker = false;
+                    }
                     KeyCode::Char('a') | KeyCode::Char('A') => {
                         self.dash_fav_picker = false;
                         self.toggle_favorite_deck(true);
@@ -532,27 +628,41 @@ impl App {
             // DJ ask mode — capture typing
             if self.dj_asking {
                 match key.code {
-                    KeyCode::Esc => { self.dj_asking = false; self.dj_ask_buffer.clear(); }
-                    KeyCode::Backspace => { self.dj_ask_buffer.pop(); }
+                    KeyCode::Esc => {
+                        self.dj_asking = false;
+                        self.dj_ask_buffer.clear();
+                    }
+                    KeyCode::Backspace => {
+                        self.dj_ask_buffer.pop();
+                    }
                     KeyCode::Enter if !self.dj_ask_buffer.is_empty() => {
                         let prompt = self.dj_ask_buffer.clone();
                         self.dj_asking = false;
                         self.dj_ask_buffer.clear();
                         // Set DJ direction and trigger
                         if let Some(ref dj) = self.claude_dj
-                            && let Ok(mut dj) = dj.try_lock() { dj.set_prompt(prompt.clone()); }
+                            && let Ok(mut dj) = dj.try_lock()
+                        {
+                            dj.set_prompt(prompt.clone());
+                        }
                         self.trigger_dj(&format!("User says: {prompt}"));
                         self.toast.show(&format!("Asked DJ: {prompt}"), 2.0);
                     }
-                    KeyCode::Char(c) => { self.dj_ask_buffer.push(c); }
+                    KeyCode::Char(c) => {
+                        self.dj_ask_buffer.push(c);
+                    }
                     _ => {}
                 }
                 return;
             }
 
             match key.code {
-                KeyCode::Tab => { self.dash_focus = self.dash_focus.next(); }
-                KeyCode::Char('d') => { self.view_mode = ViewMode::Browse; }
+                KeyCode::Tab => {
+                    self.dash_focus = self.dash_focus.next();
+                }
+                KeyCode::Char('d') => {
+                    self.view_mode = ViewMode::Browse;
+                }
                 KeyCode::Esc => {
                     if self.waveform_zoom.is_some() {
                         self.waveform_zoom = None;
@@ -567,7 +677,8 @@ impl App {
                 }
                 KeyCode::Char('w') => {
                     self.waveform_mode = self.waveform_mode.next();
-                    self.toast.show(&format!("Waveform: {}", self.waveform_mode.label()), 1.0);
+                    self.toast
+                        .show(&format!("Waveform: {}", self.waveform_mode.label()), 1.0);
                 }
                 // Cycle dashboard layout: Full → Panel(Queue) →
                 // Panel(History) → Panel(Browse) → Panel(Log) → Full.
@@ -576,13 +687,24 @@ impl App {
                 // with another app on the same screen.
                 KeyCode::Char('v') => {
                     use super::dashboard::{DashLayout, PanelSection};
-                    let (next_layout, next_section, label) = match (self.dash_layout, self.dash_panel_section) {
-                        (DashLayout::Full, _) => (DashLayout::Panel, PanelSection::Queue, "Panel: queue"),
-                        (DashLayout::Panel, PanelSection::Queue)   => (DashLayout::Panel, PanelSection::History, "Panel: history"),
-                        (DashLayout::Panel, PanelSection::History) => (DashLayout::Panel, PanelSection::Browse,  "Panel: browse"),
-                        (DashLayout::Panel, PanelSection::Browse)  => (DashLayout::Panel, PanelSection::Log,     "Panel: log"),
-                        (DashLayout::Panel, PanelSection::Log)     => (DashLayout::Full,  PanelSection::Queue,   "Full view"),
-                    };
+                    let (next_layout, next_section, label) =
+                        match (self.dash_layout, self.dash_panel_section) {
+                            (DashLayout::Full, _) => {
+                                (DashLayout::Panel, PanelSection::Queue, "Panel: queue")
+                            }
+                            (DashLayout::Panel, PanelSection::Queue) => {
+                                (DashLayout::Panel, PanelSection::History, "Panel: history")
+                            }
+                            (DashLayout::Panel, PanelSection::History) => {
+                                (DashLayout::Panel, PanelSection::Browse, "Panel: browse")
+                            }
+                            (DashLayout::Panel, PanelSection::Browse) => {
+                                (DashLayout::Panel, PanelSection::Log, "Panel: log")
+                            }
+                            (DashLayout::Panel, PanelSection::Log) => {
+                                (DashLayout::Full, PanelSection::Queue, "Full view")
+                            }
+                        };
                     self.dash_layout = next_layout;
                     self.dash_panel_section = next_section;
                     self.config.dash_layout = next_layout;
@@ -590,7 +712,9 @@ impl App {
                     self.config.save();
                     self.toast.show(label, 1.0);
                 }
-                KeyCode::Char('?') => { self.dash_help = !self.dash_help; }
+                KeyCode::Char('?') => {
+                    self.dash_help = !self.dash_help;
+                }
                 // Manual panic / train-wreck bail. Forces the in-progress
                 // crossfade onto EchoOut to salvage a bad mix. No-op
                 // when not currently crossfading.
@@ -609,21 +733,29 @@ impl App {
                 // - Crossfading: queues at front (plays after this mix)
                 KeyCode::Char('L') => {
                     if self.dash_focus == DashFocus::Browse
-                        && let Some(track) = self.current_screen().track_at(self.dash_browse_sel).cloned() {
-                            let name = format!("{} - {}", track.artist_name(), track.full_title());
-                            let outcome = self.engine.play_next(track);
-                            let msg = match outcome {
-                                crate::audio::engine::PlayNextOutcome::StartedFresh =>
-                                    format!("Playing next: {name}"),
-                                crate::audio::engine::PlayNextOutcome::LoadedAsIncoming =>
-                                    format!("Loaded as incoming: {name}"),
-                                crate::audio::engine::PlayNextOutcome::ReplacedIncoming =>
-                                    format!("Replaced incoming with {name} (prev moved to queue)"),
-                                crate::audio::engine::PlayNextOutcome::QueuedAtFront =>
-                                    format!("Queued next: {name}"),
-                            };
-                            self.toast.show(&msg, 2.0);
-                        }
+                        && let Some(track) = self
+                            .current_screen()
+                            .track_at(self.dash_browse_sel)
+                            .cloned()
+                    {
+                        let name = format!("{} - {}", track.artist_name(), track.full_title());
+                        let outcome = self.engine.play_next(track);
+                        let msg = match outcome {
+                            crate::audio::engine::PlayNextOutcome::StartedFresh => {
+                                format!("Playing next: {name}")
+                            }
+                            crate::audio::engine::PlayNextOutcome::LoadedAsIncoming => {
+                                format!("Loaded as incoming: {name}")
+                            }
+                            crate::audio::engine::PlayNextOutcome::ReplacedIncoming => {
+                                format!("Replaced incoming with {name} (prev moved to queue)")
+                            }
+                            crate::audio::engine::PlayNextOutcome::QueuedAtFront => {
+                                format!("Queued next: {name}")
+                            }
+                        };
+                        self.toast.show(&msg, 2.0);
+                    }
                 }
                 // Favorite — focus-aware. On the mini-browse panel,
                 // favorite the highlighted track. Otherwise act on the
@@ -634,9 +766,10 @@ impl App {
                 // Shift+7 (&) avoids the $ collision with hot cue 4 set.
                 KeyCode::Char('&') => {
                     if self.dash_focus == DashFocus::Browse
-                        && let Some(track) = self.current_screen().track_at(self.dash_browse_sel) {
-                            self.add_track_to_cart(track.clone());
-                        }
+                        && let Some(track) = self.current_screen().track_at(self.dash_browse_sel)
+                    {
+                        self.add_track_to_cart(track.clone());
+                    }
                 }
                 KeyCode::Char('f') | KeyCode::Char('*') => {
                     if self.dash_focus == DashFocus::Browse {
@@ -647,7 +780,9 @@ impl App {
                         let a_loaded = self.cached_info.deck_a_track.is_some();
                         let b_loaded = self.cached_info.deck_b_track.is_some();
                         match (a_loaded, b_loaded) {
-                            (true, true) => { self.dash_fav_picker = true; }
+                            (true, true) => {
+                                self.dash_fav_picker = true;
+                            }
                             (true, false) => self.toggle_favorite_deck(true),
                             (false, true) => self.toggle_favorite_deck(false),
                             (false, false) => self.toast.show("Nothing to favorite", 1.0),
@@ -723,18 +858,26 @@ impl App {
                         let tx = self.action_tx.clone();
                         tokio::spawn(async move {
                             match crate::audio::ai_beat::analyze_mix_alignment(
-                                &data.playing_peaks, &data.incoming_peaks,
-                                data.playing_bpm, data.incoming_bpm,
-                            ).await {
+                                &data.playing_peaks,
+                                &data.incoming_peaks,
+                                data.playing_bpm,
+                                data.incoming_bpm,
+                            )
+                            .await
+                            {
                                 Ok(a) => {
                                     tx.send(AppAction::AlignmentResult {
                                         nudge_ms: a.nudge_ms,
                                         is_aligned: a.is_aligned,
                                         rate_correction: a.rate_correction,
                                         details: a.details,
-                                    }).ok();
+                                    })
+                                    .ok();
                                 }
-                                Err(e) => { tx.send(AppAction::Toast(format!("Alignment error: {e}"))).ok(); }
+                                Err(e) => {
+                                    tx.send(AppAction::Toast(format!("Alignment error: {e}")))
+                                        .ok();
+                                }
                             }
                         });
                     } else {
@@ -781,10 +924,14 @@ impl App {
                     self.filter_text.push(c);
                     self.selected = 0;
                 }
-                KeyCode::Up if self.selected > 0 => { self.selected -= 1; }
+                KeyCode::Up if self.selected > 0 => {
+                    self.selected -= 1;
+                }
                 KeyCode::Down => {
                     let count = self.filtered_item_count();
-                    if self.selected + 1 < count { self.selected += 1; }
+                    if self.selected + 1 < count {
+                        self.selected += 1;
+                    }
                 }
                 _ => {}
             }
@@ -805,12 +952,24 @@ impl App {
                         self.help_scroll = 0;
                     }
                 }
-                KeyCode::Up => { self.help_scroll = self.help_scroll.saturating_sub(1); }
-                KeyCode::Down => { self.help_scroll = self.help_scroll.saturating_add(1); }
-                KeyCode::PageUp => { self.help_scroll = self.help_scroll.saturating_sub(10); }
-                KeyCode::PageDown => { self.help_scroll = self.help_scroll.saturating_add(10); }
-                KeyCode::Home => { self.help_scroll = 0; }
-                KeyCode::End => { self.help_scroll = u16::MAX; }
+                KeyCode::Up => {
+                    self.help_scroll = self.help_scroll.saturating_sub(1);
+                }
+                KeyCode::Down => {
+                    self.help_scroll = self.help_scroll.saturating_add(1);
+                }
+                KeyCode::PageUp => {
+                    self.help_scroll = self.help_scroll.saturating_sub(10);
+                }
+                KeyCode::PageDown => {
+                    self.help_scroll = self.help_scroll.saturating_add(10);
+                }
+                KeyCode::Home => {
+                    self.help_scroll = 0;
+                }
+                KeyCode::End => {
+                    self.help_scroll = u16::MAX;
+                }
                 KeyCode::Backspace => {
                     self.help_filter.pop();
                     self.help_scroll = 0;
@@ -849,15 +1008,21 @@ impl App {
                     self.search_results.clear();
                     self.selected = 0;
                 }
-                KeyCode::Backspace => { self.search_query.pop(); }
+                KeyCode::Backspace => {
+                    self.search_query.pop();
+                }
                 KeyCode::Enter if !self.search_query.is_empty() => {
                     self.trigger_search();
                 }
-                KeyCode::Up if self.selected > 0 => { self.selected -= 1; }
+                KeyCode::Up if self.selected > 0 => {
+                    self.selected -= 1;
+                }
                 KeyCode::Down if self.selected + 1 < self.search_results.len() => {
                     self.selected += 1;
                 }
-                KeyCode::Char(c) => { self.search_query.push(c); }
+                KeyCode::Char(c) => {
+                    self.search_query.push(c);
+                }
                 _ => {}
             }
             return;
@@ -867,8 +1032,12 @@ impl App {
         if matches!(self.view_mode, ViewMode::PlaylistNameInput) {
             if let Some(ref mut picker) = self.playlist_picker {
                 match key.code {
-                    KeyCode::Char(c) => { picker.new_name.push(c); }
-                    KeyCode::Backspace => { picker.new_name.pop(); }
+                    KeyCode::Char(c) => {
+                        picker.new_name.push(c);
+                    }
+                    KeyCode::Backspace => {
+                        picker.new_name.pop();
+                    }
                     KeyCode::Enter if !picker.new_name.is_empty() => {
                         let name = picker.new_name.clone();
                         let track_id = picker.track_id;
@@ -888,8 +1057,12 @@ impl App {
             if let Some(ref mut picker) = self.playlist_picker {
                 let count = picker.playlists.len() + 1; // +1 for "Create New"
                 match key.code {
-                    KeyCode::Up if picker.selected > 0 => { picker.selected -= 1; }
-                    KeyCode::Down if picker.selected + 1 < count => { picker.selected += 1; }
+                    KeyCode::Up if picker.selected > 0 => {
+                        picker.selected -= 1;
+                    }
+                    KeyCode::Down if picker.selected + 1 < count => {
+                        picker.selected += 1;
+                    }
                     KeyCode::Enter => {
                         if picker.selected == 0 {
                             // Create new playlist
@@ -917,18 +1090,26 @@ impl App {
         }
 
         // Genre/Favorites picker modes
-        if matches!(self.view_mode, ViewMode::GenrePicker | ViewMode::FavoritesPicker) {
+        if matches!(
+            self.view_mode,
+            ViewMode::GenrePicker | ViewMode::FavoritesPicker
+        ) {
             if let Some(ref mut picker) = self.genre_picker {
                 let count = picker.genres.len();
                 match key.code {
-                    KeyCode::Up if picker.selected > 0 => { picker.selected -= 1; }
-                    KeyCode::Down if picker.selected + 1 < count => { picker.selected += 1; }
+                    KeyCode::Up if picker.selected > 0 => {
+                        picker.selected -= 1;
+                    }
+                    KeyCode::Down if picker.selected + 1 < count => {
+                        picker.selected += 1;
+                    }
                     KeyCode::Enter => {
                         if let Some(genre) = picker.genres.get(picker.selected) {
                             if matches!(self.view_mode, ViewMode::GenrePicker) {
                                 self.config.default_genre = genre.name.clone();
                                 self.config.save();
-                                self.toast.show(&format!("Default genre: {}", genre.name), 1.0);
+                                self.toast
+                                    .show(&format!("Default genre: {}", genre.name), 1.0);
                                 self.genre_picker = None;
                                 self.view_mode = ViewMode::Settings;
                             } else {
@@ -963,10 +1144,15 @@ impl App {
         if matches!(self.view_mode, ViewMode::Settings) {
             let count = super::settings::settings_row_count(&self.config);
             match key.code {
-                KeyCode::Up if self.selected > 0 => { self.selected -= 1; }
-                KeyCode::Down if self.selected + 1 < count => { self.selected += 1; }
+                KeyCode::Up if self.selected > 0 => {
+                    self.selected -= 1;
+                }
+                KeyCode::Down if self.selected + 1 < count => {
+                    self.selected += 1;
+                }
                 KeyCode::Enter | KeyCode::Right => {
-                    if let Some(row) = super::settings::settings_row_at(&self.config, self.selected) {
+                    if let Some(row) = super::settings::settings_row_at(&self.config, self.selected)
+                    {
                         // Reset-all sentinel — Enter wipes config back
                         // to default, re-syncs the engine + saves. The
                         // sync is critical: without it the audio engine
@@ -980,28 +1166,38 @@ impl App {
                         if !row.options.is_empty() {
                             let next = (row.current_idx + 1) % row.options.len();
                             let key_str = row.key;
-                            if self.apply_and_sync_setting(key_str, next) { return; }
+                            if self.apply_and_sync_setting(key_str, next) {
+                                return;
+                            }
                         }
                     }
                 }
                 KeyCode::Left => {
                     if let Some(row) = super::settings::settings_row_at(&self.config, self.selected)
                         && row.key != super::settings::RESET_ALL_KEY
-                        && !row.options.is_empty() {
-                            let prev = if row.current_idx == 0 { row.options.len() - 1 } else { row.current_idx - 1 };
-                            let key_str = row.key;
-                            if self.apply_and_sync_setting(key_str, prev) { return; }
+                        && !row.options.is_empty()
+                    {
+                        let prev = if row.current_idx == 0 {
+                            row.options.len() - 1
+                        } else {
+                            row.current_idx - 1
+                        };
+                        let key_str = row.key;
+                        if self.apply_and_sync_setting(key_str, prev) {
+                            return;
                         }
+                    }
                 }
                 // `r` — reset focused row to its `AppConfig::default()` value.
                 KeyCode::Char('r') => {
                     if let Some(row) = super::settings::settings_row_at(&self.config, self.selected)
                         && row.key != super::settings::RESET_ALL_KEY
-                        && row.current_idx != row.default_idx {
-                            let key_str = row.key;
-                            let def = row.default_idx;
-                            self.apply_and_sync_setting(key_str, def);
-                        }
+                        && row.current_idx != row.default_idx
+                    {
+                        let key_str = row.key;
+                        let def = row.default_idx;
+                        self.apply_and_sync_setting(key_str, def);
+                    }
                 }
                 // `R` (shift+r) — reset every row to default (matches the
                 // explicit Reset sentinel at the bottom). Must re-sync
@@ -1023,9 +1219,18 @@ impl App {
                 }
                 // Also honor the standard navigation hotkeys so users
                 // don't get trapped in Settings.
-                KeyCode::Char('b') => { self.view_mode = ViewMode::Browse; self.selected = 0; }
-                KeyCode::Char('q') => { self.view_mode = ViewMode::Queue; self.selected = 0; }
-                KeyCode::Char('h') => { self.view_mode = ViewMode::History; self.selected = 0; }
+                KeyCode::Char('b') => {
+                    self.view_mode = ViewMode::Browse;
+                    self.selected = 0;
+                }
+                KeyCode::Char('q') => {
+                    self.view_mode = ViewMode::Queue;
+                    self.selected = 0;
+                }
+                KeyCode::Char('h') => {
+                    self.view_mode = ViewMode::History;
+                    self.selected = 0;
+                }
                 _ => {}
             }
             return;
@@ -1040,16 +1245,16 @@ impl App {
             // happened between touch + key.
             if let Some(midi) = &self.midi
                 && let Ok(state) = midi.lock()
-                    && let Some((ev, _val)) = state.last_event.clone() {
-                        self.midi_learn_captured = Some(ev);
-                    }
+                && let Some((ev, _val)) = state.last_event.clone()
+            {
+                self.midi_learn_captured = Some(ev);
+            }
             match key.code {
                 KeyCode::Esc => {
                     self.view_mode = ViewMode::Dashboard;
                 }
                 KeyCode::Up => {
-                    self.midi_learn_action_sel = self.midi_learn_action_sel
-                        .saturating_sub(1);
+                    self.midi_learn_action_sel = self.midi_learn_action_sel.saturating_sub(1);
                 }
                 KeyCode::Down => {
                     let max = super::midi_learn::action_count().saturating_sub(1);
@@ -1061,13 +1266,14 @@ impl App {
                         super::midi_learn::action_at(self.midi_learn_action_sel),
                     ) {
                         if let Some(midi) = &self.midi
-                            && let Ok(mut state) = midi.lock() {
-                                let label = format!("{} → {}", event.label(), action.label());
-                                state.map.bind(event, action);
-                                drop(state);
-                                self.toast.show(&format!("Bound {label}"), 1.5);
-                                self.midi_learn_captured = None;
-                            }
+                            && let Ok(mut state) = midi.lock()
+                        {
+                            let label = format!("{} → {}", event.label(), action.label());
+                            state.map.bind(event, action);
+                            drop(state);
+                            self.toast.show(&format!("Bound {label}"), 1.5);
+                            self.midi_learn_captured = None;
+                        }
                     } else {
                         self.toast.show("Touch a control first", 1.0);
                     }
@@ -1075,11 +1281,12 @@ impl App {
                 KeyCode::Char('u') | KeyCode::Char('U') => {
                     if let Some(event) = self.midi_learn_captured.clone()
                         && let Some(midi) = &self.midi
-                            && let Ok(mut state) = midi.lock() {
-                                state.map.unbind(&event);
-                                drop(state);
-                                self.toast.show(&format!("Unbound {}", event.label()), 1.0);
-                            }
+                        && let Ok(mut state) = midi.lock()
+                    {
+                        state.map.unbind(&event);
+                        drop(state);
+                        self.toast.show(&format!("Unbound {}", event.label()), 1.0);
+                    }
                 }
                 _ => {}
             }
@@ -1093,13 +1300,26 @@ impl App {
                 }
                 KeyCode::Tab => {
                     self.mixer_deck_is_a = !self.mixer_deck_is_a;
-                    self.toast.show(&format!("Deck {}", if self.mixer_deck_is_a {"A"} else {"B"}), 0.5);
+                    self.toast.show(
+                        &format!("Deck {}", if self.mixer_deck_is_a { "A" } else { "B" }),
+                        0.5,
+                    );
                 }
-                KeyCode::Up => { self.mixer_row = self.mixer_row.prev(); }
-                KeyCode::Down => { self.mixer_row = self.mixer_row.next(); }
-                KeyCode::Left => { self.adjust_mixer_row(-1.0); }
-                KeyCode::Right => { self.adjust_mixer_row(1.0); }
-                KeyCode::Char('r') => { self.reset_mixer_row(); }
+                KeyCode::Up => {
+                    self.mixer_row = self.mixer_row.prev();
+                }
+                KeyCode::Down => {
+                    self.mixer_row = self.mixer_row.next();
+                }
+                KeyCode::Left => {
+                    self.adjust_mixer_row(-1.0);
+                }
+                KeyCode::Right => {
+                    self.adjust_mixer_row(1.0);
+                }
+                KeyCode::Char('r') => {
+                    self.reset_mixer_row();
+                }
                 KeyCode::Char('0') => {
                     self.pending_confirm = Some(super::app::ConfirmAction::ResetAllMixerControls);
                     self.toast.show("Reset ALL mixer controls? Y/N", 5.0);
@@ -1135,12 +1355,24 @@ impl App {
         };
 
         match key.code {
-            KeyCode::Up if self.selected > 0 => { self.selected -= 1; }
-            KeyCode::Down if self.selected + 1 < item_count => { self.selected += 1; }
-            KeyCode::Home => { self.selected = 0; }
-            KeyCode::End => { self.selected = item_count.saturating_sub(1); }
-            KeyCode::PageUp => { self.selected = self.selected.saturating_sub(10); }
-            KeyCode::PageDown => { self.selected = (self.selected + 10).min(item_count.saturating_sub(1)); }
+            KeyCode::Up if self.selected > 0 => {
+                self.selected -= 1;
+            }
+            KeyCode::Down if self.selected + 1 < item_count => {
+                self.selected += 1;
+            }
+            KeyCode::Home => {
+                self.selected = 0;
+            }
+            KeyCode::End => {
+                self.selected = item_count.saturating_sub(1);
+            }
+            KeyCode::PageUp => {
+                self.selected = self.selected.saturating_sub(10);
+            }
+            KeyCode::PageDown => {
+                self.selected = (self.selected + 10).min(item_count.saturating_sub(1));
+            }
 
             KeyCode::Esc => {
                 match self.view_mode {
@@ -1149,7 +1381,9 @@ impl App {
                             // Skip empty placeholder screens (from
                             // canonical nav paths). Each pop restores
                             // its own cursor state.
-                            while self.screen_stack.len() > 1 && self.current_screen().item_count() == 0 {
+                            while self.screen_stack.len() > 1
+                                && self.current_screen().item_count() == 0
+                            {
                                 self.pop_screen();
                             }
                         }
@@ -1204,9 +1438,10 @@ impl App {
                     self.engine.stop_preview();
                     self.toast.show("Preview stopped", 1.0);
                 } else if matches!(self.view_mode, ViewMode::Browse)
-                    && let Some(track) = self.current_screen().track_at(self.selected).cloned() {
-                        self.download_for_preview(track);
-                    }
+                    && let Some(track) = self.current_screen().track_at(self.selected).cloned()
+                {
+                    self.download_for_preview(track);
+                }
             }
 
             // Enter on track list: queue track
@@ -1219,7 +1454,9 @@ impl App {
                     let mut added = 0;
                     #[allow(clippy::unnecessary_to_owned)]
                     for track in tracks.to_vec() {
-                        if self.engine.enqueue(QueueEntry::from(track)) { added += 1; }
+                        if self.engine.enqueue(QueueEntry::from(track)) {
+                            added += 1;
+                        }
                     }
                     let msg = match (added, total - added) {
                         (0, _) => "All tracks already queued".to_string(),
@@ -1232,14 +1469,16 @@ impl App {
 
             KeyCode::Char('[') => {
                 if let Some((shift, pos)) = self.engine.nudge(-1) {
-                    self.toast.show(&format!("{shift:+.0}ms  beat@{:.0}ms", pos * 1000.0), 1.0);
+                    self.toast
+                        .show(&format!("{shift:+.0}ms  beat@{:.0}ms", pos * 1000.0), 1.0);
                 } else {
                     self.toast.show("Nudge ◀", 0.5);
                 }
             }
             KeyCode::Char(']') => {
                 if let Some((shift, pos)) = self.engine.nudge(1) {
-                    self.toast.show(&format!("{shift:+.0}ms  beat@{:.0}ms", pos * 1000.0), 1.0);
+                    self.toast
+                        .show(&format!("{shift:+.0}ms  beat@{:.0}ms", pos * 1000.0), 1.0);
                 } else {
                     self.toast.show("Nudge ▶", 0.5);
                 }
@@ -1310,16 +1549,26 @@ impl App {
                 // captured by the prompt (see top of handle_key).
                 self.command_prompt = Some(String::new());
             }
-            KeyCode::Char('p') => { self.engine.pause(); self.toast.show("Play/Pause", 1.0); }
-            KeyCode::Char('n') => { self.engine.skip(); self.toast.show("Skipped", 1.0); }
+            KeyCode::Char('p') => {
+                self.engine.pause();
+                self.toast.show("Play/Pause", 1.0);
+            }
+            KeyCode::Char('n') => {
+                self.engine.skip();
+                self.toast.show("Skipped", 1.0);
+            }
             KeyCode::Char('r') => {
                 // Favorites are metadata-only on main — there's no
                 // local audio to sync. Tracks are re-fetched (in
                 // memory) from Beatport when played.
-                self.toast.show("Favorites are metadata-only on main — no sync needed", 2.5);
+                self.toast
+                    .show("Favorites are metadata-only on main — no sync needed", 2.5);
             }
 
-            KeyCode::Char('t') => { self.engine.teleport(&self.config); self.toast.show("Teleport to mix point", 1.0); }
+            KeyCode::Char('t') => {
+                self.engine.teleport(&self.config);
+                self.toast.show("Teleport to mix point", 1.0);
+            }
             KeyCode::Char('T') => {
                 use crate::audio::engine::RewindOutcome;
                 match self.engine.request_rewind() {
@@ -1332,7 +1581,8 @@ impl App {
                         self.toast.show(&format!("Rewinding: {name}"), 2.0);
                     }
                     Some(RewindOutcome::Blocked) => {
-                        self.toast.show("Wait for the current mix to finish before rewinding", 2.5);
+                        self.toast
+                            .show("Wait for the current mix to finish before rewinding", 2.5);
                     }
                     None => {
                         self.toast.show("No mix to rewind", 1.5);
@@ -1360,17 +1610,27 @@ impl App {
                 // nothing on re-press."
                 let fallback_note =
                     if matches!(self.config.analyzer_engine, AnalyzerEngine::Stratum)
-                        && !cfg!(feature = "stratum") {
+                        && !cfg!(feature = "stratum")
+                    {
                         " (not compiled — using built-in)"
-                    } else { "" };
+                    } else {
+                        ""
+                    };
                 match self.engine.reanalyze_playing(self.config.analyzer_engine) {
                     Some(bpm) => self.toast.show(
-                        &format!("Engine: {label}{fallback_note} — re-gridded @ {bpm:.1} BPM"), 3.0),
+                        &format!("Engine: {label}{fallback_note} — re-gridded @ {bpm:.1} BPM"),
+                        3.0,
+                    ),
                     None => self.toast.show(
-                        &format!("Engine: {label}{fallback_note} (no track loaded)"), 2.0),
+                        &format!("Engine: {label}{fallback_note} (no track loaded)"),
+                        2.0,
+                    ),
                 }
             }
-            KeyCode::Char('m') => { self.engine.mix_now(); self.toast.show("Mix now", 1.0); }
+            KeyCode::Char('m') => {
+                self.engine.mix_now();
+                self.toast.show("Mix now", 1.0);
+            }
             KeyCode::Char('w') | KeyCode::Char('W') => {
                 let unfollow = key.code == KeyCode::Char('W');
                 if matches!(self.view_mode, ViewMode::Browse) {
@@ -1390,8 +1650,16 @@ impl App {
                                         };
                                         let verb = if unfollow { "Unfollowed" } else { "Followed" };
                                         match result {
-                                            Ok(()) => { tx.send(AppAction::Toast(format!("{verb}: {name}"))).ok(); }
-                                            Err(e) => { tx.send(AppAction::Toast(format!("Error: {e}"))).ok(); }
+                                            Ok(()) => {
+                                                tx.send(AppAction::Toast(format!(
+                                                    "{verb}: {name}"
+                                                )))
+                                                .ok();
+                                            }
+                                            Err(e) => {
+                                                tx.send(AppAction::Toast(format!("Error: {e}")))
+                                                    .ok();
+                                            }
                                         }
                                     });
                                 }
@@ -1412,8 +1680,16 @@ impl App {
                                         };
                                         let verb = if unfollow { "Unfollowed" } else { "Followed" };
                                         match result {
-                                            Ok(()) => { tx.send(AppAction::Toast(format!("{verb}: {name}"))).ok(); }
-                                            Err(e) => { tx.send(AppAction::Toast(format!("Error: {e}"))).ok(); }
+                                            Ok(()) => {
+                                                tx.send(AppAction::Toast(format!(
+                                                    "{verb}: {name}"
+                                                )))
+                                                .ok();
+                                            }
+                                            Err(e) => {
+                                                tx.send(AppAction::Toast(format!("Error: {e}")))
+                                                    .ok();
+                                            }
                                         }
                                     });
                                 }
@@ -1421,17 +1697,26 @@ impl App {
                         }
                         _ => {
                             self.waveform_mode = self.waveform_mode.next();
-                            self.toast.show(&format!("Waveform: {}", self.waveform_mode.label()), 1.0);
+                            self.toast
+                                .show(&format!("Waveform: {}", self.waveform_mode.label()), 1.0);
                         }
                     }
                 } else {
                     // Not in browse — toggle waveform mode
                     self.waveform_mode = self.waveform_mode.next();
-                    self.toast.show(&format!("Waveform: {}", self.waveform_mode.label()), 1.0);
+                    self.toast
+                        .show(&format!("Waveform: {}", self.waveform_mode.label()), 1.0);
                 }
             }
 
-            KeyCode::Char('F') if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) | key.modifiers.contains(crossterm::event::KeyModifiers::SHIFT) => {
+            KeyCode::Char('F')
+                if key
+                    .modifiers
+                    .contains(crossterm::event::KeyModifiers::CONTROL)
+                    | key
+                        .modifiers
+                        .contains(crossterm::event::KeyModifiers::SHIFT) =>
+            {
                 // Ctrl+F or Shift+F: start local filter
                 if matches!(self.view_mode, ViewMode::Browse) {
                     self.filtering = true;
@@ -1443,9 +1728,14 @@ impl App {
 
             KeyCode::Char('y') => {
                 // Copy screen dump to clipboard
-                let path = dirs::home_dir().unwrap_or_default().join(".mixr/screen.txt");
+                let path = dirs::home_dir()
+                    .unwrap_or_default()
+                    .join(".mixr/screen.txt");
                 if let Ok(content) = std::fs::read_to_string(&path) {
-                    match std::process::Command::new("pbcopy").stdin(std::process::Stdio::piped()).spawn() {
+                    match std::process::Command::new("pbcopy")
+                        .stdin(std::process::Stdio::piped())
+                        .spawn()
+                    {
                         Ok(mut child) => {
                             if let Some(ref mut stdin) = child.stdin {
                                 use std::io::Write;
@@ -1460,26 +1750,53 @@ impl App {
             }
             KeyCode::Char('e') => {
                 let count = self.engine.export_history();
-                if count > 0 { self.toast.show(&format!("History exported: {count} tracks"), 2.0); }
-                else { self.toast.show("No history to export", 1.0); }
+                if count > 0 {
+                    self.toast
+                        .show(&format!("History exported: {count} tracks"), 2.0);
+                } else {
+                    self.toast.show("No history to export", 1.0);
+                }
             }
-            KeyCode::Char('x') => { self.engine.smart_shuffle(); self.toast.show("Queue shuffled (BPM+key)", 1.5); }
+            KeyCode::Char('x') => {
+                self.engine.smart_shuffle();
+                self.toast.show("Queue shuffled (BPM+key)", 1.5);
+            }
             KeyCode::Char('X') => {
                 let n = self.engine.queue.len();
                 if n == 0 {
                     self.toast.show("Queue already empty", 0.6);
                 } else {
                     self.pending_confirm = Some(super::app::ConfirmAction::ClearQueue);
-                    self.toast.show(&format!("Clear queue ({n} track{})? Y/N", if n == 1 { "" } else { "s" }), 5.0);
+                    self.toast.show(
+                        &format!(
+                            "Clear queue ({n} track{})? Y/N",
+                            if n == 1 { "" } else { "s" }
+                        ),
+                        5.0,
+                    );
                 }
             }
             KeyCode::Char('S') => {
                 let on = self.engine.toggle_split_cue();
-                self.toast.show(if on { "Split cue: ON (L=deck A, R=deck B)" } else { "Split cue: OFF" }, 2.0);
+                self.toast.show(
+                    if on {
+                        "Split cue: ON (L=deck A, R=deck B)"
+                    } else {
+                        "Split cue: OFF"
+                    },
+                    2.0,
+                );
             }
             KeyCode::Char('M') => {
                 let on = self.engine.toggle_metronome();
-                self.toast.show(if on { "Metronome: ON" } else { "Metronome: OFF" }, 1.0);
+                self.toast.show(
+                    if on {
+                        "Metronome: ON"
+                    } else {
+                        "Metronome: OFF"
+                    },
+                    1.0,
+                );
             }
             KeyCode::Char('{') => {
                 // Queue grab/drop — works globally, switches to queue view
@@ -1492,7 +1809,8 @@ impl App {
                     self.toast.show("Dropped", 0.5);
                 } else {
                     self.queue_grab_index = Some(self.selected);
-                    self.toast.show("Grabbed — move with ↑↓, press } to drop", 2.0);
+                    self.toast
+                        .show("Grabbed — move with ↑↓, press } to drop", 2.0);
                 }
             }
             KeyCode::Char('}') => {
@@ -1502,9 +1820,18 @@ impl App {
                     self.toast.show("Moved", 0.5);
                 }
             }
-            KeyCode::Char('q') => { self.view_mode = ViewMode::Queue; self.selected = 0; self.queue_grab_index = None; }
-            KeyCode::Char('h') => { self.view_mode = ViewMode::History; self.selected = 0; }
-            KeyCode::Char('d') => { self.view_mode = ViewMode::Dashboard; }
+            KeyCode::Char('q') => {
+                self.view_mode = ViewMode::Queue;
+                self.selected = 0;
+                self.queue_grab_index = None;
+            }
+            KeyCode::Char('h') => {
+                self.view_mode = ViewMode::History;
+                self.selected = 0;
+            }
+            KeyCode::Char('d') => {
+                self.view_mode = ViewMode::Dashboard;
+            }
             KeyCode::Char('/') | KeyCode::Char('s') => {
                 self.view_mode = ViewMode::Search;
                 self.search_query.clear();
@@ -1521,39 +1848,65 @@ impl App {
                 let slot = (c as u8 - b'1') as usize;
                 let is_a = self.cached_info.playing_is_a;
                 self.engine.cue_jump(is_a, slot);
-                self.toast.show(&format!("Cue {} jump ({})", slot + 1, Self::deck_label(is_a)), 0.5);
+                self.toast.show(
+                    &format!("Cue {} jump ({})", slot + 1, Self::deck_label(is_a)),
+                    0.5,
+                );
             }
             KeyCode::Char(c @ ('!' | '@' | '#' | '$')) => {
-                let slot = match c { '!' => 0, '@' => 1, '#' => 2, '$' => 3, _ => 0 };
+                let slot = match c {
+                    '!' => 0,
+                    '@' => 1,
+                    '#' => 2,
+                    '$' => 3,
+                    _ => 0,
+                };
                 let is_a = self.cached_info.playing_is_a;
                 self.engine.cue_set(is_a, slot);
-                self.toast.show(&format!("Cue {} set ({})", slot + 1, Self::deck_label(is_a)), 0.8);
+                self.toast.show(
+                    &format!("Cue {} set ({})", slot + 1, Self::deck_label(is_a)),
+                    0.8,
+                );
             }
             // Virtual Mixer overlay is dashboard-only. See the dashboard
             // handler above (`if matches!(ViewMode::Dashboard)`) for the
             // real z/Z binding; out here it'd collide with per-mode
             // shortcuts and confuse users browsing.
-            KeyCode::Char(',') => { self.view_mode = ViewMode::Settings; self.selected = 0; }
+            KeyCode::Char(',') => {
+                self.view_mode = ViewMode::Settings;
+                self.selected = 0;
+            }
             KeyCode::Char('K') => {
                 self.view_mode = ViewMode::MidiLearn;
                 self.midi_learn_action_sel = 0;
                 self.midi_learn_captured = None;
             }
-            KeyCode::Char('b') => { self.view_mode = ViewMode::Browse; self.selected = 0; }
+            KeyCode::Char('b') => {
+                self.view_mode = ViewMode::Browse;
+                self.selected = 0;
+            }
             // Dashboard's `v` is dashboard-layout cycle (handled in the
             // dashboard arm above); skip the compact-view toggle here so
             // the two don't double-fire.
             KeyCode::Char('v') if !matches!(self.view_mode, ViewMode::Dashboard) => {
                 self.config.compact_view = !self.config.compact_view;
                 self.config.save();
-                self.toast.show(if self.config.compact_view { "Compact view" } else { "Full view" }, 1.0);
+                self.toast.show(
+                    if self.config.compact_view {
+                        "Compact view"
+                    } else {
+                        "Full view"
+                    },
+                    1.0,
+                );
             }
             KeyCode::Char('L') => {
                 // Load more (pagination) — works on track, chart, release lists
                 if matches!(self.view_mode, ViewMode::Browse)
-                    && let Some(ref action) = self.last_load_action.clone() {
-                        self.load_more(action);
-                    }
+                    && let Some(ref action) = self.last_load_action.clone()
+                {
+                    self.load_more(action);
+                }
             }
 
             KeyCode::Char('+') => {
@@ -1573,7 +1926,11 @@ impl App {
                 if let Some(track) = track {
                     let added = self.favorites.toggle(&track);
                     let name = format!("{} - {}", track.artist_name(), track.full_title());
-                    let msg = if added { format!("★ {name}") } else { format!("Unfavorited: {name}") };
+                    let msg = if added {
+                        format!("★ {name}")
+                    } else {
+                        format!("Unfavorited: {name}")
+                    };
                     self.toast.show(&msg, 1.5);
                 }
             }
@@ -1599,7 +1956,9 @@ impl App {
                 self.view_mode = ViewMode::ClaudeDj;
                 self.scroll_offset = 0;
             }
-            KeyCode::Char('C') => { self.toggle_claude_dj(); }
+            KeyCode::Char('C') => {
+                self.toggle_claude_dj();
+            }
             _ => {}
         }
 
@@ -1636,7 +1995,9 @@ impl App {
                         -2 => {
                             // Whole row: queue track
                             let name = format!("{} - {}", track.artist_name(), track.full_title());
-                            let added = self.engine.enqueue(crate::audio::engine::QueueEntry::from(track));
+                            let added = self
+                                .engine
+                                .enqueue(crate::audio::engine::QueueEntry::from(track));
                             let msg = if added {
                                 format!("Queued: {name}")
                             } else {
@@ -1656,10 +2017,18 @@ impl App {
                                 let a = &track.artists[0];
                                 self.navigate_to_artist(a.id, &a.name);
                             } else if track.artists.len() > 1 {
-                                let artists: Vec<crate::beatport::models::BeatportArtist> = track.artists.iter()
-                                    .map(|a| crate::beatport::models::BeatportArtist { id: a.id, name: a.name.clone() })
+                                let artists: Vec<crate::beatport::models::BeatportArtist> = track
+                                    .artists
+                                    .iter()
+                                    .map(|a| crate::beatport::models::BeatportArtist {
+                                        id: a.id,
+                                        name: a.name.clone(),
+                                    })
                                     .collect();
-                                self.push_screen(BrowseScreen::ArtistList { title: "Artists".into(), artists });
+                                self.push_screen(BrowseScreen::ArtistList {
+                                    title: "Artists".into(),
+                                    artists,
+                                });
                             }
                         }
                         1 => {
@@ -1668,32 +2037,48 @@ impl App {
                                 let r = &track.remixers[0];
                                 self.navigate_to_artist(r.id, &r.name);
                             } else if track.remixers.len() > 1 {
-                                let artists: Vec<crate::beatport::models::BeatportArtist> = track.remixers.iter()
-                                    .map(|r| crate::beatport::models::BeatportArtist { id: r.id, name: r.name.clone() })
+                                let artists: Vec<crate::beatport::models::BeatportArtist> = track
+                                    .remixers
+                                    .iter()
+                                    .map(|r| crate::beatport::models::BeatportArtist {
+                                        id: r.id,
+                                        name: r.name.clone(),
+                                    })
                                     .collect();
-                                self.push_screen(BrowseScreen::ArtistList { title: "Remixers".into(), artists });
+                                self.push_screen(BrowseScreen::ArtistList {
+                                    title: "Remixers".into(),
+                                    artists,
+                                });
                             }
                         }
                         2 => {
                             // Label column
-                            if let (Some(lid), Some(lname)) = (track.label_id, track.label_name.as_deref()) {
+                            if let (Some(lid), Some(lname)) =
+                                (track.label_id, track.label_name.as_deref())
+                            {
                                 self.navigate_to_label(lid, lname);
                             }
                         }
                         3 => {
                             // Genre column
-                            if let (Some(gid), Some(gname)) = (track.genre_id, track.genre_name.as_deref()) {
+                            if let (Some(gid), Some(gname)) =
+                                (track.genre_id, track.genre_name.as_deref())
+                            {
                                 self.navigate_to_genre(gid, gname);
                             }
                         }
                         4 => {
                             // Date column — show tracks from that year
                             if let Some(ref date) = track.release_date
-                                && date.len() >= 4 {
-                                    let year = &date[..4];
-                                    let range = format!("{year}-01-01:{year}-12-31");
-                                    self.execute_menu_action(MenuAction::LoadDecadeTracks(range, track.genre_id));
-                                }
+                                && date.len() >= 4
+                            {
+                                let year = &date[..4];
+                                let range = format!("{year}-01-01:{year}-12-31");
+                                self.execute_menu_action(MenuAction::LoadDecadeTracks(
+                                    range,
+                                    track.genre_id,
+                                ));
+                            }
                         }
                         _ => {}
                     }
@@ -1736,7 +2121,10 @@ impl App {
         match self.dash_section {
             CtrlSection::CueA | CtrlSection::JumpA => {
                 self.engine.jump(direction * jb);
-                self.toast.show(&format!("A {} {jb} bars", if direction > 0 { "▶▶" } else { "◀◀" }), 1.0);
+                self.toast.show(
+                    &format!("A {} {jb} bars", if direction > 0 { "▶▶" } else { "◀◀" }),
+                    1.0,
+                );
             }
             CtrlSection::PlayA | CtrlSection::PlayB => {
                 self.engine.pause();
@@ -1744,41 +2132,61 @@ impl App {
             }
             CtrlSection::NudgeA | CtrlSection::NudgeB => {
                 self.engine.nudge(direction);
-                self.toast.show(&format!("Nudge {}", if direction > 0 { "▶" } else { "◀" }), 0.5);
+                self.toast.show(
+                    &format!("Nudge {}", if direction > 0 { "▶" } else { "◀" }),
+                    0.5,
+                );
             }
             CtrlSection::CueB | CtrlSection::JumpB => {
                 self.engine.jump(direction * jb);
-                self.toast.show(&format!("B {} {jb} bars", if direction > 0 { "▶▶" } else { "◀◀" }), 1.0);
+                self.toast.show(
+                    &format!("B {} {jb} bars", if direction > 0 { "▶▶" } else { "◀◀" }),
+                    1.0,
+                );
             }
             CtrlSection::TempoA => {
                 let range = self.config.tempo_range as f64 / 100.0;
                 let step = range / 20.0;
-                let native = self.cached_info.playing_track.as_ref().and_then(|t| t.bpm).unwrap_or(128.0);
+                let native = self
+                    .cached_info
+                    .playing_track
+                    .as_ref()
+                    .and_then(|t| t.bpm)
+                    .unwrap_or(128.0);
                 let current = self.cached_info.playing_bpm.unwrap_or(native);
                 let ratio = current / native;
                 let new_ratio = (ratio + direction as f64 * step).clamp(1.0 - range, 1.0 + range);
                 self.engine.set_playing_rate(new_ratio);
-                self.toast.show(&format!("Tempo A: {:+.1}%", (new_ratio - 1.0) * 100.0), 0.5);
+                self.toast
+                    .show(&format!("Tempo A: {:+.1}%", (new_ratio - 1.0) * 100.0), 0.5);
             }
             CtrlSection::TempoB => {
                 let range = self.config.tempo_range as f64 / 100.0;
                 let step = range / 20.0;
-                let native = self.cached_info.incoming_track.as_ref().and_then(|t| t.bpm).unwrap_or(128.0);
+                let native = self
+                    .cached_info
+                    .incoming_track
+                    .as_ref()
+                    .and_then(|t| t.bpm)
+                    .unwrap_or(128.0);
                 let current = self.cached_info.incoming_bpm.unwrap_or(native);
                 let ratio = current / native;
                 let new_ratio = (ratio + direction as f64 * step).clamp(1.0 - range, 1.0 + range);
                 self.engine.set_incoming_rate(new_ratio);
-                self.toast.show(&format!("Tempo B: {:+.1}%", (new_ratio - 1.0) * 100.0), 0.5);
+                self.toast
+                    .show(&format!("Tempo B: {:+.1}%", (new_ratio - 1.0) * 100.0), 0.5);
             }
             CtrlSection::VolumeA => {
                 let new_vol = if direction > 0 { 1.0f32 } else { 0.0 };
                 self.engine.set_volume(0, new_vol);
-                self.toast.show(&format!("Vol A: {:.0}%", new_vol * 100.0), 0.5);
+                self.toast
+                    .show(&format!("Vol A: {:.0}%", new_vol * 100.0), 0.5);
             }
             CtrlSection::VolumeB => {
                 let new_vol = if direction > 0 { 1.0f32 } else { 0.0 };
                 self.engine.set_volume(1, new_vol);
-                self.toast.show(&format!("Vol B: {:.0}%", new_vol * 100.0), 0.5);
+                self.toast
+                    .show(&format!("Vol B: {:.0}%", new_vol * 100.0), 0.5);
             }
             CtrlSection::Crossfader => {
                 let cur = self.cached_info.crossfader_pos as f64;
@@ -1786,11 +2194,16 @@ impl App {
                 self.engine.set_crossfader(next as f32);
                 self.toast.show(&format!("Crossfader: {:+.2}", next), 0.4);
             }
-            CtrlSection::EqLowA | CtrlSection::EqLowB
-            | CtrlSection::EqMidA | CtrlSection::EqMidB
-            | CtrlSection::EqHighA | CtrlSection::EqHighB => {
-                let is_a = matches!(self.dash_section,
-                    CtrlSection::EqLowA | CtrlSection::EqMidA | CtrlSection::EqHighA);
+            CtrlSection::EqLowA
+            | CtrlSection::EqLowB
+            | CtrlSection::EqMidA
+            | CtrlSection::EqMidB
+            | CtrlSection::EqHighA
+            | CtrlSection::EqHighB => {
+                let is_a = matches!(
+                    self.dash_section,
+                    CtrlSection::EqLowA | CtrlSection::EqMidA | CtrlSection::EqHighA
+                );
                 let (band, cur) = match self.dash_section {
                     CtrlSection::EqLowA => ("Low", self.cached_info.deck_a_eq_low_db),
                     CtrlSection::EqMidA => ("Mid", self.cached_info.deck_a_eq_mid_db),
@@ -1804,14 +2217,24 @@ impl App {
                 let mid = if band == "Mid" { Some(next) } else { None };
                 let hi = if band == "High" { Some(next) } else { None };
                 self.engine.set_eq(is_a, lo, mid, hi);
-                self.toast.show(&format!("{band} {}: {next:+.0} dB", Self::deck_label(is_a)), 0.4);
+                self.toast.show(
+                    &format!("{band} {}: {next:+.0} dB", Self::deck_label(is_a)),
+                    0.4,
+                );
             }
             CtrlSection::FilterA | CtrlSection::FilterB => {
                 let is_a = matches!(self.dash_section, CtrlSection::FilterA);
-                let cur = if is_a { self.cached_info.deck_a_filter_pos } else { self.cached_info.deck_b_filter_pos };
+                let cur = if is_a {
+                    self.cached_info.deck_a_filter_pos
+                } else {
+                    self.cached_info.deck_b_filter_pos
+                };
                 let next = (cur + direction as f32 * 0.05).clamp(-1.0, 1.0);
                 self.engine.set_filter(is_a, next);
-                self.toast.show(&format!("Filter {}: {next:+.2}", Self::deck_label(is_a)), 0.4);
+                self.toast.show(
+                    &format!("Filter {}: {next:+.2}", Self::deck_label(is_a)),
+                    0.4,
+                );
             }
         }
     }

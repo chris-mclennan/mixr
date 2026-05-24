@@ -20,9 +20,10 @@ impl Toast {
 
     pub fn current(&mut self) -> Option<String> {
         if let Some(expiry) = self.expiry
-            && Instant::now() < expiry {
-                return self.message.clone();
-            }
+            && Instant::now() < expiry
+        {
+            return self.message.clone();
+        }
         self.message = None;
         self.expiry = None;
         None
@@ -33,6 +34,10 @@ impl Toast {
     /// toast feedback for actions they trigger.
     pub fn peek(&self) -> Option<&str> {
         let expiry = self.expiry?;
-        if Instant::now() < expiry { self.message.as_deref() } else { None }
+        if Instant::now() < expiry {
+            self.message.as_deref()
+        } else {
+            None
+        }
     }
 }

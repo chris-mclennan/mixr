@@ -32,7 +32,9 @@ pub struct SessionSnapshot {
     pub saved_at: String,
 }
 
-fn default_deck() -> String { "a".into() }
+fn default_deck() -> String {
+    "a".into()
+}
 
 fn session_path() -> PathBuf {
     let dir = dirs::home_dir().unwrap_or_default().join(".mixr");
@@ -45,8 +47,7 @@ fn session_path() -> PathBuf {
 pub fn save(snap: &SessionSnapshot) -> std::io::Result<()> {
     let path = session_path();
     let tmp = path.with_extension("json.tmp");
-    let json = serde_json::to_string_pretty(snap)
-        .map_err(std::io::Error::other)?;
+    let json = serde_json::to_string_pretty(snap).map_err(std::io::Error::other)?;
     std::fs::write(&tmp, json)?;
     std::fs::rename(&tmp, &path)?;
     Ok(())
@@ -61,4 +62,3 @@ pub fn load() -> Option<SessionSnapshot> {
 pub fn delete() {
     let _ = std::fs::remove_file(session_path());
 }
-

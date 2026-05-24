@@ -1,46 +1,65 @@
 //! IPC command handler extracted from app.rs.
 //! Pure code move — no behavior changes.
 
-use super::app::{App, AppAction, DashFocus, ViewMode, TestMixState};
+use super::app::{App, AppAction, DashFocus, TestMixState, ViewMode};
 
 impl App {
     pub(crate) fn handle_ipc_command(&mut self, cmd: crate::ipc::IpcCommand) {
         match cmd {
-            crate::ipc::IpcCommand::Skip => { self.engine.skip(); self.toast.show("Skipped (remote)", 1.0); }
-            crate::ipc::IpcCommand::Pause => { self.engine.pause(); self.toast.show("Pause (remote)", 1.0); }
-            crate::ipc::IpcCommand::Teleport => { self.engine.teleport(&self.config); self.toast.show("Teleport (remote)", 1.0); }
-            crate::ipc::IpcCommand::MixNow => { self.engine.mix_now(); self.toast.show("Mix now (remote)", 1.0); }
-            crate::ipc::IpcCommand::ClearQueue => { self.engine.clear_queue(); self.toast.show("Queue cleared (remote)", 1.0); }
-            crate::ipc::IpcCommand::Nudge(dir) => { self.engine.nudge(dir); }
+            crate::ipc::IpcCommand::Skip => {
+                self.engine.skip();
+                self.toast.show("Skipped (remote)", 1.0);
+            }
+            crate::ipc::IpcCommand::Pause => {
+                self.engine.pause();
+                self.toast.show("Pause (remote)", 1.0);
+            }
+            crate::ipc::IpcCommand::Teleport => {
+                self.engine.teleport(&self.config);
+                self.toast.show("Teleport (remote)", 1.0);
+            }
+            crate::ipc::IpcCommand::MixNow => {
+                self.engine.mix_now();
+                self.toast.show("Mix now (remote)", 1.0);
+            }
+            crate::ipc::IpcCommand::ClearQueue => {
+                self.engine.clear_queue();
+                self.toast.show("Queue cleared (remote)", 1.0);
+            }
+            crate::ipc::IpcCommand::Nudge(dir) => {
+                self.engine.nudge(dir);
+            }
             crate::ipc::IpcCommand::ResumeAuto => {
                 let was_paused = self.engine.resume_auto();
                 self.toast.show(
-                    if was_paused { "Auto-mix re-enabled" } else { "Auto-mix already on" },
+                    if was_paused {
+                        "Auto-mix re-enabled"
+                    } else {
+                        "Auto-mix already on"
+                    },
                     1.0,
                 );
             }
             crate::ipc::IpcCommand::LoadDeck { is_a } => {
                 let deck_label = if is_a { "A" } else { "B" };
                 // Resolve the highlighted track from the current screen.
-                let track = self.current_screen().tracks()
+                let track = self
+                    .current_screen()
+                    .tracks()
                     .and_then(|tracks| tracks.get(self.selected).cloned());
                 let Some(track) = track else {
-                    self.toast.show(
-                        &format!("Load → Deck {deck_label}: no track selected"),
-                        1.5,
-                    );
+                    self.toast
+                        .show(&format!("Load → Deck {deck_label}: no track selected"), 1.5);
                     return;
                 };
                 // Refuse if the requested deck is currently playing —
                 // hot-loading over a live deck would cut it mid-song.
                 let info = &self.cached_info;
-                let target_is_playing = (is_a && info.deck_a_is_playing)
-                    || (!is_a && info.deck_b_is_playing);
+                let target_is_playing =
+                    (is_a && info.deck_a_is_playing) || (!is_a && info.deck_b_is_playing);
                 if target_is_playing {
-                    self.toast.show(
-                        &format!("Deck {deck_label} is playing — pause first"),
-                        2.0,
-                    );
+                    self.toast
+                        .show(&format!("Deck {deck_label} is playing — pause first"), 2.0);
                     return;
                 }
                 // Determine routing: incoming-slot if the playing deck
@@ -49,8 +68,11 @@ impl App {
                 let any_playing = info.deck_a_is_playing || info.deck_b_is_playing;
                 let as_incoming = any_playing;
                 self.toast.show(
-                    &format!("Load → Deck {deck_label}: {} - {}",
-                        track.artist_name(), track.full_title()),
+                    &format!(
+                        "Load → Deck {deck_label}: {} - {}",
+                        track.artist_name(),
+                        track.full_title()
+                    ),
                     1.5,
                 );
                 self.download_and_play(std::sync::Arc::new(track), as_incoming);
@@ -60,10 +82,8 @@ impl App {
             }
             crate::ipc::IpcCommand::PlayDeck { is_a } => {
                 self.engine.play_pause_deck(is_a);
-                self.toast.show(
-                    &format!("Play/Pause {}", if is_a { "A" } else { "B" }),
-                    0.5,
-                );
+                self.toast
+                    .show(&format!("Play/Pause {}", if is_a { "A" } else { "B" }), 0.5);
             }
             crate::ipc::IpcCommand::JumpDeck { is_a, bars } => {
                 self.engine.jump_deck_bars(is_a, bars);
@@ -82,8 +102,12 @@ impl App {
                     0.5,
                 );
             }
-            crate::ipc::IpcCommand::Metronome => { self.engine.toggle_metronome(); }
-            crate::ipc::IpcCommand::SplitCue => { self.engine.toggle_split_cue(); }
+            crate::ipc::IpcCommand::Metronome => {
+                self.engine.toggle_metronome();
+            }
+            crate::ipc::IpcCommand::SplitCue => {
+                self.engine.toggle_split_cue();
+            }
             crate::ipc::IpcCommand::Search(query) => {
                 self.toast.show(&format!("Searching: {query}"), 1.0);
                 self.search_query = query;
@@ -92,18 +116,27 @@ impl App {
             }
             crate::ipc::IpcCommand::QueueAll => {
                 let screen = self.current_screen();
-                tracing::info!("QueueAll: screen={}, items={}", screen.title(), screen.item_count());
+                tracing::info!(
+                    "QueueAll: screen={}, items={}",
+                    screen.title(),
+                    screen.item_count()
+                );
                 if let Some(tracks) = screen.tracks() {
                     let total = tracks.len();
                     let mut added = 0;
                     #[allow(clippy::unnecessary_to_owned)]
                     for track in tracks.to_vec() {
-                        if self.engine.enqueue(crate::audio::engine::QueueEntry::from(track)) {
+                        if self
+                            .engine
+                            .enqueue(crate::audio::engine::QueueEntry::from(track))
+                        {
                             added += 1;
                         }
                     }
                     let skipped = total - added;
-                    tracing::info!("Queued {added}/{total} tracks via IPC ({skipped} duplicates skipped)");
+                    tracing::info!(
+                        "Queued {added}/{total} tracks via IPC ({skipped} duplicates skipped)"
+                    );
                     let msg = if skipped == 0 {
                         format!("Queued {added} (remote)")
                     } else {
@@ -154,22 +187,51 @@ impl App {
                 let count = self.current_screen().item_count();
                 #[allow(clippy::collapsible_match)] // one-liner shape reads better unwrapped
                 match dir.as_str() {
-                    "up" => { if self.selected > 0 { self.selected -= 1; } }
-                    "down" => { if self.selected + 1 < count { self.selected += 1; } }
-                    "enter" => { self.handle_browse_enter(); }
-                    "back" => { self.pop_screen(); }
+                    "up" => {
+                        if self.selected > 0 {
+                            self.selected -= 1;
+                        }
+                    }
+                    "down" => {
+                        if self.selected + 1 < count {
+                            self.selected += 1;
+                        }
+                    }
+                    "enter" => {
+                        self.handle_browse_enter();
+                    }
+                    "back" => {
+                        self.pop_screen();
+                    }
                     _ => {}
                 }
             }
-            crate::ipc::IpcCommand::ViewDashboard => { self.view_mode = ViewMode::Dashboard; }
-            crate::ipc::IpcCommand::ViewBrowse => { self.view_mode = ViewMode::Browse; self.selected = 0; }
-            crate::ipc::IpcCommand::ViewQueue => { self.view_mode = ViewMode::Queue; self.selected = 0; }
-            crate::ipc::IpcCommand::ViewHistory => { self.view_mode = ViewMode::History; self.selected = 0; }
-            crate::ipc::IpcCommand::ViewHelp => { self.view_mode = ViewMode::Help; }
-            crate::ipc::IpcCommand::ViewSettings => { self.view_mode = ViewMode::Settings; self.selected = 0; }
+            crate::ipc::IpcCommand::ViewDashboard => {
+                self.view_mode = ViewMode::Dashboard;
+            }
+            crate::ipc::IpcCommand::ViewBrowse => {
+                self.view_mode = ViewMode::Browse;
+                self.selected = 0;
+            }
+            crate::ipc::IpcCommand::ViewQueue => {
+                self.view_mode = ViewMode::Queue;
+                self.selected = 0;
+            }
+            crate::ipc::IpcCommand::ViewHistory => {
+                self.view_mode = ViewMode::History;
+                self.selected = 0;
+            }
+            crate::ipc::IpcCommand::ViewHelp => {
+                self.view_mode = ViewMode::Help;
+            }
+            crate::ipc::IpcCommand::ViewSettings => {
+                self.view_mode = ViewMode::Settings;
+                self.selected = 0;
+            }
             crate::ipc::IpcCommand::WaveformMode => {
                 self.waveform_mode = self.waveform_mode.next();
-                self.toast.show(&format!("Waveform: {}", self.waveform_mode.label()), 1.0);
+                self.toast
+                    .show(&format!("Waveform: {}", self.waveform_mode.label()), 1.0);
             }
             crate::ipc::IpcCommand::Shuffle => {
                 self.engine.smart_shuffle();
@@ -178,9 +240,15 @@ impl App {
             crate::ipc::IpcCommand::SetQuality(q) => {
                 match q.to_lowercase().as_str() {
                     // FLAC unreachable on main's scope; coerce to 256k.
-                    "flac" | "lossless" => self.config.audio_quality = crate::config::AudioQuality::High,
-                    "256k" | "high" => self.config.audio_quality = crate::config::AudioQuality::High,
-                    "128k" | "standard" => self.config.audio_quality = crate::config::AudioQuality::Standard,
+                    "flac" | "lossless" => {
+                        self.config.audio_quality = crate::config::AudioQuality::High
+                    }
+                    "256k" | "high" => {
+                        self.config.audio_quality = crate::config::AudioQuality::High
+                    }
+                    "128k" | "standard" => {
+                        self.config.audio_quality = crate::config::AudioQuality::Standard
+                    }
                     _ => {}
                 }
                 self.config.save();
@@ -196,7 +264,10 @@ impl App {
                     self.engine.set_crossfade_bars(bars);
                     self.toast.show(&format!("Crossfade: {bars} bars"), 1.0);
                 } else {
-                    self.toast.show(&format!("Invalid crossfade bars: {bars} (use 4/8/16/32/64)"), 2.0);
+                    self.toast.show(
+                        &format!("Invalid crossfade bars: {bars} (use 4/8/16/32/64)"),
+                        2.0,
+                    );
                 }
             }
             crate::ipc::IpcCommand::Jump(bars) => {
@@ -211,42 +282,63 @@ impl App {
                 self.engine.extend_playback(bars);
                 self.toast.show(&format!("Extended {bars} bars"), 1.0);
             }
-            crate::ipc::IpcCommand::SetRate { deck, rate } => {
-                match deck {
-                    Some(is_a) => {
-                        self.engine.set_deck_rate(is_a, rate);
-                        self.toast.show(
-                            &format!("Tempo {}: {rate:.3}", if is_a { "A" } else { "B" }),
-                            0.6,
-                        );
-                    }
-                    None => {
-                        self.engine.set_incoming_rate(rate);
-                        self.toast.show(&format!("Rate: {rate:.3}"), 1.0);
-                    }
+            crate::ipc::IpcCommand::SetRate { deck, rate } => match deck {
+                Some(is_a) => {
+                    self.engine.set_deck_rate(is_a, rate);
+                    self.toast.show(
+                        &format!("Tempo {}: {rate:.3}", if is_a { "A" } else { "B" }),
+                        0.6,
+                    );
                 }
-            }
+                None => {
+                    self.engine.set_incoming_rate(rate);
+                    self.toast.show(&format!("Rate: {rate:.3}"), 1.0);
+                }
+            },
             crate::ipc::IpcCommand::Volume { playing, incoming } => {
-                if let Some(v) = playing { self.engine.set_volume(0, v as f32); }
-                if let Some(v) = incoming { self.engine.set_volume(1, v as f32); }
+                if let Some(v) = playing {
+                    self.engine.set_volume(0, v as f32);
+                }
+                if let Some(v) = incoming {
+                    self.engine.set_volume(1, v as f32);
+                }
                 self.toast.show("Volume set (IPC)", 0.5);
             }
             crate::ipc::IpcCommand::SetMixIn(t) => {
                 self.engine.set_mix_in_point(t);
                 self.toast.show(&format!("Mix-in: {t:.1}s"), 1.0);
             }
-            crate::ipc::IpcCommand::SetEq { is_a, low, mid, high } => {
+            crate::ipc::IpcCommand::SetEq {
+                is_a,
+                low,
+                mid,
+                high,
+            } => {
                 self.engine.set_eq(is_a, low, mid, high);
-                self.toast.show(&format!("EQ {}: low={:?} mid={:?} high={:?}",
-                    Self::deck_label(is_a), low, mid, high), 1.0);
+                self.toast.show(
+                    &format!(
+                        "EQ {}: low={:?} mid={:?} high={:?}",
+                        Self::deck_label(is_a),
+                        low,
+                        mid,
+                        high
+                    ),
+                    1.0,
+                );
             }
             crate::ipc::IpcCommand::SetDeckFilter { is_a, pos } => {
                 self.engine.set_filter(is_a, pos);
-                self.toast.show(&format!("Filter {}: {:+.2}", Self::deck_label(is_a), pos), 1.0);
+                self.toast.show(
+                    &format!("Filter {}: {:+.2}", Self::deck_label(is_a), pos),
+                    1.0,
+                );
             }
             crate::ipc::IpcCommand::SetChannelFader { is_a, level } => {
                 self.engine.set_channel_fader(is_a, level);
-                self.toast.show(&format!("Fader {}: {:.2}", Self::deck_label(is_a), level), 1.0);
+                self.toast.show(
+                    &format!("Fader {}: {:.2}", Self::deck_label(is_a), level),
+                    1.0,
+                );
             }
             crate::ipc::IpcCommand::SetCrossfader(pos) => {
                 self.engine.set_crossfader(pos);
@@ -261,11 +353,15 @@ impl App {
             }
             crate::ipc::IpcCommand::LoopBeats { is_a, beats } => {
                 self.engine.loop_beats(is_a, beats);
-                self.toast.show(&format!("Loop {} {beats} beats", Self::deck_label(is_a)), 1.0);
+                self.toast.show(
+                    &format!("Loop {} {beats} beats", Self::deck_label(is_a)),
+                    1.0,
+                );
             }
             crate::ipc::IpcCommand::LoopRelease { is_a } => {
                 self.engine.loop_release(is_a);
-                self.toast.show(&format!("Loop {} released", Self::deck_label(is_a)), 1.0);
+                self.toast
+                    .show(&format!("Loop {} released", Self::deck_label(is_a)), 1.0);
             }
             crate::ipc::IpcCommand::InstallRubberband => {
                 self.spawn_install_rubberband();
@@ -285,7 +381,11 @@ impl App {
                 let next = on.unwrap_or(!crate::audio::engine::profiler_enabled());
                 crate::audio::engine::set_profiler_enabled(next);
                 self.toast.show(
-                    if next { "Profiler: ON" } else { "Profiler: OFF" },
+                    if next {
+                        "Profiler: ON"
+                    } else {
+                        "Profiler: OFF"
+                    },
                     1.5,
                 );
             }
@@ -325,7 +425,7 @@ impl App {
                 // by name. Also include axis + range extents for drag
                 // targets so tests can compute the rect center or
                 // any specific Y/X along the strip.
-                use serde_json::{json, Value};
+                use serde_json::{Value, json};
                 let mut out = serde_json::Map::new();
                 for t in &self.click_targets {
                     let Some(label) = t.label else { continue };
@@ -347,7 +447,9 @@ impl App {
                     }
                     out.insert(label.to_string(), entry);
                 }
-                let path = dirs::home_dir().unwrap_or_default().join(".mixr/layout.json");
+                let path = dirs::home_dir()
+                    .unwrap_or_default()
+                    .join(".mixr/layout.json");
                 let text = serde_json::to_string_pretty(&Value::Object(out))
                     .unwrap_or_else(|_| "{}".into());
                 if let Err(e) = std::fs::write(&path, text) {
@@ -358,16 +460,22 @@ impl App {
                 self.config.quantize_on = on;
                 self.config.quantize_beats = beats.max(0.001);
                 self.config.save();
-                self.engine.set_quantize(self.config.quantize_on, self.config.quantize_beats);
+                self.engine
+                    .set_quantize(self.config.quantize_on, self.config.quantize_beats);
                 let label = match beats {
                     b if b < 0.1875 => "1/8".to_string(),
-                    b if b < 0.375  => "1/4".to_string(),
-                    b if b < 0.75   => "1/2".to_string(),
+                    b if b < 0.375 => "1/4".to_string(),
+                    b if b < 0.75 => "1/2".to_string(),
                     b => format!("{b:.0}"),
                 };
-                self.toast.show(&format!("Quantize {} ({label} beat{})",
-                    if on {"on"} else {"off"},
-                    if beats >= 1.5 {"s"} else {""}), 1.0);
+                self.toast.show(
+                    &format!(
+                        "Quantize {} ({label} beat{})",
+                        if on { "on" } else { "off" },
+                        if beats >= 1.5 { "s" } else { "" }
+                    ),
+                    1.0,
+                );
             }
             crate::ipc::IpcCommand::RateMix(good) => {
                 let Some(ref entry) = self.last_mix_entry else {
@@ -384,11 +492,17 @@ impl App {
                     return;
                 };
                 if let Ok(mut dj) = dj.try_lock() {
-                    if good { dj.rate_good(e); }
-                    else    { dj.rate_bad(e); }
+                    if good {
+                        dj.rate_good(e);
+                    } else {
+                        dj.rate_bad(e);
+                    }
                     self.toast.show(
-                        if good { "Mix rated: 👍 saved to DJ memory" }
-                        else    { "Mix rated: 👎 saved to DJ memory" },
+                        if good {
+                            "Mix rated: 👍 saved to DJ memory"
+                        } else {
+                            "Mix rated: 👎 saved to DJ memory"
+                        },
                         1.5,
                     );
                 }
@@ -398,19 +512,27 @@ impl App {
                 // serde_json::to_value + merge-by-key lets callers flip
                 // one knob without re-sending the whole block. Unknown
                 // keys are silently ignored (serde skips them).
-                let mut current = serde_json::to_value(&self.config.claude_dj)
-                    .unwrap_or(serde_json::Value::Null);
+                let mut current =
+                    serde_json::to_value(&self.config.claude_dj).unwrap_or(serde_json::Value::Null);
                 if let (Some(curr), Some(obj)) = (current.as_object_mut(), patch.as_object()) {
-                    for (k, v) in obj { curr.insert(k.clone(), v.clone()); }
+                    for (k, v) in obj {
+                        curr.insert(k.clone(), v.clone());
+                    }
                 }
-                if let Ok(new) = serde_json::from_value::<crate::config::ClaudeDjSettings>(current.clone()) {
+                if let Ok(new) =
+                    serde_json::from_value::<crate::config::ClaudeDjSettings>(current.clone())
+                {
                     self.config.claude_dj = new.clone();
                     self.config.save();
                     if let Some(dj) = &self.claude_dj
-                        && let Ok(mut dj) = dj.try_lock() { dj.apply_settings(new.clone()); }
+                        && let Ok(mut dj) = dj.try_lock()
+                    {
+                        dj.apply_settings(new.clone());
+                    }
                     // Engine-side manual-mix flag mirrors the settings
                     // `mode` field so the audio path acts on it live.
-                    self.engine.apply_claude_dj_settings(&new, self.config.claude_dj_enabled);
+                    self.engine
+                        .apply_claude_dj_settings(&new, self.config.claude_dj_enabled);
                     let m = format!("{:?}", self.config.claude_dj.mode);
                     self.toast.show(&format!("Claude DJ: {m} mode"), 1.5);
                 } else {
@@ -431,9 +553,15 @@ impl App {
                             // Surface the id so scripts (smoke test,
                             // Claude DJ tools) can capture it from the
                             // toast. Format is stable for regex parsing.
-                            tx.send(AppAction::Toast(format!("Playlist created: id={pid} name='{pname}'"))).ok();
+                            tx.send(AppAction::Toast(format!(
+                                "Playlist created: id={pid} name='{pname}'"
+                            )))
+                            .ok();
                         }
-                        Err(e) => { tx.send(AppAction::Toast(format!("Playlist create failed: {e}"))).ok(); }
+                        Err(e) => {
+                            tx.send(AppAction::Toast(format!("Playlist create failed: {e}")))
+                                .ok();
+                        }
                     }
                 });
             }
@@ -446,8 +574,14 @@ impl App {
                 tokio::spawn(async move {
                     let mut api = api.lock().await;
                     match api.delete_playlist(id).await {
-                        Ok(()) => { tx.send(AppAction::Toast(format!("Playlist deleted: id={id}"))).ok(); }
-                        Err(e) => { tx.send(AppAction::Toast(format!("Playlist delete failed: {e}"))).ok(); }
+                        Ok(()) => {
+                            tx.send(AppAction::Toast(format!("Playlist deleted: id={id}")))
+                                .ok();
+                        }
+                        Err(e) => {
+                            tx.send(AppAction::Toast(format!("Playlist delete failed: {e}")))
+                                .ok();
+                        }
                     }
                 });
             }
@@ -464,7 +598,11 @@ impl App {
                     "playing" => {
                         // Map "playing" to the physical deck currently playing
                         let info = &self.cached_info;
-                        if info.playing_is_a { Some(MonitorSource::DeckA) } else { Some(MonitorSource::DeckB) }
+                        if info.playing_is_a {
+                            Some(MonitorSource::DeckA)
+                        } else {
+                            Some(MonitorSource::DeckB)
+                        }
                     }
                     "both" => Some(MonitorSource::Both),
                     "a" => Some(MonitorSource::DeckA),
@@ -475,7 +613,8 @@ impl App {
                     self.engine.set_monitor_source(s);
                     self.toast.show(&format!("Monitor source: {src}"), 1.0);
                 } else {
-                    self.toast.show(&format!("Unknown monitor source: {src}"), 1.5);
+                    self.toast
+                        .show(&format!("Unknown monitor source: {src}"), 1.5);
                 }
             }
             crate::ipc::IpcCommand::MonitorDevice(name) => {
@@ -486,8 +625,15 @@ impl App {
                 // takes effect on next launch.
                 self.config.monitor_device = name.clone();
                 self.config.save();
-                let label = if name.is_empty() { "disabled".to_string() } else { name };
-                self.toast.show(&format!("Monitor device: {label} (effective on restart)"), 2.0);
+                let label = if name.is_empty() {
+                    "disabled".to_string()
+                } else {
+                    name
+                };
+                self.toast.show(
+                    &format!("Monitor device: {label} (effective on restart)"),
+                    2.0,
+                );
             }
             crate::ipc::IpcCommand::LocalLibraryDir(path) => {
                 // Set the local library path. Live: rebuild the root
@@ -496,103 +642,136 @@ impl App {
                 // tick without restart.
                 self.config.local_library_dir = path.clone();
                 self.config.save();
-                self.screen_stack = vec![
-                    crate::beatport::catalog::root_screen_v2(
-                        !path.is_empty(),
-                        !self.config.rekordbox_xml.is_empty(),
-                        !self.config.engine_dj_db.is_empty(),
-                    )
-                ];
+                self.screen_stack = vec![crate::beatport::catalog::root_screen_v2(
+                    !path.is_empty(),
+                    !self.config.rekordbox_xml.is_empty(),
+                    !self.config.engine_dj_db.is_empty(),
+                )];
                 self.selected = 0;
-                let label = if path.is_empty() { "disabled".to_string() } else { path };
+                let label = if path.is_empty() {
+                    "disabled".to_string()
+                } else {
+                    path
+                };
                 self.toast.show(&format!("Local library: {label}"), 2.0);
             }
             crate::ipc::IpcCommand::RekordboxXml(path) => {
                 self.config.rekordbox_xml = path.clone();
                 self.config.save();
-                self.screen_stack = vec![
-                    crate::beatport::catalog::root_screen_v2(
-                        !self.config.local_library_dir.is_empty(),
-                        !path.is_empty(),
-                        !self.config.engine_dj_db.is_empty(),
-                    )
-                ];
+                self.screen_stack = vec![crate::beatport::catalog::root_screen_v2(
+                    !self.config.local_library_dir.is_empty(),
+                    !path.is_empty(),
+                    !self.config.engine_dj_db.is_empty(),
+                )];
                 self.selected = 0;
-                let label = if path.is_empty() { "disabled".to_string() } else { path };
+                let label = if path.is_empty() {
+                    "disabled".to_string()
+                } else {
+                    path
+                };
                 self.toast.show(&format!("Rekordbox XML: {label}"), 2.0);
             }
             crate::ipc::IpcCommand::EngineDjDb(path) => {
                 self.config.engine_dj_db = path.clone();
                 self.config.save();
-                self.screen_stack = vec![
-                    crate::beatport::catalog::root_screen_v3(
-                        !self.config.local_library_dir.is_empty(),
-                        !self.config.rekordbox_xml.is_empty(),
-                        !path.is_empty(),
-                        !self.config.serato_db.is_empty(),
-                    )
-                ];
+                self.screen_stack = vec![crate::beatport::catalog::root_screen_v3(
+                    !self.config.local_library_dir.is_empty(),
+                    !self.config.rekordbox_xml.is_empty(),
+                    !path.is_empty(),
+                    !self.config.serato_db.is_empty(),
+                )];
                 self.selected = 0;
-                let label = if path.is_empty() { "disabled".to_string() } else { path };
+                let label = if path.is_empty() {
+                    "disabled".to_string()
+                } else {
+                    path
+                };
                 self.toast.show(&format!("Engine DJ DB: {label}"), 2.0);
             }
             crate::ipc::IpcCommand::SeratoDb(path) => {
                 self.config.serato_db = path.clone();
                 self.config.save();
-                self.screen_stack = vec![
-                    crate::beatport::catalog::root_screen_v3(
-                        !self.config.local_library_dir.is_empty(),
-                        !self.config.rekordbox_xml.is_empty(),
-                        !self.config.engine_dj_db.is_empty(),
-                        !path.is_empty(),
-                    )
-                ];
+                self.screen_stack = vec![crate::beatport::catalog::root_screen_v3(
+                    !self.config.local_library_dir.is_empty(),
+                    !self.config.rekordbox_xml.is_empty(),
+                    !self.config.engine_dj_db.is_empty(),
+                    !path.is_empty(),
+                )];
                 self.selected = 0;
-                let label = if path.is_empty() { "disabled".to_string() } else { path };
+                let label = if path.is_empty() {
+                    "disabled".to_string()
+                } else {
+                    path
+                };
                 self.toast.show(&format!("Serato DB: {label}"), 2.0);
             }
             crate::ipc::IpcCommand::DelayFeedback { is_a, value } => {
                 self.engine.set_delay_feedback(is_a, value);
-                self.toast.show(&format!("Delay feedback {}: {:.2}", Self::deck_label(is_a), value), 1.0);
+                self.toast.show(
+                    &format!("Delay feedback {}: {:.2}", Self::deck_label(is_a), value),
+                    1.0,
+                );
             }
             crate::ipc::IpcCommand::DelaySamples { is_a, value } => {
                 self.engine.set_delay_samples(is_a, value);
-                self.toast.show(&format!("Delay samples {}: {}", Self::deck_label(is_a), value), 1.0);
+                self.toast.show(
+                    &format!("Delay samples {}: {}", Self::deck_label(is_a), value),
+                    1.0,
+                );
             }
-            crate::ipc::IpcCommand::DelaySync { is_a, beat_fraction } => {
+            crate::ipc::IpcCommand::DelaySync {
+                is_a,
+                beat_fraction,
+            } => {
                 self.engine.set_delay_sync(is_a, beat_fraction);
-                self.toast.show(&format!("Delay sync {}: {:.2} beats", Self::deck_label(is_a), beat_fraction), 1.0);
+                self.toast.show(
+                    &format!(
+                        "Delay sync {}: {:.2} beats",
+                        Self::deck_label(is_a),
+                        beat_fraction
+                    ),
+                    1.0,
+                );
             }
             crate::ipc::IpcCommand::LoopIn { is_a } => {
                 self.engine.loop_in(is_a);
-                self.toast.show(&format!("Loop IN {}", Self::deck_label(is_a)), 1.0);
+                self.toast
+                    .show(&format!("Loop IN {}", Self::deck_label(is_a)), 1.0);
             }
             crate::ipc::IpcCommand::LoopOut { is_a } => {
                 self.engine.loop_out(is_a);
-                self.toast.show(&format!("Loop OUT {}", Self::deck_label(is_a)), 1.0);
+                self.toast
+                    .show(&format!("Loop OUT {}", Self::deck_label(is_a)), 1.0);
             }
             crate::ipc::IpcCommand::StopDeck { is_a } => {
                 self.engine.stop_deck(is_a);
-                self.toast.show(&format!("Stop {}", Self::deck_label(is_a)), 1.0);
+                self.toast
+                    .show(&format!("Stop {}", Self::deck_label(is_a)), 1.0);
             }
             crate::ipc::IpcCommand::SeekDeck { is_a, time } => {
                 self.engine.seek_deck(is_a, time);
-                self.toast.show(&format!("Seek {} → {time:.1}s", Self::deck_label(is_a)), 1.0);
+                self.toast.show(
+                    &format!("Seek {} → {time:.1}s", Self::deck_label(is_a)),
+                    1.0,
+                );
             }
             crate::ipc::IpcCommand::Cue { is_a, slot, action } => {
                 let deck = Self::deck_label(is_a);
                 match action {
                     crate::ipc::CueAction::Set => {
                         self.engine.cue_set(is_a, slot);
-                        self.toast.show(&format!("Cue {} set ({deck})", slot + 1), 0.8);
+                        self.toast
+                            .show(&format!("Cue {} set ({deck})", slot + 1), 0.8);
                     }
                     crate::ipc::CueAction::Jump => {
                         self.engine.cue_jump(is_a, slot);
-                        self.toast.show(&format!("Cue {} jump ({deck})", slot + 1), 0.5);
+                        self.toast
+                            .show(&format!("Cue {} jump ({deck})", slot + 1), 0.5);
                     }
                     crate::ipc::CueAction::Clear => {
                         self.engine.cue_clear(is_a, slot);
-                        self.toast.show(&format!("Cue {} clear ({deck})", slot + 1), 0.5);
+                        self.toast
+                            .show(&format!("Cue {} clear ({deck})", slot + 1), 0.5);
                     }
                 }
             }
@@ -610,7 +789,9 @@ impl App {
                     "history_count": info.history.len(),
                     "audio_callback": prof,
                 });
-                let path = dirs::home_dir().unwrap_or_default().join(".mixr/diagnose.json");
+                let path = dirs::home_dir()
+                    .unwrap_or_default()
+                    .join(".mixr/diagnose.json");
                 if let Ok(json) = serde_json::to_string_pretty(&diag) {
                     std::fs::write(path, json).ok();
                 }
@@ -643,7 +824,8 @@ impl App {
             }
             crate::ipc::IpcCommand::ExportHistory => {
                 let count = self.engine.export_history();
-                self.toast.show(&format!("Exported {count} tracks (IPC)"), 1.0);
+                self.toast
+                    .show(&format!("Exported {count} tracks (IPC)"), 1.0);
             }
             crate::ipc::IpcCommand::SmartShuffle => {
                 self.engine.smart_shuffle();
@@ -654,7 +836,14 @@ impl App {
                 if let Some(track) = self.current_screen().track_at(self.selected) {
                     let track = track.clone();
                     let added = self.favorites.toggle(&track);
-                    self.toast.show(if added { "★ Favorited" } else { "Unfavorited" }, 1.0);
+                    self.toast.show(
+                        if added {
+                            "★ Favorited"
+                        } else {
+                            "Unfavorited"
+                        },
+                        1.0,
+                    );
                 }
             }
             crate::ipc::IpcCommand::Filter(text) => {
@@ -666,15 +855,20 @@ impl App {
             }
             crate::ipc::IpcCommand::GetScreen => {
                 // Force immediate screen dump
-                self.last_screen_dump = std::time::Instant::now() - std::time::Duration::from_secs(10);
+                self.last_screen_dump =
+                    std::time::Instant::now() - std::time::Duration::from_secs(10);
             }
             crate::ipc::IpcCommand::QueueTrack(id) => {
                 // Search queue/screen for track by ID and queue it
-                let found = self.current_screen().tracks()
+                let found = self
+                    .current_screen()
+                    .tracks()
                     .and_then(|tracks| tracks.iter().find(|t| t.id == id).cloned());
                 if let Some(track) = found {
                     let name = format!("{} - {}", track.artist_name(), track.full_title());
-                    let added = self.engine.enqueue(crate::audio::engine::QueueEntry::from(track));
+                    let added = self
+                        .engine
+                        .enqueue(crate::audio::engine::QueueEntry::from(track));
                     let msg = if added {
                         format!("Queued: {name} (IPC)")
                     } else {
