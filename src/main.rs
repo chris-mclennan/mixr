@@ -311,6 +311,10 @@ async fn main() -> Result<()> {
         let mut app = App::new(config, action_tx.clone(), auth).await?;
         app.midi = Some(midi_state);
         app.apply_cli_args(&args).await;
+        // Tell the render layer it's painting into a tmnl native pane
+        // so it leaves a 1-cell horizontal margin + 2 reserved rows
+        // at the bottom (cmdline + gutter).
+        app.native_mode = true;
         return crate::tui::blit::run(app, action_rx, std::path::Path::new(&socket)).await;
     }
 

@@ -442,6 +442,14 @@ pub struct App {
     /// Waveform zoom state: None = no zoom, Some(true) = deck A zoomed,
     /// Some(false) = deck B zoomed. Click a waveform row to toggle.
     pub(crate) waveform_zoom: Option<bool>,
+    /// `true` when mixr is rendering into a tmnl native pane (set
+    /// by `blit::run` after construction). Drives a small layout
+    /// adjustment: 1-cell horizontal padding outside the dashboard
+    /// border (so it doesn't kiss the tmnl window edge) + 2 reserved
+    /// rows at the bottom (future `:` cmdline + gutter, mirroring
+    /// mnml). Top stays flush because tmnl already gives breathing
+    /// room via `MACOS_TAB_STRIP_PX_SINGLE`.
+    pub native_mode: bool,
 }
 
 /// Rectangular hit-test target with an action to fire on left-click.
@@ -675,6 +683,7 @@ impl App {
             log_scroll_offset: 0,
             click_targets: Vec::new(),
             waveform_zoom: None,
+            native_mode: false,
             current_page: 1,
             last_load_action: None,
             api,
@@ -888,7 +897,24 @@ impl App {
         if matches!(self.view_mode, ViewMode::Dashboard) || !self.click_targets.is_empty() {
             self.click_targets.clear();
         }
-        let size = frame.area();
+        // Native mode (mixr hosted inside tmnl) reserves a 1-cell
+        // padding on left + right so the dashboard border doesn't
+        // kiss the tmnl window edge, and 2 rows at the bottom for
+        // the (future) `:` cmdline + status gutter — matches mnml's
+        // shell-prompt-style chrome. Top stays flush; tmnl's
+        // `MACOS_TAB_STRIP_PX_SINGLE` already gives breathing room
+        // above for the macOS traffic-light buttons.
+        let size = if self.native_mode {
+            let a = frame.area();
+            ratatui::layout::Rect::new(
+                a.x + 1,
+                a.y,
+                a.width.saturating_sub(2),
+                a.height.saturating_sub(2),
+            )
+        } else {
+            frame.area()
+        };
         let info = &self.cached_info;
         let np_height = if info.state == crate::audio::engine::EngineState::Crossfading
             && info.incoming_track.is_some()
