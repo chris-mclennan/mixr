@@ -1,0 +1,46 @@
+---
+title: mixr
+description: Lean terminal DJ app for electronic music — Beatport streaming, AI-assisted mixing, hardware controllers.
+template: splash
+hero:
+  tagline: A DJ app in your terminal. Beatport streaming, AI-assisted mixing, hardware controllers — no Resolume, no Ableton, no friends judging your CDJ skills.
+  actions:
+    - text: Install
+      link: /install/
+      icon: right-arrow
+    - text: GitHub
+      link: https://github.com/chris-mclennan/mixr-rs
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## What is mixr
+
+mixr is a terminal-native DJ app for electronic music. It pulls tracks from Beatport, runs two decks with a real crossfader + EQ + filter chain, accepts input from popular USB DJ controllers, and uses an AI assistant to suggest mixes from your library based on key and BPM.
+
+<CardGrid stagger>
+  <Card title="Beatport streaming" icon="rocket">
+    Search, preview, and stream tracks from your Beatport library — no per-track download, no offline-only.
+  </Card>
+  <Card title="Two-deck mixer" icon="random">
+    Crossfader, three-band EQ per deck, high/low-pass filter, tempo-sync, beat-matching helpers.
+  </Card>
+  <Card title="AI-assisted track picking" icon="puzzle">
+    "What should I play next" — the assistant looks at the current track's BPM + key + mood and surfaces compatible candidates from your library or Beatport's catalog.
+  </Card>
+  <Card title="Hardware controllers" icon="setting">
+    Plug-and-play support for common USB DJ controllers (Pioneer DDJ family, Numark, more landing). MIDI mapping is config-driven; new controllers are a TOML file away.
+  </Card>
+</CardGrid>
+
+## The family
+
+mixr is one of three small Rust tools by Chris McLennan:
+
+- **mixr** — this DJ app
+- **[tmnl](https://tmnl.sh)** — a GPU-rendered terminal that lets mixr render as a native tab (with full graphics) instead of nested in some other terminal emulator
+- **[mnml](https://mnml.sh)** — a NvChad-style terminal IDE
+
+mixr runs fine in any terminal. Inside tmnl specifically, mixr gets native-tab integration via the `tmnl-protocol` cell-streaming layer — meaning the crossfader and EQ knobs render as proper graphics, not unicode block art.
