@@ -3,3 +3,5 @@
 **/.DS_Store
 .claude/settings.local.json
 .local/
+# mnml editor's per-workspace bookkeeping when mixr-rs is opened in mnml
+.mnml/
