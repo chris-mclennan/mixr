@@ -91,8 +91,7 @@ cargo run -- --favorites                               # list favorited tracks
 ./run.ps1         # Windows (PowerShell)
 ```
 
-`run.sh` also ships the family-wide dev subcommands shared with `mnml`, `tmnl`,
-and `internal-app`:
+`run.sh` also ships the family-wide dev subcommands shared with `mnml` and `tmnl`:
 
 ```bash
 ./run.sh build [args]    # cargo build

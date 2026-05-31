@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # mixr-rs wrapper — restart-on-75 loop + family-common dev subcommands.
 # Family convention: `build`/`release`/`test`/`check`/`watch`/`help` are
-# shared across mnml + tmnl + mixr-rs + internal-app.
+# shared across mnml + tmnl + mixr-rs.
 #
 # Usage:
 #   ./run.sh                      Run mixr (release profile, restart loop).

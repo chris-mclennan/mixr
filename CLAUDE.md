@@ -181,7 +181,7 @@ cargo run -- --export                  # export history
 cargo run -- --favorites               # list favorited tracks
 ```
 
-**Recommended wrappers**: `run.sh` (macOS/Linux) and `run.ps1` (Windows) auto-detect librubberband, pass `--features rubberband` when present, and implement the restart loop (exit 75). `run.sh` also ships the family-wide dev subcommands shared with `mnml` / `tmnl` / `internal-app` — `./run.sh build|release|test|check|watch|help` plus mixr-specific `./run.sh blit <socket>` (run as a tmnl/mnml native client) and `./run.sh logout` (clear OAuth + WebView cookies). `./run.sh check` runs the same `cargo clippy --all-targets -- -D warnings` invocation as CI.
+**Recommended wrappers**: `run.sh` (macOS/Linux) and `run.ps1` (Windows) auto-detect librubberband, pass `--features rubberband` when present, and implement the restart loop (exit 75). `run.sh` also ships the family-wide dev subcommands shared with `mnml` and `tmnl` — `./run.sh build|release|test|check|watch|help` plus mixr-specific `./run.sh blit <socket>` (run as a tmnl/mnml native client) and `./run.sh logout` (clear OAuth + WebView cookies). `./run.sh check` runs the same `cargo clippy --all-targets -- -D warnings` invocation as CI.
 
 **Rubberband auto-installer**: selecting Rubberband in Settings when the feature is not compiled runs the platform package manager (`brew` / `apt` / `dnf` / `pacman`), rebuilds with `--features rubberband`, and restarts. IPC: `{"install_rubberband":1}`. Unsupported OS shows a toast with manual install instructions.
 
@@ -237,7 +237,7 @@ session from mnml's pane into a new tmnl tab) lands.
 **run.sh — family-wide subcommands + blit/logout modes (2026-05-23):**
 Adopts the shared family dev-subcommand convention. `./run.sh
 build|release|test|check|watch|help` now matches the same shape as
-`mnml`/`tmnl`/`internal-app`. The original 23-line restart-on-75 loop +
+`mnml` and `tmnl`. The original 23-line restart-on-75 loop +
 auto-detected `--features rubberband` is preserved as the default arm.
 New mixr-specific modes — `./run.sh blit <socket>` (run as a
 tmnl/mnml native client) and `./run.sh logout` (clear OAuth tokens +
