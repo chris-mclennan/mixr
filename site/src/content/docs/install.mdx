@@ -1,0 +1,93 @@
+---
+title: Install
+description: How to install mixr on macOS, Linux, and Windows.
+---
+
+import { LinkButton, CardGrid, Card } from '@astrojs/starlight/components';
+
+<div style="display: flex; gap: 0.75rem; flex-wrap: wrap; margin: 1.5rem 0 2.5rem;">
+  <LinkButton href="https://github.com/chris-mclennan/mixr/releases/latest/download/mixr-aarch64-apple-darwin.dmg" icon="apple" iconPlacement="start">
+    Download for macOS
+  </LinkButton>
+  <LinkButton href="https://github.com/chris-mclennan/mixr/releases/latest/download/mixr-installer.sh" variant="secondary" icon="linux" iconPlacement="start">
+    Download for Linux
+  </LinkButton>
+  <LinkButton href="https://github.com/chris-mclennan/mixr/releases/latest/download/mixr-installer.ps1" variant="secondary" icon="seti:windows" iconPlacement="start">
+    Download for Windows
+  </LinkButton>
+</div>
+
+Or paste the shell installer for your platform:
+
+```sh
+# macOS / Linux
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/chris-mclennan/mixr/releases/latest/download/mixr-installer.sh | sh
+```
+
+```powershell
+# Windows
+irm https://github.com/chris-mclennan/mixr/releases/latest/download/mixr-installer.ps1 | iex
+```
+
+## Platform details
+
+<CardGrid>
+  <Card title="macOS" icon="apple">
+    **Apple Silicon + Intel** — universal `.dmg` opens, drag `mixr.app` into Applications. Then double-click `mixr` in Launchpad.
+
+    Or `.pkg` from the [latest release](https://github.com/chris-mclennan/mixr/releases/latest) for the CLI install.
+
+    Requires macOS 10.14 (Mojave) or newer.
+  </Card>
+  <Card title="Linux" icon="linux">
+    Shell installer drops `mixr` on `PATH`:
+
+    ```sh
+    curl -LsSf https://github.com/chris-mclennan/mixr/releases/latest/download/mixr-installer.sh | sh
+    ```
+
+    For Beatport login you'll need WebKit installed — `apt install libwebkit2gtk-4.1-dev` or the equivalent for your distro.
+  </Card>
+  <Card title="Windows" icon="seti:windows">
+    Double-click the `.msi` from the [latest release](https://github.com/chris-mclennan/mixr/releases/latest), or PowerShell:
+
+    ```powershell
+    irm https://github.com/chris-mclennan/mixr/releases/latest/download/mixr-installer.ps1 | iex
+    ```
+  </Card>
+  <Card title="Family bundle" icon="puzzle">
+    mixr pairs with [tmnl](https://tmnl.sh) (GPU terminal). Install both, and clicking the `mixr` dock icon opens mixr as a native tab inside tmnl — sharp text, full GPU rendering.
+  </Card>
+</CardGrid>
+
+## Beatport login
+
+On first launch, mixr opens an embedded WebView pointing at `dj.beatport.com`. Sign in there — credentials never touch mixr. The exchanged OAuth token is stored at `~/.mixr/auth.json` and refreshed automatically. Run `mixr --logout` to clear it.
+
+> Audio quality tops out at 256k HLS (AAC). FLAC streams require a higher-tier OAuth scope only available to Beatport's own clients.
+
+## Build from source
+
+```sh
+git clone https://github.com/chris-mclennan/mixr
+cd mixr
+cargo build --release
+./target/release/mixr
+```
+
+You'll need an audio output stack — CoreAudio on macOS, ALSA / PipeWire on Linux, WASAPI on Windows. All come standard.
+
+### Wrapper script (recommended)
+
+The repo's `run.sh` / `run.ps1` auto-detect librubberband and implement the restart-on-exit-75 loop:
+
+```sh
+./run.sh          # macOS / Linux (bash)
+./run.ps1         # Windows (PowerShell)
+```
+
+## Verify
+
+```sh
+mixr --version
+```
