@@ -24,8 +24,8 @@ If the user provides details (e.g. "/mix 2 hours of Techno"), extract what you c
 pgrep -f mixr 2>/dev/null && echo "RUNNING" || echo "NOT RUNNING"
 
 # 2. If not running, build and launch
-cd ~/Projects/mixr-rs && cargo build --release 2>&1
-osascript -e "tell application \"Terminal\" to do script \"~/Projects/mixr-rs/target/release/mixr\""
+cd ~/Projects/mixr && cargo build --release 2>&1
+osascript -e "tell application \"Terminal\" to do script \"~/Projects/mixr/target/release/mixr\""
 
 # 3. Send commands via ~/.mixr/command (when IPC is wired up)
 echo '{"browse":"Genres/GENRE_NAME/Top 100"}' > ~/.mixr/command
