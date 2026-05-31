@@ -7,6 +7,7 @@
 Beatport streaming, beat-locked crossfades, AI-assisted mixing, and hardware
 controller support — a full DJ rig in one terminal binary.
 
+[![Docs](https://img.shields.io/badge/docs-mixr.sh-magenta.svg)](https://mixr.sh)
 [![Crates.io](https://img.shields.io/crates/v/mixr-rs.svg?logo=rust)](https://crates.io/crates/mixr-rs)
 [![CI](https://github.com/chris-mclennan/mixr/actions/workflows/ci.yml/badge.svg)](https://github.com/chris-mclennan/mixr/actions/workflows/ci.yml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
@@ -33,6 +34,10 @@ controller support — a full DJ rig in one terminal binary.
 - **Cart + buy** the track that's playing right now (`&` on the dashboard)
 - **File-based IPC** at `~/.mixr/command` — script the whole rig from any language
 - **Cross-platform**: macOS primary, Linux + Windows supported
+
+See **[FEATURES.md](FEATURES.md)** for the complete feature inventory with
+test coverage notes (150 unit tests + 30 smoke assertions). Quick reference
+for keybinds + IPC commands.
 
 ## How It Works
 
