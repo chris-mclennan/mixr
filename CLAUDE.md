@@ -210,6 +210,28 @@ cargo run -- --favorites               # list favorited tracks
 
 ## Status
 
+**Local library folder browser — drill-down replaces flat dump
+(2026-05-31):** the **Local Library** root-menu entry now opens a
+Beatport-style folder drill-down instead of a single 10k-row flat
+TrackList. Each level builds via the new `local_library::folder_screen`,
+which decides among three shapes based on what's inside the folder:
+only-tracks ⇒ rich `TrackList` (BPM / key / artist / title / duration);
+only-subdirs ⇒ `Menu` of subfolders + a trailing `⇲ All tracks
+(recursive)` row; mixed ⇒ `Menu` with `♪ Tracks here (N)` + subfolders
++ recursive-all. Three new `MenuAction` variants — `PushLocalFolder`,
+`LoadLocalFolderTracks`, `LoadLocalLibraryRecursive` — all dispatched
+synchronously from `app::execute_menu_action` (no API; pure
+filesystem). New `local_library::list_folder` does the one-level walk
+(immediate subdirs + immediate audio files, hidden entries skipped);
+new `scan_library(&Path)` replaces the old `scan_library(&str)` so
+"All tracks (recursive)" can scope to any sub-folder. Title rendering
+shows `Local Library` at the root and `Local · <rel-path>` deeper so
+the user has breadcrumb context without us threading the full stack
+of names. 8 new unit tests (folder-title at/below/outside-root,
+hidden-entry filtering, alphabetic case-insensitive sort, empty-folder
+hint row, only-subdirs Menu shape); 287 default tests pass + clippy
+clean under `-D warnings`.
+
 **reset-all in Settings now re-syncs the engine + saves (2026-05-24):**
 Both reset-all paths in `src/tui/keys.rs` (Enter on the `RESET_ALL_KEY`
 sentinel row + capital `R`) used to just do `self.config =

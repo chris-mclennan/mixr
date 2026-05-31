@@ -142,8 +142,9 @@ pub enum MenuAction {
     PushMyLibrary,
     PushFavorites,
     /// User's local-files library — set by Settings → Local Library
-    /// Directory. Resolves to a TrackList of files found by
-    /// `local_library::scan_library`. Hidden from the root menu when
+    /// Directory. Opens the folder-drill-down browser rooted at the
+    /// configured directory; each level builds via
+    /// `local_library::folder_screen`. Hidden from the root menu when
     /// the config field is empty.
     PushLocalLibrary,
     /// Tracks imported from a rekordbox XML export. Hidden from the
@@ -160,6 +161,20 @@ pub enum MenuAction {
     /// Tracks from an auto-detected USB DJ stick. Each variant in
     /// `usb_libraries::detected_sticks()` adds its own entry.
     PushUsbStick(std::path::PathBuf),
+    /// Drill into a subfolder of the local library. Pushes another
+    /// folder Menu (or a TrackList if the folder only contains audio
+    /// files). Handled in `app::execute_menu_action` since the screen
+    /// is built synchronously from the filesystem.
+    PushLocalFolder(std::path::PathBuf),
+    /// Show the audio files at exactly one folder level (no recursion)
+    /// as a rich TrackList. Used by the "Tracks here (N)" entry that
+    /// the folder menu inserts when a folder contains both subfolders
+    /// and tracks.
+    LoadLocalFolderTracks(std::path::PathBuf),
+    /// Show every audio file under a folder, recursively (the legacy
+    /// "Local Library" flat-list behaviour). Used by the "All tracks
+    /// (recursive)" entry at each folder level.
+    LoadLocalLibraryRecursive(std::path::PathBuf),
 
     // Discover
     LoadGlobalTop100,
@@ -957,6 +972,11 @@ pub async fn execute_action(
         MenuAction::PushEngineDj => Ok(None),
         MenuAction::PushSerato => Ok(None),
         MenuAction::PushUsbStick(_) => Ok(None),
+        // Local-folder navigation is synchronous (no API) and config-aware,
+        // so the app dispatcher handles these directly.
+        MenuAction::PushLocalFolder(_) => Ok(None),
+        MenuAction::LoadLocalFolderTracks(_) => Ok(None),
+        MenuAction::LoadLocalLibraryRecursive(_) => Ok(None),
     }
 }
 

@@ -142,7 +142,12 @@ Beatport (root_screen)
 │   ├── Cart            [LoadMyCart           → TrackList]
 │   └── Playlists       [LoadMyPlaylists      → ChartList]
 │
-└── Favorites           [PushFavorites → TrackList (local favorites)]
+├── Favorites           [PushFavorites → TrackList (local favorites)]
+│
+└── Local Library       [PushLocalLibrary → folder_screen at config.local_library_dir]
+    ├── ♪ Tracks here (N)   [LoadLocalFolderTracks(path)   → TrackList — one level only]
+    ├── ▸ <subfolder>/      [PushLocalFolder(path)         → another folder_screen]
+    └── ⇲ All tracks (recursive) [LoadLocalLibraryRecursive(path) → TrackList — flat]
 
 # Secondary entry points reached from TrackList column-drill (→ key):
 # ArtistList item   → PushArtistDetail(id,name) → artist_detail_screen:

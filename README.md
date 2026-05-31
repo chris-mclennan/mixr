@@ -175,7 +175,7 @@ mixr can browse files alongside Beatport tracks — pull metadata from your exis
 
 | Source | Path | Notes |
 |--------|------|-------|
-| **Local files** | `config.local_library_dir` | Recursive scan, symphonia metadata. |
+| **Local files** | `config.local_library_dir` | Folder-drill-down browser (subdirs as menu rows, leaves as rich TrackList with BPM/key/duration); symphonia metadata. Each level has an "All tracks (recursive)" row to flatten the subtree. |
 | **rekordbox.xml** | `config.rekordbox_xml` | File → Export → Collection (XML) in rekordbox. |
 | **rekordbox USB** | auto-detected | Sticks with `<mount>/PIONEER/rekordbox/export.pdb` (DeviceSQL binary). |
 | **Engine DJ** | `config.engine_dj_db` | `~/Music/Engine Library/Database2/m.db` or USB stick at `<mount>/Engine Library/Database2/m.db`. |

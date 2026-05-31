@@ -7,6 +7,13 @@
 //! WAV/OGG) up to a depth limit. Metadata extraction uses symphonia's
 //! probe — only reads the file's tag/metadata block, not the audio
 //! payload, so a 10k-track library scans in a second or two.
+//!
+//! Two scan modes:
+//! - `scan_library` — recursive, returns a single sorted flat list
+//!   (used by "All tracks (recursive)" and the legacy menu entry).
+//! - `list_folder` — one level deep only, returning subfolders +
+//!   tracks separately so `folder_screen` can build a drill-down
+//!   Menu that matches the Beatport browser feel.
 
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -17,6 +24,7 @@ use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::{MetadataOptions, MetadataRevision, StandardTagKey};
 use symphonia::core::probe::Hint;
 
+use crate::beatport::catalog::{BrowseScreen, MenuAction, MenuItem};
 use crate::beatport::models::{BeatportTrack, BeatportTrackArtist};
 
 /// Audio extensions we recognize. Anything else in the directory is
@@ -28,13 +36,11 @@ const AUDIO_EXTS: &[&str] = &["flac", "aac", "m4a", "mp3", "wav", "ogg", "opus"]
 /// the entire home directory if someone misconfigures the path.
 const MAX_DEPTH: usize = 4;
 
-/// Scan the configured local-library directory. Returns tracks sorted
-/// by `Artist - Title`. Empty if the dir doesn't exist or is empty.
-pub fn scan_library(dir: &str) -> Vec<BeatportTrack> {
-    if dir.is_empty() {
-        return Vec::new();
-    }
-    let root = Path::new(dir);
+/// Recursive scan of a directory. Returns tracks sorted by
+/// `Artist - Title`. Empty if `root` doesn't exist or is empty.
+/// Used by "All tracks (recursive)" to flatten an arbitrary folder
+/// subtree into a single TrackList.
+pub fn scan_library(root: &Path) -> Vec<BeatportTrack> {
     if !root.is_dir() {
         return Vec::new();
     }
@@ -58,6 +64,150 @@ pub fn scan_library(dir: &str) -> Vec<BeatportTrack> {
             })
     });
     tracks
+}
+
+/// Enumerate one level of `dir`: immediate subdirectories and
+/// immediate audio files (no recursion). Subdirectories are sorted
+/// alphabetically (case-insensitive). Tracks are returned with full
+/// metadata, sorted by `Artist - Title`. Returns `(folders, tracks)`.
+/// Empty pair if `dir` doesn't exist or can't be read.
+pub fn list_folder(dir: &Path) -> (Vec<PathBuf>, Vec<BeatportTrack>) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return (Vec::new(), Vec::new());
+    };
+    let mut folders: Vec<PathBuf> = Vec::new();
+    let mut audio_paths: Vec<PathBuf> = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        // Skip hidden / system files (.DS_Store, .git, ._foo, …).
+        if name.starts_with('.') {
+            continue;
+        }
+        if path.is_dir() {
+            folders.push(path);
+        } else if let Some(ext) = path.extension().and_then(|e| e.to_str())
+            && AUDIO_EXTS.iter().any(|x| x.eq_ignore_ascii_case(ext))
+        {
+            audio_paths.push(path);
+        }
+    }
+    folders.sort_by_key(|p| {
+        p.file_name()
+            .and_then(|n| n.to_str())
+            .map(str::to_lowercase)
+            .unwrap_or_default()
+    });
+    audio_paths.sort();
+    let mut tracks: Vec<BeatportTrack> = audio_paths
+        .into_iter()
+        .filter_map(|p| extract_track(&p))
+        .collect();
+    tracks.sort_by(|a, b| {
+        a.artist_name()
+            .to_lowercase()
+            .cmp(&b.artist_name().to_lowercase())
+            .then_with(|| {
+                a.full_title()
+                    .to_lowercase()
+                    .cmp(&b.full_title().to_lowercase())
+            })
+    });
+    (folders, tracks)
+}
+
+/// Build the browse screen for a single folder. Decides among three
+/// shapes based on what's inside:
+/// - Only subfolders → `Menu` of subfolders + "All tracks (recursive)".
+/// - Only tracks → `TrackList` (rich rendering, BPM/key/duration).
+/// - Both → `Menu` with "Tracks here (N)" + subfolders + "All tracks
+///   (recursive)".
+/// - Empty → `Menu` with just a hint row.
+///
+/// `root_dir` is the configured library root, used to render
+/// breadcrumb-style titles relative to it. When `dir == root_dir` the
+/// title is "Local Library"; deeper, the title is the relative path.
+pub fn folder_screen(root_dir: &Path, dir: &Path) -> BrowseScreen {
+    let (folders, tracks) = list_folder(dir);
+    let title = folder_title(root_dir, dir);
+
+    // Leaf with only tracks → skip the Menu wrap, push a TrackList.
+    if folders.is_empty() && !tracks.is_empty() {
+        let count = tracks.len();
+        return BrowseScreen::TrackList {
+            title: format!("{title} ({count})"),
+            tracks,
+        };
+    }
+
+    let mut items: Vec<MenuItem> = Vec::new();
+
+    // Mixed folder: show the in-this-folder tracks first so the user
+    // can jump straight to them without drilling further.
+    if !tracks.is_empty() {
+        items.push(MenuItem {
+            label: format!("♪ Tracks here ({})", tracks.len()),
+            action: MenuAction::LoadLocalFolderTracks(dir.to_path_buf()),
+        });
+    }
+
+    // Subfolder entries — labelled with a leading folder glyph. Each
+    // pushes another folder_screen via the PushLocalFolder action.
+    for f in &folders {
+        let name = f
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("?")
+            .to_string();
+        items.push(MenuItem {
+            label: format!("▸ {name}/"),
+            action: MenuAction::PushLocalFolder(f.clone()),
+        });
+    }
+
+    // "All tracks (recursive)" — the legacy flat-list mode, scoped to
+    // this folder. Useful when the user wants the entire subtree as
+    // one TrackList for sorting / searching.
+    if !folders.is_empty() || !tracks.is_empty() {
+        items.push(MenuItem {
+            label: "⇲ All tracks (recursive)".into(),
+            action: MenuAction::LoadLocalLibraryRecursive(dir.to_path_buf()),
+        });
+    }
+
+    // Empty directory — render an explanatory row so the user isn't
+    // staring at a blank screen.
+    if items.is_empty() {
+        items.push(MenuItem {
+            label: "(empty folder)".into(),
+            action: MenuAction::PushLocalFolder(dir.to_path_buf()),
+        });
+    }
+
+    BrowseScreen::Menu { title, items }
+}
+
+/// Title for a folder screen — "Local Library" at the root, otherwise
+/// the path of `dir` relative to `root_dir` (so the user sees a
+/// breadcrumb-like cue in the title without us having to thread the
+/// full stack of names).
+fn folder_title(root_dir: &Path, dir: &Path) -> String {
+    if dir == root_dir {
+        return "Local Library".into();
+    }
+    match dir.strip_prefix(root_dir) {
+        Ok(rel) => format!("Local · {}", rel.display()),
+        Err(_) => {
+            // dir is outside root_dir (e.g. a symlink target) — fall
+            // back to just the folder's own name.
+            dir.file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("?")
+                .to_string()
+        }
+    }
 }
 
 fn walk(dir: &Path, depth: usize, out: &mut Vec<PathBuf>) {
@@ -228,8 +378,8 @@ mod tests {
 
     #[test]
     fn empty_dir_returns_empty() {
-        assert!(scan_library("").is_empty());
-        assert!(scan_library("/this/path/does/not/exist/anywhere").is_empty());
+        assert!(scan_library(Path::new("")).is_empty());
+        assert!(scan_library(Path::new("/this/path/does/not/exist/anywhere")).is_empty());
     }
 
     #[test]
@@ -242,6 +392,123 @@ mod tests {
             id1 < 0,
             "local IDs must be negative to avoid collision with Beatport IDs"
         );
+    }
+
+    /// Create a unique tempdir under `env::temp_dir()`. std-only so we
+    /// don't add a tempfile dep just for these tests.
+    fn make_tempdir(name: &str) -> PathBuf {
+        let pid = std::process::id();
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let dir = std::env::temp_dir().join(format!("mixr-test-{name}-{pid}-{nanos}"));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn folder_title_at_root_is_local_library() {
+        let root = PathBuf::from("/music");
+        assert_eq!(folder_title(&root, &root), "Local Library");
+    }
+
+    #[test]
+    fn folder_title_below_root_is_relative() {
+        let root = PathBuf::from("/music");
+        let sub = PathBuf::from("/music/2024/House");
+        assert_eq!(folder_title(&root, &sub), "Local · 2024/House");
+    }
+
+    #[test]
+    fn folder_title_outside_root_falls_back_to_dir_name() {
+        let root = PathBuf::from("/music");
+        let sub = PathBuf::from("/other/Folder");
+        assert_eq!(folder_title(&root, &sub), "Folder");
+    }
+
+    #[test]
+    fn list_folder_returns_empty_for_missing_dir() {
+        let (folders, tracks) = list_folder(Path::new("/does/not/exist/anywhere"));
+        assert!(folders.is_empty());
+        assert!(tracks.is_empty());
+    }
+
+    #[test]
+    fn list_folder_skips_hidden_entries_and_unknown_extensions() {
+        let dir = make_tempdir("hidden");
+        std::fs::create_dir(dir.join(".hidden_folder")).unwrap();
+        std::fs::create_dir(dir.join("visible_folder")).unwrap();
+        std::fs::write(dir.join(".DS_Store"), b"x").unwrap();
+        std::fs::write(dir.join("cover.jpg"), b"x").unwrap();
+        std::fs::write(dir.join("notes.txt"), b"x").unwrap();
+        // Empty placeholder MP3 — extract_track will return None
+        // (symphonia can't probe an empty file), so this file is
+        // counted as audio by extension but yields zero tracks.
+        std::fs::write(dir.join("track.mp3"), b"").unwrap();
+        let (folders, tracks) = list_folder(&dir);
+        assert_eq!(
+            folders.len(),
+            1,
+            "only the non-hidden folder should be listed"
+        );
+        assert!(folders[0].ends_with("visible_folder"));
+        assert!(
+            tracks.is_empty(),
+            "empty MP3 placeholder can't be probed by symphonia"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn list_folder_sorts_folders_alphabetically_case_insensitive() {
+        let dir = make_tempdir("sort");
+        for name in ["Zulu", "alpha", "Mike", "bravo"] {
+            std::fs::create_dir(dir.join(name)).unwrap();
+        }
+        let (folders, _) = list_folder(&dir);
+        let names: Vec<String> = folders
+            .iter()
+            .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, vec!["alpha", "bravo", "Mike", "Zulu"]);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn folder_screen_empty_dir_yields_hint_menu() {
+        let dir = make_tempdir("empty");
+        match folder_screen(&dir, &dir) {
+            BrowseScreen::Menu { title, items } => {
+                assert_eq!(title, "Local Library");
+                assert_eq!(items.len(), 1);
+                assert_eq!(items[0].label, "(empty folder)");
+            }
+            other => panic!("expected Menu, got {other:?}"),
+        }
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn folder_screen_only_subdirs_yields_menu_with_recursive_entry() {
+        let dir = make_tempdir("subdirs");
+        std::fs::create_dir(dir.join("A")).unwrap();
+        std::fs::create_dir(dir.join("B")).unwrap();
+        match folder_screen(&dir, &dir) {
+            BrowseScreen::Menu { items, .. } => {
+                // 2 subfolders + "All tracks (recursive)" tail.
+                assert_eq!(items.len(), 3);
+                assert!(items[0].label.starts_with("▸ A"));
+                assert!(items[1].label.starts_with("▸ B"));
+                assert!(items[2].label.contains("All tracks (recursive)"));
+                assert!(matches!(
+                    items[2].action,
+                    MenuAction::LoadLocalLibraryRecursive(_)
+                ));
+            }
+            other => panic!("expected Menu, got {other:?}"),
+        }
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

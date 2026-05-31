@@ -2302,21 +2302,61 @@ impl App {
             return;
         }
 
-        // Local Library — scan the configured directory now (sync,
-        // metadata-only — fast even for large libraries since
-        // symphonia only reads tag blocks). Future: cache between
-        // pushes if scan starts taking >100ms in practice.
+        // Local Library — push the folder-drill-down screen rooted at
+        // the configured directory. Each subfolder is a Menu entry
+        // that pushes a deeper folder; leaves resolve to a rich
+        // TrackList (BPM/key/duration). See `local_library::folder_screen`
+        // for the three-shape decision (only-folders / only-tracks /
+        // mixed).
         if matches!(action, MenuAction::PushLocalLibrary) {
             let dir = self.config.local_library_dir.clone();
-            let tracks = crate::local_library::scan_library(&dir);
-            let count = tracks.len();
-            let title = if count > 0 {
-                format!("Local Library ({count})")
-            } else {
-                "Local Library (empty — set Settings → Local Library Directory)".into()
-            };
-            let screen = BrowseScreen::TrackList { title, tracks };
+            if dir.is_empty() {
+                self.toast.show(
+                    "Local Library: set Settings → Local Library Directory first",
+                    3.0,
+                );
+                return;
+            }
+            let root = std::path::PathBuf::from(&dir);
+            if !root.is_dir() {
+                self.toast
+                    .show(&format!("Local Library: {dir} is not a directory"), 3.0);
+                return;
+            }
+            let screen = crate::local_library::folder_screen(&root, &root);
             self.push_screen(screen);
+            return;
+        }
+
+        // Drill into a sub-folder of the local library.
+        if let MenuAction::PushLocalFolder(path) = &action {
+            let root = std::path::PathBuf::from(&self.config.local_library_dir);
+            let screen = crate::local_library::folder_screen(&root, path);
+            self.push_screen(screen);
+            return;
+        }
+
+        // "Tracks here (N)" — the audio files at exactly one folder
+        // level, rendered as a rich TrackList.
+        if let MenuAction::LoadLocalFolderTracks(path) = &action {
+            let (_folders, tracks) = crate::local_library::list_folder(path);
+            let count = tracks.len();
+            let title = folder_track_list_title(path, &self.config.local_library_dir, count);
+            self.push_screen(BrowseScreen::TrackList { title, tracks });
+            return;
+        }
+
+        // "All tracks (recursive)" — every audio file under the given
+        // folder, flat-listed. Same shape as the legacy
+        // `PushLocalLibrary` flat dump, but scoped to any folder.
+        if let MenuAction::LoadLocalLibraryRecursive(path) = &action {
+            let tracks = crate::local_library::scan_library(path);
+            let count = tracks.len();
+            let title = folder_track_list_title(path, &self.config.local_library_dir, count);
+            self.push_screen(BrowseScreen::TrackList {
+                title: format!("{title} (recursive)"),
+                tracks,
+            });
             return;
         }
 
@@ -3311,6 +3351,24 @@ impl App {
             }
             self.last_screen_dump = std::time::Instant::now();
         }
+    }
+}
+
+/// Build the title for a local-folder TrackList screen — "Local
+/// Library (N)" at the root, otherwise "Local · <rel-path> (N)".
+fn folder_track_list_title(path: &std::path::Path, root_dir: &str, count: usize) -> String {
+    let root = std::path::Path::new(root_dir);
+    if path == root {
+        return format!("Local Library ({count})");
+    }
+    match path.strip_prefix(root) {
+        Ok(rel) => format!("Local · {} ({count})", rel.display()),
+        Err(_) => format!(
+            "{} ({count})",
+            path.file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("Folder")
+        ),
     }
 }
 
