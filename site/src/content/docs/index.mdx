@@ -1,9 +1,9 @@
 ---
 title: mixr
-description: Lean terminal DJ app for electronic music — Beatport streaming, AI-assisted mixing, hardware controllers.
+description: A terminal DJ app for electronic music — Beatport streaming, beat-locked crossfades, Claude DJ, and hardware controller support.
 template: splash
 hero:
-  tagline: A DJ app in your terminal. Beatport streaming, AI-assisted mixing, hardware controllers — no Resolume, no Ableton, no friends judging your CDJ skills.
+  tagline: A full DJ rig in one terminal binary. Beatport streaming, beat-locked crossfades, Claude DJ, MIDI controllers.
   actions:
     - text: Install
       link: /install/
@@ -16,31 +16,72 @@ hero:
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
 
-## What is mixr
-
-mixr is a terminal-native DJ app for electronic music. It pulls tracks from Beatport, runs two decks with a real crossfader + EQ + filter chain, accepts input from popular USB DJ controllers, and uses an AI assistant to suggest mixes from your library based on key and BPM.
+```
+┌─ mixr ─────────────────────────────────────────────────────────────┐
+│ Deck A  ARTBAT — Element  126.0 BPM  3:42 ███████░░░               │
+│ Deck B  Cassian — Run     128.0 BPM  cued                          │
+│                                                                    │
+│ ◀ ─ ─ ─ ─ ─ ─ ●─────── ─ ─ ─ ─ ─ ─ ─ ▶   crossfader                │
+│ MIX IN 4 bars   transition: BeatMatched   key dist 1   gap 1.6%    │
+└────────────────────────────────────────────────────────────────────┘
+```
 
 <CardGrid stagger>
-  <Card title="Beatport streaming" icon="rocket">
-    Search, preview, and stream tracks from your Beatport library — no per-track download, no offline-only.
+  <Card title="Beatport streaming via OAuth" icon="rocket">
+    Sign in with your own Beatport account (PKCE OAuth in an embedded WebView — credentials never touch mixr). Browse Beatport's catalog top to bottom: Discover, Genres, Decades, My Beatport, My Library. Tokens at `~/.mixr/auth.json`, refreshed automatically. 256k HLS audio (FLAC requires a higher-tier scope only available to Beatport's own clients).
   </Card>
-  <Card title="Two-deck mixer" icon="random">
-    Crossfader, three-band EQ per deck, high/low-pass filter, tempo-sync, beat-matching helpers.
+  <Card title="Five transition types, beat-locked" icon="random">
+    16-bar phase-locked crossfades, auto-selected per mix by BPM gap and Camelot key distance:
+    - **BeatMatched** — cos/sin equal-power
+    - **EchoOut** — echo tail + hard cut (for big BPM gaps)
+    - **BassSwap** — EQ lows swap at midpoint (matched BPM, key dist ≤ 1)
+    - **FilterSweep** — LP → HP sweep (matched BPM, key dist = 2)
+    - **LoopRoll** — 4-beat loop on the outgoing deck
+
+    Override per-mix via IPC; configurable rule engine at `~/.mixr/transitions.json`.
   </Card>
-  <Card title="AI-assisted track picking" icon="puzzle">
-    "What should I play next" — the assistant looks at the current track's BPM + key + mood and surfaces compatible candidates from your library or Beatport's catalog.
+  <Card title="Claude DJ" icon="puzzle">
+    Claude picks tracks, beatmatches, and operates the mixer. Three modes:
+    - **Auto** — Claude runs the whole set unattended
+    - **Assist** — Claude suggests, you confirm
+    - **Manual** — Claude operates physical-deck tools while you steer
+
+    ~20 tools, Prep vs Performance call modes, adaptive rate-limit backoff, training memory (rate mixes `+`/`-` to teach what works), mid-mix phase checks, stall watchdog. Bring your own Anthropic API key.
   </Card>
-  <Card title="Hardware controllers" icon="setting">
-    Plug-and-play support for common USB DJ controllers (Pioneer DDJ family, Numark, more landing). MIDI mapping is config-driven; new controllers are a TOML file away.
+  <Card title="Library imports + local browser" icon="document">
+    Already have a library? Import it:
+    - **rekordbox.xml** — full hierarchy + cue points
+    - **Engine DJ DB** — desktop + USB drive layouts
+    - **Serato Database V2**
+
+    Plus a recursive local-files browser with symphonia tag extraction (BPM / key / artist / title / duration in-line). Browse your own music side-by-side with Beatport.
+  </Card>
+  <Card title="MIDI controllers" icon="setting">
+    Any controller, any binding — TOML mapping per device. Bundled preset for **Numark Mixstream Pro Go Plus** plus a generic 2-channel layout. Built-in MIDI Learn (`K` from the dashboard).
+  </Card>
+  <Card title="Recording, hot cues, EQ + filter" icon="laptop">
+    Record your set to WAV / AIFF / .cue sheet, save as a Beatport playlist on the fly. Hot cues 0–3 on each deck (set with `!@#$`, jump with `1234`). 3-band EQ per deck (-24..+12 dB), single-knob filter, beat-aligned loop, delay FX, master limiter (Soft Knee), monitor device for headphone cue, pitch stretching (Off / Rubberband / Timestretch).
   </Card>
 </CardGrid>
+
+## Script the whole rig
+
+mixr exposes a file-based IPC at `~/.mixr/command`. Drop a JSON line, mixr reads + acts. Works from any language, any tool:
+
+```sh
+echo '{"skip":1}'           > ~/.mixr/command   # next track
+echo '{"crossfader":-0.5}'  > ~/.mixr/command   # fader toward deck A
+echo '{"transition":"echoout"}' > ~/.mixr/command   # force the next mix
+```
+
+Used internally by the dashboard, by Claude DJ's tool calls, and by your scripts.
 
 ## The family
 
 mixr is one of three small Rust tools by Chris McLennan:
 
 - **mixr** — this DJ app
-- **[tmnl](https://tmnl.sh)** — a GPU-rendered terminal that lets mixr render as a native tab (with full graphics) instead of nested in some other terminal emulator
+- **[tmnl](https://tmnl.sh)** — a GPU-rendered terminal that lets mixr render as a native tab (full graphics) instead of nested in some other terminal emulator
 - **[mnml](https://mnml.sh)** — a NvChad-style terminal IDE
 
-mixr runs fine in any terminal. Inside tmnl specifically, mixr gets native-tab integration via the `tmnl-protocol` cell-streaming layer — meaning the crossfader and EQ knobs render as proper graphics, not unicode block art.
+mixr runs fine in any terminal. Inside tmnl specifically, mixr gets native-tab integration via the `tmnl-protocol` cell-streaming layer.
