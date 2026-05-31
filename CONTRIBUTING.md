@@ -5,8 +5,8 @@ Thanks for your interest in mixr. This guide covers the workflow and conventions
 ## Getting started
 
 ```bash
-git clone https://github.com/chris-mclennan/mixr-rs
-cd mixr-rs
+git clone https://github.com/chris-mclennan/mixr
+cd mixr
 cargo build
 cargo run            # the binary is `mixr`
 ```
@@ -68,7 +68,7 @@ There is also a keybinding smoke test that drives mixr over IPC:
 
 ## Reporting bugs & requesting features
 
-Use the [issue tracker](https://github.com/chris-mclennan/mixr-rs/issues). For
+Use the [issue tracker](https://github.com/chris-mclennan/mixr/issues). For
 audio bugs, include your OS, output device, and whether a pitch-stretch feature
 was enabled.
 

@@ -35,7 +35,7 @@ capabilities present in the current `main`.
 - **File-based IPC** — drive the whole rig by writing JSON to `~/.mixr/command`;
   read state from `status.json` / `screen.txt` / `quick.txt` / `events.jsonl`.
 - **Native integration** — `mixr --blit` runs mixr as a native pane inside the
-  [`tmnl`](https://github.com/chris-mclennan/tmnl-rs) terminal.
+  [`tmnl`](https://github.com/chris-mclennan/tmnl) terminal.
 
-[Unreleased]: https://github.com/chris-mclennan/mixr-rs/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/chris-mclennan/mixr-rs/releases/tag/v0.1.0
+[Unreleased]: https://github.com/chris-mclennan/mixr/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/chris-mclennan/mixr/releases/tag/v0.1.0

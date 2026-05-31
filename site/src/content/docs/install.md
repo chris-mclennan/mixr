@@ -14,8 +14,8 @@ The crate is `mixr-rs`; the binary it installs is `mixr`.
 ## Or build from source
 
 ```sh
-git clone https://github.com/chris-mclennan/mixr-rs
-cd mixr-rs
+git clone https://github.com/chris-mclennan/mixr
+cd mixr
 cargo build --release
 ./target/release/mixr
 ```

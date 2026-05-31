@@ -8,7 +8,7 @@ Beatport streaming, beat-locked crossfades, AI-assisted mixing, and hardware
 controller support — a full DJ rig in one terminal binary.
 
 [![Crates.io](https://img.shields.io/crates/v/mixr-rs.svg?logo=rust)](https://crates.io/crates/mixr-rs)
-[![CI](https://github.com/chris-mclennan/mixr-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/chris-mclennan/mixr-rs/actions/workflows/ci.yml)
+[![CI](https://github.com/chris-mclennan/mixr/actions/workflows/ci.yml/badge.svg)](https://github.com/chris-mclennan/mixr/actions/workflows/ci.yml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 
 </div>
@@ -294,8 +294,8 @@ mixr is one of a small family of terminal-native Rust tools:
 
 | Project | What it is | |
 |---------|-----------|--|
-| [**tmnl**](https://github.com/chris-mclennan/tmnl-rs) | A GPU-accelerated terminal | hosts mixr as a native tab |
-| [**mnml**](https://github.com/chris-mclennan/mnml-rs) | A terminal IDE | runs as a native tmnl tab |
+| [**tmnl**](https://github.com/chris-mclennan/tmnl) | A GPU-accelerated terminal | hosts mixr as a native tab |
+| [**mnml**](https://github.com/chris-mclennan/mnml) | A terminal IDE | runs as a native tmnl tab |
 | **mixr** | A terminal DJ app | ← you are here |
 | [**tmnl-protocol**](https://github.com/chris-mclennan/tmnl-protocol) | The binary wire protocol | mixr's `--blit` integration |
 | [**fim-engine**](https://github.com/chris-mclennan/fim-engine) | Embedded code completion | local FIM, used by tmnl & mnml |
