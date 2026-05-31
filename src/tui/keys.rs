@@ -1150,6 +1150,18 @@ impl App {
                 KeyCode::Down if self.selected + 1 < count => {
                     self.selected += 1;
                 }
+                KeyCode::Home => {
+                    self.selected = 0;
+                }
+                KeyCode::End => {
+                    self.selected = count.saturating_sub(1);
+                }
+                KeyCode::PageUp => {
+                    self.selected = self.selected.saturating_sub(10);
+                }
+                KeyCode::PageDown => {
+                    self.selected = (self.selected + 10).min(count.saturating_sub(1));
+                }
                 KeyCode::Enter | KeyCode::Right => {
                     if let Some(row) = super::settings::settings_row_at(&self.config, self.selected)
                     {

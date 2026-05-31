@@ -997,10 +997,19 @@ pub fn settings_row_at(config: &AppConfig, row_idx: usize) -> Option<SettingRow>
 /// focused row; `[bracket]` = current choice; `*` = modified from
 /// `AppConfig::default()`. Matches the family settings UI convention
 /// — see CLAUDE.md.
+///
+/// Scrolls when the row list exceeds `area.height` — keeps the
+/// focused row visible by sliding the rendered window down as
+/// `selected_row` advances past the bottom.
 pub fn render_settings(frame: &mut Frame, area: Rect, config: &AppConfig, selected_row: usize) {
     let items = build_settings(config);
     let mut lines: Vec<Line> = Vec::with_capacity(items.len());
     let mut row_counter = 0usize;
+    // Track the index in `lines` of the focused row so we can scroll
+    // to keep it visible — section headers consume line slots but
+    // aren't counted by `selected_row`, so this can't be derived
+    // arithmetically.
+    let mut focused_line_idx: usize = 0;
 
     for item in items.iter() {
         match item {
@@ -1014,6 +1023,9 @@ pub fn render_settings(frame: &mut Frame, area: Rect, config: &AppConfig, select
             }
             SettingItem::Row(row) => {
                 let is_selected = row_counter == selected_row;
+                if is_selected {
+                    focused_line_idx = lines.len();
+                }
                 row_counter += 1;
                 let marker = if is_selected { "▸ " } else { "  " };
                 let mut spans = vec![
@@ -1087,7 +1099,17 @@ pub fn render_settings(frame: &mut Frame, area: Rect, config: &AppConfig, select
         }
     }
 
-    let paragraph = Paragraph::new(lines);
+    // Slide the rendered window so the focused row stays on-screen.
+    // When focused_line_idx falls within the visible area, scroll = 0;
+    // once it goes past the bottom, scroll advances row-by-row.
+    let body_h = area.height as usize;
+    let scroll = if body_h > 0 && focused_line_idx >= body_h {
+        focused_line_idx + 1 - body_h
+    } else {
+        0
+    };
+    let window: Vec<Line> = lines.into_iter().skip(scroll).take(body_h).collect();
+    let paragraph = Paragraph::new(window);
     frame.render_widget(paragraph, area);
 }
 
@@ -1108,6 +1130,46 @@ mod tests {
             _ => None,
         });
         assert!(reset.is_some(), "reset sentinel row missing");
+    }
+
+    /// Regression: the renderer used to dump every line into a single
+    /// Paragraph with no scroll offset, so once `selected_row` advanced
+    /// past `area.height` the focused row went off-screen and the user
+    /// appeared "stuck". This test renders into a too-small TestBackend
+    /// with the focus on the last row and asserts the focus marker is
+    /// visible somewhere in the buffer.
+    #[test]
+    fn focused_row_stays_visible_when_past_visible_area() {
+        use ratatui::Terminal;
+        use ratatui::backend::TestBackend;
+
+        let cfg = AppConfig::default();
+        let last_row = settings_row_count(&cfg).saturating_sub(1);
+        assert!(last_row > 6, "test assumes more rows than the test area");
+
+        let backend = TestBackend::new(80, 6);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|frame| {
+                render_settings(frame, frame.area(), &cfg, last_row);
+            })
+            .unwrap();
+
+        let buf = terminal.backend().buffer();
+        // The focused-row marker `▸` must appear somewhere visible.
+        let mut found_marker = false;
+        for y in 0..buf.area.height {
+            for x in 0..buf.area.width {
+                if buf[(x, y)].symbol() == "▸" {
+                    found_marker = true;
+                    break;
+                }
+            }
+        }
+        assert!(
+            found_marker,
+            "focus marker ▸ should be visible after scrolling"
+        );
     }
 
     #[test]
