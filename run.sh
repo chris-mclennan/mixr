@@ -50,6 +50,7 @@ case "${1:-default}" in
     exec cargo clippy --all-targets -- -D warnings
     ;;
   dist-check) shift; exec ./scripts/dist-check.sh "$@" ;;
+  newsletter) shift; exec ./scripts/send-release-newsletter.sh "$@" ;;
   app)     shift; exec ./scripts/build-app.sh "$@" ;;
   dmg)     shift; exec ./scripts/build-dmg.sh "$@" ;;
   watch)
