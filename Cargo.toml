@@ -96,3 +96,8 @@ rusqlite = { version = "0.32", features = ["bundled"] }  # Engine DJ + Serato li
 [profile.release]
 opt-level = 3
 lto = true
+
+# The profile that 'dist' will build with (cargo-dist).
+[profile.dist]
+inherits = "release"
+lto = "thin"
