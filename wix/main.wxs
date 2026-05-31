@@ -61,7 +61,7 @@
     <Product
         Id='*'
         Name='mixr-rs'
-        UpgradeCode='681C59FB-950F-42B0-999A-89E5ED497228'
+        UpgradeCode='89893C47-F45E-422C-9F1A-0CE8CFDE1DEE'
         Manufacturer='Chris McLennan'
         Language='1033'
         Codepage='1252'
@@ -69,7 +69,7 @@
 
         <Package Id='*'
             Keywords='Installer'
-            Description='A GPU-rendered terminal for macOS — and a structured-cell display surface that apps can draw to directly.'
+            Description='Lean terminal DJ app for electronic music — Beatport streaming, AI-assisted mixing, hardware controllers.'
             Manufacturer='Chris McLennan'
             InstallerVersion='450'
             Languages='1033'
@@ -110,7 +110,7 @@
                     -->
 
                     <Directory Id='Bin' Name='bin'>
-                        <Component Id='Path' Guid='B3861F1C-5533-4494-980A-3431529D7A2F' KeyPath='yes'>
+                        <Component Id='Path' Guid='A3011DA7-87F5-4A4F-A689-638637AB807E' KeyPath='yes'>
                             <Environment
                                 Id='PATH'
                                 Name='PATH'
