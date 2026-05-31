@@ -34,6 +34,14 @@ export default defineConfig({
           ],
         },
         {
+          // Manual pages added by the `manual-writer` agent over time.
+          // Order here reflects intended reading sequence.
+          label: 'Manual',
+          items: [
+            { label: 'Getting Started', slug: 'manual/getting-started' },
+          ],
+        },
+        {
           label: 'Family',
           items: [
             { label: 'tmnl — GPU terminal', link: 'https://tmnl.sh' },

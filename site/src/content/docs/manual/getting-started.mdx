@@ -1,0 +1,306 @@
+---
+title: Getting Started
+description: Install mixr, log into Beatport, queue your first track, ride your first crossfade.
+---
+
+This page walks you from a clean install to your first beat-matched
+crossfade. It assumes nothing — no terminal background, no DJ
+software background. If you can use a laptop, you can use mixr.
+
+If you're hitting this for the first time and just want to get
+playing music: follow the page top to bottom. It takes about ten
+minutes.
+
+## 1. Install mixr
+
+Grab the installer for your platform from the [Install
+page](/install/) — DMG for macOS, shell installer for Linux, MSI
+or PowerShell for Windows. The install page has the per-platform
+quirks (WebKit on Linux, the family-bundle launcher on macOS); we
+won't repeat them here.
+
+When the install finishes, open a terminal and run:
+
+```sh
+mixr
+```
+
+That's it. mixr lives entirely in the terminal — no separate
+window, no system tray, no daemon. Quit any time with `Ctrl+C`.
+
+## 2. The dashboard
+
+On first launch (after you've signed in to Beatport — next
+section), you land on the **dashboard**. This is mixr's home
+screen and the one you'll spend most of your time on. It looks
+something like this:
+
+```
+┌─ mixr ─────────────────────────────────────────────────────────────┐
+│ Deck A  ARTBAT — Element  126.0 BPM  3:42 ███████░░░               │
+│ Deck B  Cassian — Run     128.0 BPM  cued                          │
+│                                                                    │
+│ ◀ ─ ─ ─ ─ ─ ─ ●─────── ─ ─ ─ ─ ─ ─ ─ ▶   crossfader                │
+│ MIX IN 4 bars   transition: BeatMatched   key dist 1   gap 1.6%    │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+Two decks side by side — **Deck A on the left, Deck B on the
+right** — with a crossfader between them. Below that, a row of
+status panels: queue, history, browse, log. Below that, the
+controller readout (EQ, filter, tempo, volume, loop) and the
+mixer state.
+
+A few keys to know before you do anything else:
+
+| Key | What it does |
+|---|---|
+| `d` | Return to the dashboard from anywhere |
+| `b` | Open the full Beatport browse view |
+| `q` | View your current queue |
+| `,` | Open Settings |
+| `?` | Open the in-app help (every key listed) |
+| `Esc` | Go back / cancel |
+| `Ctrl+C` | Quit |
+
+The other thing worth knowing: mixr is **fully mouse-driveable**.
+Scroll-wheel works in every list. You can click and drag the
+crossfader. You can click `[← back]` in the top-right of any
+non-dashboard screen. If a key is faster, use the key; if a click
+is faster, click.
+
+## 3. Sign in to Beatport
+
+mixr streams from Beatport using your own subscription. On first
+launch it opens a small embedded browser window pointing at
+**dj.beatport.com** — sign in there as you normally would. Your
+Beatport password never touches mixr; the embedded window just
+hands mixr a token after the login succeeds.
+
+What's actually happening:
+
+- mixr uses OAuth 2.0 with PKCE — the same kind of login flow
+  apps use to sign in with Google or Apple.
+- After you complete the login, Beatport hands mixr an access
+  token. mixr saves it to `~/.mixr/auth.json`.
+- The token refreshes itself automatically. You shouldn't have
+  to log in again unless you actively log out.
+
+If you ever want to clear your credentials (signing out, handing
+the laptop to someone else, switching Beatport accounts) just run:
+
+```sh
+mixr --logout
+```
+
+That deletes `~/.mixr/auth.json` and the WebView's cookie store.
+Next launch will prompt for login again.
+
+> **One honest caveat about audio quality.** Beatport's OAuth
+> scope tops out at **256 kbps HLS (AAC)** — perfectly fine for
+> a venue PA or headphones, but not FLAC. FLAC streams require a
+> higher-tier OAuth scope that Beatport only grants to its own
+> apps. This is a Beatport policy, not a mixr limitation. The
+> tracks still sound great; just be aware you're not getting
+> lossless.
+
+You only have to do this once.
+
+## 4. Load your first track
+
+Press `b` to open the browse view. You'll see a menu reflecting
+Beatport's full catalog:
+
+```
+Beatport
+▸ Discover
+  Genres
+  Decades
+  My Beatport
+  My Library
+  Favorites
+  Local Library
+```
+
+Drill in with `Enter` or `→` (right arrow). Back out with `Esc`
+or `←` (left arrow).
+
+For your first track, let's pick something well-curated:
+
+1. Press `b` to open Browse.
+2. Arrow down to **Genres**, press `Enter`.
+3. Pick a genre — say, **Melodic House & Techno** — press `Enter`.
+4. Pick **Top 100**, press `Enter`.
+5. You're now in a track list. The columns show artist, title,
+   BPM, key, label, duration.
+6. Arrow to a track you want and press `Enter` — it queues.
+
+The status bar (or a toast popup) confirms `Queued: Artist –
+Title`. You can keep going — queue a second, third, fourth track
+the same way.
+
+A few shortcuts that save time:
+
+| Key | What it does |
+|---|---|
+| `a` | Queue **all** tracks on the current screen |
+| `Space` | Preview the highlighted track (toggle to stop) |
+| `L` | Load the next page of results (Beatport paginates) |
+| `Ctrl+F` | Filter the visible list as you type |
+| `o` | Open the highlighted track on beatport.com in a browser |
+| `Esc` | Go back to the previous menu |
+
+If you queued at least one track, press `d` to return to the
+dashboard and watch it play.
+
+## 5. Your first mix
+
+Here's where mixr does the work that makes it mixr.
+
+The model is **autoplay-from-queue**. You don't manually pick
+which deck a track loads onto, or which deck plays first. mixr
+handles all of that:
+
+- The first queued track loads onto **Deck A** and starts
+  playing.
+- The second queued track preloads onto **Deck B** as the
+  *incoming* track.
+- When the playing track reaches its **mix-in point** (near the
+  end), mixr starts a 16-bar phase-locked crossfade to the
+  incoming track.
+- When the crossfade finishes, the decks swap roles, the next
+  queued track preloads, and the cycle repeats.
+
+So the simplest possible first mix is: **queue two tracks, sit
+back, and watch the crossfader move.** mixr will pick the
+transition type (BeatMatched, BassSwap, FilterSweep, EchoOut, or
+LoopRoll) based on the BPM gap and Camelot key distance between
+the two tracks. The dashboard shows you which one it picked and
+how long until the mix.
+
+### The transport keys
+
+You'll use these constantly:
+
+| Key | What it does |
+|---|---|
+| `p` | Play / pause the currently-playing deck |
+| `n` | Skip to the next queued track immediately |
+| `m` | **Mix now** — trigger the crossfade immediately, don't wait for the mix-in point |
+| `t` | **Teleport** to the mix-in point on the playing deck — fast-forward to where the mix will start |
+| `<` / `>` | Jump back / forward by N bars (cycles 4 / 8 / 16 / 32) |
+| `Space` | Preview a different track (in browse / queue views) |
+
+For your very first mix, the most useful key is `m` — once both
+decks have something on them, `m` triggers the crossfade right
+now, so you don't have to wait three minutes to hear what
+happens.
+
+### Moving the crossfader yourself
+
+mixr auto-moves the crossfader during a transition, but you can
+take manual control any time.
+
+The keyboard way:
+
+1. Press `Tab` from the dashboard to cycle focus. You'll see
+   sections light up in cyan as Tab cycles through them —
+   Controller, Queue, History, Browse, Log.
+2. Stop on **Controller**.
+3. Press `↑` / `↓` to move between the controller's rows. One of
+   them is the crossfader.
+4. With Crossfader selected, `←` / `→` nudge the crossfader 0.05
+   steps left or right (toward Deck A or Deck B).
+
+The mouse way is faster: just **click and drag the crossfader
+bar** on the dashboard. Click anywhere along the track to jump
+the fader there.
+
+The "force a transition type" way: open the command prompt with
+`:` and type, for example:
+
+```
+:transition echoout
+```
+
+…then hit Enter. The next crossfade will be an EchoOut hard-cut.
+
+## 6. Your own music — the local library
+
+Already have a folder of music? Point mixr at it and you'll get a
+folder-drill browser alongside Beatport.
+
+1. Press `,` to open Settings.
+2. Arrow down to the **Library** section.
+3. Find the **Local Library Directory** row and press `Enter`.
+4. Type the path to your music folder — for example
+   `/Users/you/Music/DJ` on macOS or `/home/you/music` on Linux.
+5. Press `Enter` to save.
+6. Press `Esc` to close Settings.
+
+Now press `b` to open Browse and scroll to the bottom — **Local
+Library** is the last menu item. Drill in and you'll see your
+music as a folder tree, with each track showing BPM / key /
+duration (extracted from the file tags). Each level of the tree
+also has an **All tracks (recursive)** row that flattens the
+subtree into a single flat track list — handy when you want to
+browse a whole crate at once.
+
+This is just-shipped in **v0.1.3** — if you installed mixr a
+while back, run the installer again to get it.
+
+If you've got an existing rekordbox / Engine DJ / Serato library,
+the same Settings → Library section has rows for those, too:
+
+- **Rekordbox XML** — point at your exported XML
+- **Engine DJ Database** — point at the SQLite `m.db` file
+- **Serato Database** — point at the `_Serato_/database V2` file
+
+Plug in a USB stick with rekordbox or Engine Library or Serato
+data on it, and mixr auto-detects it and adds it to the Browse
+menu while it's mounted.
+
+## 7. Where to go next
+
+You've now done the things that take eighty percent of mixr to
+its eighty-percent useful state. From here:
+
+- **Recording your set** — press `R` any time to start recording.
+  mixr writes a `.wav` file to `~/.mixr/recordings/`. There are
+  Settings options for `.cue` sheets and AIFF format, and you can
+  even tell mixr to save the played-out set back to Beatport as a
+  playlist.
+
+- **Hot cues** — Once a track's loaded, `Shift+1` through
+  `Shift+4` (the `!@#$` keys) set hot cues at the current
+  position. `1` through `4` jump back to them. The dashboard
+  shows them as little dots `●1 ●2 ●3 ●4`.
+
+- **Virtual mixer** — press `z` or `Z` to open the mixer overlay
+  for per-deck EQ, single-knob filter, channel fader, and
+  beat-aligned loops. Tab between decks, `↑↓` to pick a row,
+  `←→` to adjust.
+
+- **Claude DJ** — the AI DJ that picks tracks, beatmatches, and
+  rides the mixer for you. Bring your own Anthropic API key
+  (`mixr --claude-key sk-ant-...`), then `C` to toggle it on.
+  Three modes (Auto / Assist / Manual) to taste.
+
+- **MIDI controllers** — plug one in. If it's a Numark Mixstream
+  Pro Go Plus, or a generic 2-channel layout, it auto-binds. For
+  anything else, press `K` from the dashboard for MIDI learn
+  mode and waggle each control to bind it.
+
+- **Scripting via IPC** — every keybind has a JSON equivalent.
+  Write JSON to `~/.mixr/command`, mixr reads + acts. Useful from
+  shell scripts, Stream Deck, BetterTouchTool, or any tool that
+  can write a file.
+
+Deeper manual pages on each of these are coming as separate
+chapters. Until then, the [FEATURES.md
+file](https://github.com/chris-mclennan/mixr/blob/main/FEATURES.md)
+in the source repo is the complete inventory of every feature
+mixr ships, every keybind, and every IPC command — searchable in
+one page.
+
+Welcome to mixr. Have fun.
