@@ -1143,6 +1143,48 @@ impl App {
         // Settings mode — handle separately
         if matches!(self.view_mode, ViewMode::Settings) {
             let count = super::settings::settings_row_count(&self.config);
+            // Text-input edit mode — when active, capture all keystrokes
+            // for the in-progress value. Esc cancels, Enter saves to
+            // config via apply_text_setting, any printable char appends.
+            if self.settings_editing_text.is_some() {
+                match key.code {
+                    KeyCode::Esc => {
+                        self.settings_editing_text = None;
+                    }
+                    KeyCode::Enter => {
+                        if let Some(value) = self.settings_editing_text.take()
+                            && let Some(super::settings::SettingsRowEntry::Text(row)) =
+                                super::settings::settings_row_entry_at(
+                                    &self.config,
+                                    self.selected,
+                                )
+                        {
+                            let key_id = row.key;
+                            super::settings::apply_text_setting(
+                                &mut self.config,
+                                key_id,
+                                value,
+                            );
+                            // Persist to ~/.mixr/config.toml so the edit
+                            // sticks across restarts.
+                            self.config.save();
+                            self.toast.show(&format!("Saved {}", row.label), 1.5);
+                        }
+                    }
+                    KeyCode::Backspace => {
+                        if let Some(buf) = self.settings_editing_text.as_mut() {
+                            buf.pop();
+                        }
+                    }
+                    KeyCode::Char(c) => {
+                        if let Some(buf) = self.settings_editing_text.as_mut() {
+                            buf.push(c);
+                        }
+                    }
+                    _ => {}
+                }
+                return;
+            }
             match key.code {
                 KeyCode::Up if self.selected > 0 => {
                     self.selected -= 1;
@@ -1163,6 +1205,14 @@ impl App {
                     self.selected = (self.selected + 10).min(count.saturating_sub(1));
                 }
                 KeyCode::Enter | KeyCode::Right => {
+                    // Text rows: Enter on a TextRow opens edit mode with the
+                    // current value pre-populated.
+                    if let Some(super::settings::SettingsRowEntry::Text(row)) =
+                        super::settings::settings_row_entry_at(&self.config, self.selected)
+                    {
+                        self.settings_editing_text = Some(row.value.clone());
+                        return;
+                    }
                     if let Some(row) = super::settings::settings_row_at(&self.config, self.selected)
                     {
                         // Reset-all sentinel — Enter wipes config back

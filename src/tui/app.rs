@@ -290,6 +290,12 @@ pub struct App {
     pub(crate) scroll_offset: usize,
     pub(crate) selected_column: i32, // -2 = whole row, -1 = title, 0 = artist, 1 = remixer, 2 = label, 3 = genre, 4 = date
 
+    /// Settings text-row in-progress value. `Some` only while the
+    /// user is actively editing a text/path row (Enter on the row
+    /// initializes this; Esc clears; second Enter saves). When
+    /// `None`, settings navigation is the standard ↑↓ / Enter cycle.
+    pub(crate) settings_editing_text: Option<String>,
+
     // View mode overlays
     pub(crate) view_mode: ViewMode,
 
@@ -648,6 +654,7 @@ impl App {
             selected: 0,
             scroll_offset: 0,
             selected_column: -2,
+            settings_editing_text: None,
             view_mode: ViewMode::Browse,
             dash_focus: DashFocus::Controller,
             dash_browse_sel: 0,
@@ -1173,6 +1180,7 @@ impl App {
                         content_area,
                         &self.config,
                         self.selected,
+                        self.settings_editing_text.as_deref(),
                     );
                     // Click targets — only register rects for editable Row
                     // items (skip Section headers). `selected` is a row-index

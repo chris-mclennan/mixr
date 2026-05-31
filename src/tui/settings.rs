@@ -25,14 +25,35 @@ pub struct SettingRow {
     pub default_idx: usize,
 }
 
-/// One item in the rendered settings list — either a section header
-/// (`── <name> ──`, not focusable) or an editable row. Matches the
-/// family settings UI convention shared with mnml + tmnl (see
-/// `CLAUDE.md`).
+/// One item in the rendered settings list — section header, discrete-
+/// choice row, or text-input row (path / freeform string). Matches
+/// the family settings UI convention shared with mnml + tmnl (see
+/// `CLAUDE.md`). The `TextRow` is the v2 extension over the original
+/// discrete-only schema; enables editing paths like `local_library_dir`
+/// in-app instead of forcing config-file edits.
 #[derive(Debug, Clone)]
 pub enum SettingItem {
     Section(&'static str),
     Row(SettingRow),
+    TextRow(TextSettingRow),
+}
+
+/// A text-input settings row — for paths, freeform strings, anything
+/// that doesn't fit a fixed list of choices.
+#[derive(Debug, Clone)]
+pub struct TextSettingRow {
+    pub key: &'static str,
+    pub label: &'static str,
+    pub value: String,
+    pub default: String,
+    /// User-facing placeholder shown when `value` is empty.
+    pub placeholder: &'static str,
+}
+
+impl TextSettingRow {
+    pub fn modified(&self) -> bool {
+        self.value != self.default
+    }
 }
 
 impl SettingRow {
@@ -514,6 +535,39 @@ pub fn build_settings(config: &AppConfig) -> Vec<SettingItem> {
         0,
     )));
 
+    // ── Library ────────────────────────────────────────────────────
+    // Path inputs — Enter to edit, type to modify, Esc to cancel,
+    // Enter to save. v2 of the family settings UI convention.
+    out.push(SettingItem::Section("Library"));
+    out.push(SettingItem::TextRow(TextSettingRow {
+        key: "local_library_dir",
+        label: "Local Library Directory",
+        value: config.local_library_dir.clone(),
+        default: d.local_library_dir.clone(),
+        placeholder: "/path/to/music — Enter to edit",
+    }));
+    out.push(SettingItem::TextRow(TextSettingRow {
+        key: "rekordbox_xml",
+        label: "Rekordbox XML",
+        value: config.rekordbox_xml.clone(),
+        default: d.rekordbox_xml.clone(),
+        placeholder: "/path/to/rekordbox.xml",
+    }));
+    out.push(SettingItem::TextRow(TextSettingRow {
+        key: "engine_dj_db",
+        label: "Engine DJ Database",
+        value: config.engine_dj_db.clone(),
+        default: d.engine_dj_db.clone(),
+        placeholder: "/path/to/m.db",
+    }));
+    out.push(SettingItem::TextRow(TextSettingRow {
+        key: "serato_db",
+        label: "Serato Database",
+        value: config.serato_db.clone(),
+        default: d.serato_db.clone(),
+        placeholder: "/path/to/database V2",
+    }));
+
     // ── Account ────────────────────────────────────────────────────
     out.push(SettingItem::Section("Account"));
     out.push(SettingItem::Row(SettingRow::new(
@@ -963,6 +1017,32 @@ pub fn apply_setting(config: &mut AppConfig, key: &str, option_idx: usize) -> Op
     }
 }
 
+/// Apply a text/path value to the config by key. Mirrors apply_setting's
+/// shape for choice rows. Returns the engine-resync key string when
+/// the field has runtime effects (currently no library-dir fields do —
+/// they trigger a re-scan only on next browse).
+pub fn apply_text_setting(config: &mut AppConfig, key: &str, value: String) -> Option<&'static str> {
+    match key {
+        "local_library_dir" => {
+            config.local_library_dir = value;
+            None
+        }
+        "rekordbox_xml" => {
+            config.rekordbox_xml = value;
+            None
+        }
+        "engine_dj_db" => {
+            config.engine_dj_db = value;
+            None
+        }
+        "serato_db" => {
+            config.serato_db = value;
+            None
+        }
+        _ => None,
+    }
+}
+
 fn toggle_transition(config: &mut AppConfig, name: &str, on: bool) {
     let has = config.enabled_transitions.iter().any(|s| s == name);
     if on && !has {
@@ -972,24 +1052,63 @@ fn toggle_transition(config: &mut AppConfig, name: &str, on: bool) {
     }
 }
 
+/// Unified focusable-row reference. Choice rows and text rows are
+/// both navigable from the settings list; their key handling diverges
+/// (Choice: Enter cycles, Left/Right adjust; Text: Enter → edit mode,
+/// typing modifies the value).
+#[derive(Debug, Clone)]
+pub enum SettingsRowEntry {
+    Choice(SettingRow),
+    Text(TextSettingRow),
+}
+
+impl SettingsRowEntry {
+    #[allow(dead_code)] // accessor for future call sites that need either kind generically
+    pub fn key(&self) -> &str {
+        match self {
+            SettingsRowEntry::Choice(r) => r.key,
+            SettingsRowEntry::Text(r) => r.key,
+        }
+    }
+    #[allow(dead_code)]
+    pub fn modified(&self) -> bool {
+        match self {
+            SettingsRowEntry::Choice(r) => r.modified(),
+            SettingsRowEntry::Text(r) => r.modified(),
+        }
+    }
+}
+
 /// Total focusable rows (Sections are not focusable). Used by the
 /// key handler in `keys.rs` to bound `self.selected`.
 pub fn settings_row_count(config: &AppConfig) -> usize {
     build_settings(config)
         .iter()
-        .filter(|i| matches!(i, SettingItem::Row(_)))
+        .filter(|i| !matches!(i, SettingItem::Section(_)))
         .count()
 }
 
 /// The `row_idx`-th focusable row, by skipping `Section` items.
-pub fn settings_row_at(config: &AppConfig, row_idx: usize) -> Option<SettingRow> {
+/// Returns a Choice row or a Text row.
+pub fn settings_row_entry_at(config: &AppConfig, row_idx: usize) -> Option<SettingsRowEntry> {
     build_settings(config)
         .into_iter()
         .filter_map(|i| match i {
-            SettingItem::Row(r) => Some(r),
-            _ => None,
+            SettingItem::Row(r) => Some(SettingsRowEntry::Choice(r)),
+            SettingItem::TextRow(r) => Some(SettingsRowEntry::Text(r)),
+            SettingItem::Section(_) => None,
         })
         .nth(row_idx)
+}
+
+/// Choice-row only accessor — for legacy code paths that don't need
+/// to handle text rows. Returns None for text rows even at valid
+/// indices.
+pub fn settings_row_at(config: &AppConfig, row_idx: usize) -> Option<SettingRow> {
+    match settings_row_entry_at(config, row_idx)? {
+        SettingsRowEntry::Choice(r) => Some(r),
+        SettingsRowEntry::Text(_) => None,
+    }
 }
 
 /// Render the settings screen. Paints `── Section ──` headers (not
@@ -1001,7 +1120,13 @@ pub fn settings_row_at(config: &AppConfig, row_idx: usize) -> Option<SettingRow>
 /// Scrolls when the row list exceeds `area.height` — keeps the
 /// focused row visible by sliding the rendered window down as
 /// `selected_row` advances past the bottom.
-pub fn render_settings(frame: &mut Frame, area: Rect, config: &AppConfig, selected_row: usize) {
+pub fn render_settings(
+    frame: &mut Frame,
+    area: Rect,
+    config: &AppConfig,
+    selected_row: usize,
+    editing_text: Option<&str>,
+) {
     let items = build_settings(config);
     let mut lines: Vec<Line> = Vec::with_capacity(items.len());
     let mut row_counter = 0usize;
@@ -1096,6 +1221,66 @@ pub fn render_settings(frame: &mut Frame, area: Rect, config: &AppConfig, select
 
                 lines.push(Line::from(spans));
             }
+            SettingItem::TextRow(row) => {
+                let is_selected = row_counter == selected_row;
+                if is_selected {
+                    focused_line_idx = lines.len();
+                }
+                row_counter += 1;
+                let marker = if is_selected { "▸ " } else { "  " };
+                let mut spans = vec![
+                    Span::styled(
+                        marker,
+                        Style::default().fg(if is_selected {
+                            Color::White
+                        } else {
+                            Color::DarkGray
+                        }),
+                    ),
+                    Span::styled(
+                        format!("{}:  ", row.label),
+                        Style::default().fg(if is_selected {
+                            Color::White
+                        } else {
+                            Color::Gray
+                        }),
+                    ),
+                ];
+                // While editing the focused row, paint the in-progress value
+                // with a trailing block cursor. Otherwise show the saved
+                // value (or placeholder when empty).
+                if let (true, Some(editing)) = (is_selected, editing_text) {
+                    spans.push(Span::styled(
+                        editing.to_string(),
+                        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                    ));
+                    spans.push(Span::styled(
+                        "█",
+                        Style::default().fg(Color::Yellow),
+                    ));
+                } else if row.value.is_empty() {
+                    spans.push(Span::styled(
+                        row.placeholder.to_string(),
+                        Style::default()
+                            .fg(Color::DarkGray)
+                            .add_modifier(Modifier::ITALIC),
+                    ));
+                } else {
+                    spans.push(Span::styled(
+                        row.value.clone(),
+                        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                    ));
+                    if row.modified() {
+                        spans.push(Span::styled(
+                            "  *",
+                            Style::default()
+                                .fg(Color::Yellow)
+                                .add_modifier(Modifier::BOLD),
+                        ));
+                    }
+                }
+                lines.push(Line::from(spans));
+            }
         }
     }
 
@@ -1117,6 +1302,53 @@ pub fn render_settings(frame: &mut Frame, area: Rect, config: &AppConfig, select
 mod tests {
     use super::*;
     use crate::config::AppConfig;
+
+    #[test]
+    fn text_rows_appear_in_library_section() {
+        let cfg = AppConfig::default();
+        let items = build_settings(&cfg);
+        // The Library section should include the local_library_dir text row.
+        let lib_idx = items
+            .iter()
+            .position(|i| matches!(i, SettingItem::Section("Library")));
+        assert!(lib_idx.is_some(), "Library section missing");
+        let after_lib = &items[lib_idx.unwrap()..];
+        let has_text_row = after_lib.iter().any(|i| {
+            matches!(i, SettingItem::TextRow(r) if r.key == "local_library_dir")
+        });
+        assert!(has_text_row, "local_library_dir TextRow missing");
+    }
+
+    #[test]
+    fn apply_text_setting_updates_local_library_dir() {
+        let mut cfg = AppConfig::default();
+        assert_eq!(cfg.local_library_dir, "");
+        let result = apply_text_setting(
+            &mut cfg,
+            "local_library_dir",
+            "/Users/test/Music".into(),
+        );
+        assert!(result.is_none(), "no engine-resync key expected");
+        assert_eq!(cfg.local_library_dir, "/Users/test/Music");
+    }
+
+    #[test]
+    fn settings_row_count_includes_text_rows() {
+        let cfg = AppConfig::default();
+        let count = settings_row_count(&cfg);
+        let entry_count = (0..count)
+            .filter_map(|i| settings_row_entry_at(&cfg, i))
+            .count();
+        assert_eq!(count, entry_count, "row count vs entry iteration mismatch");
+        // At least one TextRow should be in the list.
+        let any_text = (0..count).any(|i| {
+            matches!(
+                settings_row_entry_at(&cfg, i),
+                Some(SettingsRowEntry::Text(_))
+            )
+        });
+        assert!(any_text, "expected at least one TextRow in the new schema");
+    }
 
     #[test]
     fn build_settings_has_sections_and_reset() {
@@ -1151,7 +1383,7 @@ mod tests {
         let mut terminal = Terminal::new(backend).unwrap();
         terminal
             .draw(|frame| {
-                render_settings(frame, frame.area(), &cfg, last_row);
+                render_settings(frame, frame.area(), &cfg, last_row, None);
             })
             .unwrap();
 
