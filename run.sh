@@ -49,6 +49,8 @@ case "${1:-default}" in
     cargo fmt --check || exit 1
     exec cargo clippy --all-targets -- -D warnings
     ;;
+  app)     shift; exec ./scripts/build-app.sh "$@" ;;
+  dmg)     shift; exec ./scripts/build-dmg.sh "$@" ;;
   watch)
     if ! command -v cargo-watch >/dev/null 2>&1; then
       echo "[run.sh] cargo-watch not installed — \`cargo install cargo-watch\`" >&2
