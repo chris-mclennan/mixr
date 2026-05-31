@@ -42,6 +42,12 @@ export default defineConfig({
           ],
         },
         {
+          label: 'Releases',
+          items: [
+            { label: 'Changelog', slug: 'changelog' },
+          ],
+        },
+        {
           label: 'Family',
           items: [
             { label: 'tmnl — GPU terminal', link: 'https://tmnl.sh' },

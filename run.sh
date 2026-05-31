@@ -49,6 +49,7 @@ case "${1:-default}" in
     cargo fmt --check || exit 1
     exec cargo clippy --all-targets -- -D warnings
     ;;
+  dist-check) shift; exec ./scripts/dist-check.sh "$@" ;;
   app)     shift; exec ./scripts/build-app.sh "$@" ;;
   dmg)     shift; exec ./scripts/build-dmg.sh "$@" ;;
   watch)
