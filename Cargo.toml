@@ -18,6 +18,15 @@ exclude = [".local/", ".claude/", ".github/", "assets/", "scripts/", "run.sh", "
 name = "mixr"
 path = "src/main.rs"
 
+# WiX GUIDs — required by cargo-dist for the Windows MSI installer.
+# Stable for the life of the package; never regenerate (changing
+# them would orphan existing installs on upgrade).
+[package.metadata.wix]
+upgrade-guid = "89893C47-F45E-422C-9F1A-0CE8CFDE1DEE"
+path-guid = "A3011DA7-87F5-4A4F-A689-638637AB807E"
+license = false
+eula = false
+
 [features]
 default = []
 # Enables the RubberBand pitch-stretch engine via librubberband FFI.
