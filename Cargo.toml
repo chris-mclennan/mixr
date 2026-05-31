@@ -93,6 +93,13 @@ hidapi = "2.6"      # HID input — richer per-controller features (jog wheel re
 quick-xml = "0.36"  # rekordbox.xml library import
 rusqlite = { version = "0.32", features = ["bundled"] }  # Engine DJ + Serato library DBs
 
+# Windows AF_UNIX support (Win10 build 17063+) — std doesn't expose
+# `UnixStream` on Windows even though the OS supports it. Matches the
+# same dep in mnml + tmnl-protocol so file-path UDS sockets work end-
+# to-end on Windows.
+[target.'cfg(windows)'.dependencies]
+uds_windows = "1.1"
+
 [profile.release]
 opt-level = 3
 lto = true

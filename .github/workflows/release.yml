@@ -161,7 +161,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             libasound2-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev \
-            libssl-dev pkg-config
+            libudev-dev libssl-dev pkg-config
       - uses: swatinem/rust-cache@v2
         with:
           key: ${{ join(matrix.targets, '-') }}
