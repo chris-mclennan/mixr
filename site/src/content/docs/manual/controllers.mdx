@@ -1,0 +1,331 @@
+---
+title: Hardware Controllers
+description: Plug a MIDI or HID DJ controller into mixr — auto-bind, MIDI Learn, presets, and the binding-map JSON.
+---
+
+mixr is a keyboard-and-mouse app first, but it's also happy to be
+driven by a piece of physical hardware. Plug in a class-compliant
+MIDI controller — a Numark Mixstream, a Hercules DJControl, a
+Reloop Beatmix, the knob bank you keep on the desk — and the
+faders, knobs, jog wheels, and pads on it map directly to mixr's
+crossfader, EQ, transport, hot cues, and browse navigation.
+
+This page covers what gets mapped, how the binding format works,
+how to bind your own controller in five minutes via MIDI Learn,
+and what's coming on the HID side for vendor-specific features
+like LED feedback and high-resolution jog wheels.
+
+> **Quality of life, not a requirement.** Nothing in mixr needs a
+> controller — the keyboard does everything. A controller is for
+> when you'd rather grab a fader than press `Tab`. Skip this page
+> entirely if you're a keyboard purist.
+
+## What gets mapped
+
+Physical control on your hardware → mixr action. The full set of
+bindable actions is closed (so MIDI Learn can show you the
+complete list), and breaks down roughly like this:
+
+- **Audible mixer** — crossfader, per-deck channel fader, 3-band
+  EQ (low / mid / high) per deck, single-knob filter per deck,
+  per-deck tempo slider.
+- **Per-deck transport** — play/pause, jump ±N bars, nudge ±1
+  for phase tweaking.
+- **Load** — load the highlighted browse-list track to Deck A or
+  Deck B.
+- **Cues** — hot-cue jump (slots 1–4 per deck), hot-cue set
+  (Shift+pad on most hardware).
+- **Loops** — 1, 2, 4, 8, 16-beat loop activate / release per
+  deck.
+- **Transitions** — force a specific transition type for the next
+  mix (BeatMatched / EchoOut / BassSwap / FilterSweep / LoopRoll).
+- **UI navigation** — up / down / enter / back, browse-knob
+  rotary scroll, switch view (dashboard / browse / queue / history
+  / settings), resume auto-mix.
+- **Globals** — single-button play/pause (toggles whichever deck
+  is playing), Mix Now (force the crossfade immediately).
+
+Every one of these is also IPC-reachable, which is the trick
+that keeps the controller layer simple: a MIDI event hits the
+listener, the listener writes a JSON command to `~/.mixr/command`,
+and the engine picks it up next tick. No special-cased code paths.
+
+## MIDI controllers
+
+mixr's MIDI side uses the [midir](https://crates.io/crates/midir)
+crate under the hood. On launch, a background thread enumerates
+every MIDI input port on your system and opens all of them — if
+you have a Mixstream Pro *and* a NanoKontrol *and* a foot pedal
+all plugged in, mixr listens on all three at once and routes
+events through the same binding map.
+
+### The binding map
+
+Bindings live in a single JSON file:
+
+```
+~/.mixr/midi-map.json
+```
+
+This is the source of truth. mixr loads it at startup; MIDI Learn
+writes to it; you can edit it by hand. Format:
+
+```json
+{
+  "bindings": [
+    {
+      "event": { "ControlChange": { "channel": 15, "controller": 14 } },
+      "action": { "kind": "crossfader" }
+    },
+    {
+      "event": { "ControlChange": { "channel": 0, "controller": 8 } },
+      "action": { "kind": "eq_low", "is_a": true }
+    },
+    {
+      "event": { "NoteOn": { "channel": 2, "note": 10 } },
+      "action": { "kind": "play_pause" }
+    }
+  ]
+}
+```
+
+A few things worth knowing about the format:
+
+- **`event`** is one of `ControlChange` (knobs / faders / pitch
+  sliders), `NoteOn` (buttons / pads — note-off is treated as a
+  release), or `PitchBend` (pitch wheels on keyboards; rare on
+  DJ controllers).
+- **`channel`** is **0-indexed** in the JSON, even though MIDI
+  hardware typically labels channels 1–16. Subtract 1 from
+  whatever the hardware says.
+- **`controller`** / **`note`** are 0–127. Whatever number your
+  MIDI monitor app shows is the number that goes here.
+- **`action.kind`** is one of the action variants listed in the
+  next section. `is_a: true` means Deck A; `is_a: false` means
+  Deck B.
+
+### MIDI Learn — bind without editing JSON
+
+The fast path. From the dashboard:
+
+1. Press **`K`** to open the MIDI Learn screen.
+2. The top pane shows `Captured: (touch a control on your MIDI
+   device)`. Touch any knob, fader, or button on your hardware —
+   the line updates to e.g. `Captured: CC ch1 #7 = 64`.
+3. The middle pane is a scrollable list of every bindable action.
+   Use `↑↓` to highlight the one you want (Crossfader, EQ Low A,
+   Play/Pause, etc.). Bound actions show their current event
+   alongside the label.
+4. Press **`Enter`** — done. The binding is written to disk and
+   takes effect immediately.
+5. The bottom pane lists every binding currently active.
+
+A few keys inside MIDI Learn:
+
+| Key | What it does |
+|---|---|
+| `↑` / `↓` | Move through the action list |
+| `Enter` | Bind the captured event to the highlighted action |
+| `U` | Unbind the captured event (or the highlighted row) |
+| `Esc` | Close MIDI Learn, return to the previous view |
+
+Events fired while MIDI Learn is open **do not dispatch** — the
+listener observes them but doesn't trigger actions. That's so
+the act of binding doesn't accidentally start a crossfade.
+
+### Bundled presets
+
+mixr ships with two starter maps in `presets/` inside the source
+tree:
+
+- **`presets/numark-mixstream-pro.midi-map.json`** — Numark
+  Mixstream Pro / Pro Go Plus, derived from the official Mixxx
+  mapping. Crossfader, per-deck channel fader / EQ / filter,
+  per-deck play and cue. Performance-pad mappings beyond the
+  first hot cue per deck are pending hands-on observation.
+- **`presets/generic-2-channel.midi-map.json`** — a conventional
+  2-channel layout that approximates most consumer controllers
+  (Hercules, Reloop, basic Pioneer, Numark). Includes the four
+  hot cues per deck and per-deck tempo sliders.
+
+To use a preset, copy it to `~/.mixr/midi-map.json`:
+
+```sh
+cp presets/numark-mixstream-pro.midi-map.json ~/.mixr/midi-map.json
+```
+
+Then relaunch mixr (or just restart the MIDI listener — quitting
+and re-running is the simplest). Open MIDI Learn (`K`) to confirm
+the bindings show up in the bottom pane.
+
+## Common mappings, in one place
+
+If you're hand-editing the JSON rather than using MIDI Learn,
+here's the cheat sheet. Each row maps a *type* of physical
+control to the right event kind and `action.kind` value.
+
+| Physical control | Event kind | Action | Notes |
+|---|---|---|---|
+| Crossfader | `ControlChange` | `crossfader` | CC 0–127 → −1..+1 |
+| Channel fader (per deck) | `ControlChange` | `channel_fader` + `is_a` | CC → 0..1 volume |
+| EQ knob (low / mid / high) | `ControlChange` | `eq_low` / `eq_mid` / `eq_high` + `is_a` | CC → ±18 dB |
+| Single-knob filter | `ControlChange` | `filter` + `is_a` | CC → LP (−1) ↔ HP (+1) |
+| Tempo slider | `ControlChange` | `tempo` + `is_a` | CC → ±8% rate |
+| Play / pause button | `NoteOn` | `play_pause_deck` + `is_a` | Press = velocity > 0 |
+| Hot-cue pad (slot N) | `NoteOn` | `cue` + `is_a`, `slot: 0..3` | Slots are 0-indexed |
+| Hot-cue set (Shift+pad) | `NoteOn` | `cue_set` + `is_a`, `slot: 0..3` | Same note, different action |
+| Loop pad (N beats) | `NoteOn` | `loop_beats` + `is_a`, `beats: 1\|2\|4\|8\|16` | Press again to release |
+| Browse rotary encoder | `ControlChange` | `browse_scroll` | Value 1 = down step, 127 = up step |
+| Nav buttons | `NoteOn` | `navigate_up` / `_down` / `_enter` / `_back` | List navigation |
+| Pitch wheel (rare) | `PitchBend` | (no direct action — bind via Learn) | 14-bit value |
+
+The full enum list lives in
+[`src/midi.rs`](https://github.com/chris-mclennan/mixr/blob/main/src/midi.rs)
+— the `Action` enum is the canonical source.
+
+## Specific controllers
+
+### Numark Mixstream Pro Go Plus
+
+Drop the bundled preset in place and the following work
+out of the box:
+
+- **Crossfader** — channel 15, CC #14.
+- **Channel faders A / B** — channels 0 / 1, CC #14.
+- **EQ knobs A / B** — CC #4 (high), #6 (mid), #8 (low) on
+  channels 0 / 1.
+- **Single-knob filter A / B** — CC #11 on channels 0 / 1.
+- **Play / pause** — note 10 on channels 2 / 3 (one channel per
+  deck's transport cluster).
+- **Cue set (first hot cue per deck)** — note 9 on channels 2 / 3.
+
+What's not yet covered: the full performance-pad bank (slots
+2–4 hot cues, samplers, loop rolls), jog-wheel scratch, and the
+nav cluster's back button. These are pending live observation —
+the easiest way to add them is MIDI Learn. Touch a pad with
+`K` open and you'll see exactly which channel + note it sends.
+
+### Other controllers
+
+Most consumer-grade 2-channel DJ controllers follow the same
+shape — channel 0 for Deck A, channel 1 for Deck B, CC events
+for continuous controls, note-on for buttons. The
+`generic-2-channel.midi-map.json` preset is a reasonable
+starting point. Copy it to `~/.mixr/midi-map.json`, plug your
+controller in, open MIDI Learn, and adjust the bindings that
+don't line up. Most of the time you'll only need to rebind a
+handful — typically the crossfader CC number and the play /
+cue note numbers.
+
+## HID controllers
+
+Most DJ controllers expose *two* protocols: class-compliant MIDI
+(generic, parsed by the layer above) and vendor-specific HID
+(higher resolution, LED feedback, raw jog-wheel touch detection).
+MIDI gets you 80% of the way; HID is the last 20%.
+
+mixr's HID layer ([hidapi](https://crates.io/crates/hidapi))
+currently ships **discovery and a listener scaffold**, but not
+yet vendor-specific decoders.
+
+What works today:
+
+- On launch, mixr enumerates every connected HID device and
+  logs each to `~/.mixr/mixr.log` with vendor ID, product ID,
+  manufacturer, and product strings. Handy when figuring out
+  what VID/PID your controller uses.
+- The dispatch trait (`Decoder`) is in place — once a per-controller
+  decoder lands, its decoded events go through the same `Action`
+  enum and IPC pipeline as MIDI.
+
+What doesn't work yet (be honest about the state):
+
+- No vendor decoders are wired. HID reports come in but nothing
+  consumes them. The Mixstream Pro Go Plus is first in line —
+  decoder lands when the hardware arrives in the office. Other
+  controllers follow as people ask.
+- LED feedback (lighting up the play button when a deck is
+  playing, dimming an EQ band that's at zero) requires HID
+  write reports per controller. Planned, not built.
+
+If you've got a controller you want to see supported, the path
+forward is HID dump → decoder. The discovery log is the first
+step.
+
+## Troubleshooting
+
+### "Controller not detected"
+
+mixr only sees a controller if your **OS** sees it first.
+
+- **macOS** — open *Audio MIDI Setup* → *Window → Show MIDI
+  Studio*. Your controller should show up as a device with at
+  least one input port. If it doesn't appear there, mixr
+  can't see it either — it's a driver / cable / power issue,
+  not a mixr issue. Some controllers need a vendor driver
+  installed; others are class-compliant and just work.
+- **Linux** — `aconnect -l` lists ALSA MIDI sources. Your
+  controller should appear with at least one port. If it
+  doesn't, check `dmesg` for USB enumeration errors.
+- **Windows** — Device Manager → *Sound, video and game
+  controllers*. If your controller's there, mixr will see it.
+
+After verifying the OS sees the device, restart mixr. The
+listener only opens ports it sees at launch — hot-plugging
+after start isn't picked up.
+
+### "It's detected but nothing happens when I touch a control"
+
+Open MIDI Learn (`K`) and touch the control. The captured-event
+line should update.
+
+- **Updates, but no action fires** — the event isn't bound. Pick
+  an action from the list and press `Enter`.
+- **Doesn't update** — the listener isn't reading from that
+  port. Check `~/.mixr/mixr.log` for `MIDI: opening <port>`
+  lines on startup. If your port isn't there, it wasn't
+  available at launch.
+
+### "Wrong action fires when I touch a control"
+
+Two bindings have collided — both pointing at the same event.
+The binding-map's `bind()` function replaces by event, so this
+shouldn't happen if you're using MIDI Learn, but hand-edited
+JSON can produce duplicates. Open `~/.mixr/midi-map.json`,
+search for the offending event, and delete the extra row.
+
+### "MIDI sysex isn't received"
+
+Correct — sysex (system-exclusive messages, status byte `0xF0`)
+is not parsed. The MIDI layer handles ControlChange (`0xB`),
+NoteOn (`0x9`), NoteOff (`0x8`), and PitchBend (`0xE`) only.
+That covers every standard DJ-controller control; controllers
+that *only* send sysex for some buttons (rare) won't bind
+those.
+
+### "Tempo slider snaps to extremes"
+
+Some tempo sliders send 0 at the bottom and 127 at the top
+even when they're motorized / centered. The `tempo` action
+treats CC value 64 as center (rate = 1.0); if your slider
+sends 64 only when physically centered, this works as
+expected. If your slider doesn't send 64 at center, rebind
+to two separate `nudge_deck` actions on the ±1 buttons and
+leave the slider unbound.
+
+## Where to go next
+
+- **[Mixing →](/manual/mixing/)** — the keyboard equivalents
+  of everything your controller does, plus the bits a controller
+  can't replace (the command prompt, the Virtual Mixer overlay).
+- **[Claude DJ →](/manual/ai-dj/)** — using the AI alongside a
+  controller. The two coexist: Claude rides the crossfader
+  during auto-mix, and the moment you touch a fader on your
+  hardware, control transfers back to you for the rest of that
+  mix.
+- **[FEATURES.md →](https://github.com/chris-mclennan/mixr/blob/main/FEATURES.md)**
+  — the complete IPC reference. Every action a controller can
+  bind to is in there with the corresponding JSON command.
+
+That's the controller story. Plug it in, press `K`, bind what
+you want, mix.
