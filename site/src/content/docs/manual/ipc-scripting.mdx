@@ -1,0 +1,343 @@
+---
+title: IPC & Scripting
+description: Drive mixr from any language — Bash, Python, Node, Stream Deck, TouchOSC, Whisper, a cron job — by writing one line of JSON to ~/.mixr/command.
+---
+
+mixr is a TUI, but it isn't *only* a TUI. Every action you can
+take with the keyboard, mouse, or MIDI controller is also reachable
+over a file-based IPC channel. That's the killer feature for anyone
+who codes: **mixr can be driven from any language that can write to
+a file.** Bash, Python, Node, Go, Rust, AppleScript, a Stream Deck
+profile, TouchOSC over `osascript`, a Whisper-powered voice agent,
+DMX lighting software — anything that can `echo` a string into a
+text file becomes a mixr remote control.
+
+This page is the full reference for that channel: what it is, how
+to test it in 5 seconds, every command the parser understands, and
+a handful of recipes for the integrations people most often want.
+
+## How it works
+
+mixr watches `~/.mixr/command` every tick (~16 ms). When something
+appears, mixr atomically renames it out of the way, reads it,
+parses each line as a JSON object, and executes the resulting
+command(s). The rename is race-free — a writer that fires between
+rename and read creates a *new* `command` file, which the next tick
+picks up. No lost messages.
+
+The format is **newline-delimited JSON** (JSONL):
+
+- **One line = one command.** Multiple lines run back-to-back in
+  order.
+- **`>` overwrite** the file for one-shot fire-and-forget.
+- **`>>` append** to queue several commands at once.
+- **Bad JSON is silently dropped.** mixr logs the parse error to
+  `~/.mixr/mixr.log` but never crashes on malformed input.
+- **Unknown command keys** are logged at debug level and otherwise
+  ignored. Unknown keys inside a known command (e.g. an extra
+  `"foo"` field on `eq`) are tolerated.
+
+## 5-second test
+
+With mixr running, drop this into any shell:
+
+```bash
+echo '{"skip":1}' > ~/.mixr/command
+```
+
+The currently playing track skips. That's the entire contract.
+Everything else on this page is just *which* JSON to write.
+
+A few more one-liners to prove the model:
+
+```bash
+echo '{"pause":1}' > ~/.mixr/command          # toggle play/pause
+echo '{"mixnow":1}' > ~/.mixr/command         # force the next crossfade
+echo '{"transition":"echoout"}' > ~/.mixr/command
+echo '{"crossfader":0.5}' > ~/.mixr/command   # ride crossfader to 50% B
+```
+
+## Reading state back
+
+The command channel is one-way. To read what mixr is doing, watch
+these files (all in `~/.mixr/`):
+
+- **`status.json`** — full state, rewritten every 2 s. Track,
+  BPM, deck EQ/filter/loop, crossfader position, transition type,
+  full queue. The canonical "what is mixr doing right now" file.
+- **`quick.txt`** — compact `key=value` snapshot, rewritten every
+  tick. Cheap to poll from a shell loop or a status-bar widget.
+- **`screen.txt`** — plain-text dump of the current view (browse
+  list, dashboard, settings). Useful for smoke tests.
+- **`events.jsonl`** — append-only event log. `tail -f` for
+  scrobblers, analytics, archival helpers.
+
+A 1-line shell scrobbler that fires on every track change:
+
+```bash
+tail -f ~/.mixr/events.jsonl | jq -r 'select(.event == "play")'
+```
+
+## The full command surface
+
+Every command below is the JSON shape mixr's parser actually
+accepts. Field types are checked at parse time — a missing or
+mistyped field silently no-ops that command but doesn't affect
+others on the same line.
+
+### Playback
+
+```json
+{"skip":1}                                     // skip current track
+{"pause":1}                                    // toggle play/pause
+{"teleport":1}                                 // jump to mix-in point
+{"mixnow":1}                                   // force crossfade now
+{"nudge":1}                                    // nudge incoming +1 (-1 = pull back)
+{"nudge":{"deck":"a","direction":1}}           // per-deck nudge
+{"jump":4}                                     // jump playing deck ±N bars
+{"jump":{"deck":"b","bars":-8}}                // per-deck jump
+{"extend":16}                                  // extend playback N bars before mix
+{"setrate":1.05}                               // set incoming deck rate
+{"setrate":{"deck":"a","rate":0.98}}           // per-deck rate
+{"shiftgrid":-12.5}                            // shift beat grid ±ms
+{"setmixin":48.0}                              // set mix-in point (seconds)
+{"volume":{"playing":0.8,"incoming":0.5}}      // ducking
+{"stop_deck":{"deck":"b"}}                     // stop a deck
+{"seek_deck":{"deck":"a","time":30.0}}         // seek to time (s)
+```
+
+### Queue
+
+```json
+{"clear":1}                                    // clear the queue
+{"shuffle":1}                                  // random shuffle
+{"smart_shuffle":1}                            // BPM/key-aware shuffle
+{"queueall":1}                                 // queue every visible track
+{"queue_track":12345678}                       // queue a Beatport track id
+{"favorite":1}                                 // favorite selected track
+```
+
+### Navigation
+
+```json
+{"search":"ARTBAT"}                            // jump to search
+{"browse":"Genres/Techno/Top 100"}             // navigate to a path
+{"navigate":"down"}                            // up | down | enter | back
+{"filter":"melodic"}                           // filter the visible list
+```
+
+### Library
+
+Each of these rebuilds the root browse menu so the entry appears
+(or disappears, when empty). Passing `""` disables that source.
+
+```json
+{"local_library_dir":"/Users/dj/Music/Sets"}
+{"rekordbox_xml":"/Users/dj/Documents/rekordbox.xml"}
+{"engine_dj_db":"/Volumes/USB/Engine Library/Database2/m.db"}
+{"serato_db":"/Users/dj/Music/_Serato_/database V2"}
+{"local_library_dir":""}                       // disable + rebuild menu
+```
+
+### Mixer
+
+```json
+{"eq":{"deck":"a","low":-6,"mid":0,"high":3}}  // any subset of low/mid/high
+{"deck_filter":{"deck":"a","pos":-0.5}}        // -1 = LP, +1 = HP, 0 = bypass
+{"fader":{"a":0.8,"b":1.0}}                    // channel faders 0..1
+{"crossfader":0.0}                             // -1 = full A, +1 = full B
+{"transition":"echoout"}                       // beatmatched|echoout|bassswap|filtersweep|looproll
+{"loop":{"deck":"a","beats":4}}                // 4-beat loop
+{"loop":{"deck":"a","release":true}}           // release the loop
+```
+
+### Settings
+
+```json
+{"quality":"lossless"}                         // lossless | 256k | 128k
+{"crossfade":32}                               // crossfade bars (8/16/32/64)
+{"master_gain":1.0}                            // 0.0..1.5
+{"install_rubberband":1}                       // brew install + rebuild + restart
+{"profile":"on"}                               // audio profiler on | off | toggle
+{"monitor_device":"Scarlett Solo USB"}         // headphone-cue device
+{"playlist_create":"Sunday Brunch"}            // creates Beatport playlist
+{"playlist_delete":{"id":99,"confirm":true}}   // confirm:true required
+{"claudedj":{"mode":"manual","quick_mix":true}} // any subset of DJ knobs
+{"rate_mix":"good"}                            // good | bad | "+" | "-" | true | false
+{"click":{"col":12,"row":5,"shift":false}}     // synthesize mouse click
+```
+
+> `playlist_delete` requires explicit confirmation. `{"playlist_delete":42}`
+> alone is **rejected** with a toast asking you to repeat with
+> `confirm:true`. This stops accidental wipes from a runaway script.
+
+### Views
+
+```json
+{"dashboard":1}
+{"view_browse":1}
+{"view_queue":1}
+{"view_history":1}
+{"view_settings":1}
+{"waveform":"phrase"}                          // phrase | audio | off
+```
+
+### Utilities
+
+```json
+{"key":"p"}                                    // single char → synthesize keypress
+{"key":"enter"}                                // named: up/down/left/right/enter/esc/tab/backspace/pageup/pagedown
+{"export":1}                                   // export history to ~/.mixr/history-DATE.{txt,json}
+{"diagnose":1}                                 // write ~/.mixr/diagnose.json
+{"get_screen":1}                               // refresh ~/.mixr/screen.txt
+{"restart":1}                                  // exit 75 → wrapper relaunches
+{"status":1}                                   // write status.json now (don't wait 2s)
+{"test_mix":1}                                 // Global Top 10 → queue all → teleport → mix
+```
+
+There are more commands the parser understands (`metronome`,
+`splitcue`, `load_deck`, `play_deck`, `cue`, `cue_set`, `loop_in`,
+`loop_out`, `delay_feedback`, `delay_samples`, `delay_sync`,
+`quantize`, `pitch_stretch`, `monitor_source`, `resume_auto`,
+`layout`, `drag`) — same shape as their nearest neighbors above.
+See `src/ipc.rs` in the repo for the authoritative parser.
+
+## The `:` prompt and `mixr --command`
+
+Two convenience wrappers around the same channel:
+
+- **In-app `:` prompt** (vim-style cmdline). Type `:skip 1`,
+  `:transition echoout`, `:vol 0.8`, `:queue 12345678`. The prompt
+  runs `shorthand_to_json("skip 1")` → `{"skip":1}` and writes
+  that into the command file.
+- **CLI `--command`** for shell scripts. `mixr --command
+  '{"skip":1}'` sends a single JSON object to a running instance.
+  Bare-keyword shorthand works too: `mixr --command skip` →
+  `{"skip":1}`.
+
+The shorthand grammar is `<key> <value>`. Empty value → `1`;
+parses as int → integer; parses as float → float; `"true"`/`"false"`
+→ bool; anything else → string. So `tx echoout` becomes
+`{"tx":"echoout"}` and `vol 0.8` becomes `{"vol":0.8}`.
+
+## Stream Deck integration
+
+Every Stream Deck plugin ecosystem ships an **Open File** /
+**System: Run Command** action. The recipe is one line:
+
+```bash
+echo '{"transition":"echoout"}' > ~/.mixr/command
+```
+
+Set one button per transition type, one for `mixnow`, one for
+`skip`, one for crossfader presets, one for each EQ kill. The
+Companion app for the Elgato Stream Deck (and most clones)
+supports custom shell commands directly; on macOS, the **Run**
+action will execute the snippet as-is.
+
+For multi-line batches (`>>` append), point the button at a tiny
+shell script:
+
+```bash
+#!/usr/bin/env bash
+{
+  echo '{"transition":"bassswap"}'
+  echo '{"crossfade":16}'
+  echo '{"mixnow":1}'
+} >> ~/.mixr/command
+```
+
+## TouchOSC, OSC bridges, custom controllers
+
+mixr doesn't speak OSC natively, but any OSC handler can shell out.
+With **TouchOSC Bridge** or **TouchDesigner**'s Execute DAT, route
+an OSC message like `/mixr/crossfader 0.5` to:
+
+```bash
+echo "{\"crossfader\":$1}" > ~/.mixr/command
+```
+
+The same pattern works for **MIDI-to-IPC** scripts (Python +
+`mido`), **DMX lighting** consoles that can run shell hooks, and
+**game controllers** via `joystickwake` or similar.
+
+## Python helper
+
+A 10-line module covers most use cases:
+
+```python
+import json, pathlib
+
+CMD = pathlib.Path.home() / ".mixr" / "command"
+
+def send(**kwargs):
+    """Send one IPC command. Multiple kwargs run in the same JSON line."""
+    CMD.write_text(json.dumps(kwargs) + "\n")
+
+def batch(*cmds):
+    """Queue several commands back-to-back."""
+    with CMD.open("a") as f:
+        for c in cmds:
+            f.write(json.dumps(c) + "\n")
+
+# Usage
+send(transition="echoout")
+send(mixnow=1)
+batch({"eq": {"deck": "a", "low": -24}}, {"crossfader": 1.0})
+```
+
+## Use cases people actually build
+
+- **Automated DJ rotation.** A cron job that flips `crossfade`
+  bars and `transition` type each hour for a 24/7 stream.
+- **Voice control via Whisper.** A Whisper transcript piped
+  through a tiny matcher: "next track" → `{"skip":1}`, "kill
+  bass" → `{"eq":{"deck":"a","low":-24}}`, "mix now" →
+  `{"mixnow":1}`.
+- **Lighting sync.** Tail `~/.mixr/events.jsonl` from your DMX
+  software, fire a cue on every `crossfade_start` event.
+- **Stage-side iPad controller.** TouchOSC with custom buttons →
+  OSC bridge → IPC. Run mixr on a Mac mini in the booth, drive it
+  from anywhere on the local network.
+- **CI-style smoke tests.** `test_mix`, `click {col,row}`,
+  `get_screen` + diff against a golden file. This is how mixr's
+  own dev loop tests changes without a human in the loop.
+- **Multi-room set assembly.** A Python script that reads a CSV of
+  Beatport IDs and fires `queue_track` for each row.
+
+## Troubleshooting
+
+- **My JSON didn't do anything.** Check `~/.mixr/mixr.log` for a
+  `parse error` or `Unknown command` line. Most often it's a
+  missing comma, a bare integer where an object is expected
+  (`{"jump":4}` is fine; `{"eq":-6}` is not — `eq` needs the
+  `{deck, low/mid/high}` shape), or a typo in the command name.
+- **File watcher delay.** Commands fire on the next tick (~16 ms).
+  If you're writing very fast (e.g. one command per millisecond
+  from a controller), use `>>` append so multiple commands land
+  on the same tick rather than racing each other.
+- **`>` vs `>>`.** `>` truncates the file — fine for one-shot
+  fire-and-forget. `>>` appends — use when you want several
+  commands to run back-to-back without the engine processing the
+  first one before the second arrives.
+- **Empty string is a valid value.** `{"local_library_dir":""}`
+  intentionally disables that source. If you don't want that, omit
+  the key.
+- **Confirm-required commands.** `playlist_delete` and (eventually)
+  any other destructive action requires `{"confirm":true}`. The
+  no-confirm shape surfaces a toast asking you to repeat with
+  confirmation — no network call is made.
+
+## Where to go next
+
+- **Driving Claude DJ from a script.** See [Claude DJ](/manual/ai-dj/)
+  for the `{"claudedj":{...}}` knobs and the AI-assisted mix loop.
+- **Building a MIDI map.** `~/.mixr/midi-map.json` lets you route
+  CC / note-on / pitch-bend messages straight to IPC actions —
+  no shell layer needed. Press `K` in mixr to enter MIDI Learn.
+- **`mixr --command` from cron / launchd / systemd.** The CLI
+  form is the right tool when you don't want a long-running
+  watcher script — just shell out once.
+
+The IPC channel is intentionally minimal: one file, one JSON line,
+one command. Everything else is your imagination.

@@ -41,7 +41,9 @@ export default defineConfig({
             { label: 'Getting Started', slug: 'manual/getting-started' },
             { label: 'Mixing', slug: 'manual/mixing' },
             { label: 'Library Imports', slug: 'manual/library-imports' },
+            { label: 'Hardware Controllers', slug: 'manual/controllers' },
             { label: 'Claude DJ', slug: 'manual/ai-dj' },
+            { label: 'IPC & Scripting', slug: 'manual/ipc-scripting' },
           ],
         },
         {
