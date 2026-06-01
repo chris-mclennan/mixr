@@ -1,0 +1,362 @@
+---
+title: Claude DJ
+description: The AI mixing partner — three modes, two trigger phases, training memory, and a tool set that maps onto real decks.
+---
+
+mixr ships with **Claude DJ** — an in-app DJ agent powered by
+Anthropic's Claude (currently `claude-haiku-4-5`). It's the thing
+that makes mixr different from every other terminal music player:
+the AI doesn't sit in a sidebar suggesting tracks. It actually
+drives the mix.
+
+How much of the mix is up to you. There are three modes, ranging
+from "Claude picks tracks, engine does the rest" to "Claude is the
+DJ, end to end." This page walks through what each mode actually
+does, how it triggers, and which knobs you turn to shape its
+behavior.
+
+## What Claude DJ is
+
+Three sentences:
+
+- **Claude (Anthropic)** runs in the background through mixr's
+  Anthropic API client.
+- It reads the engine state — what's playing, what's queued, BPM,
+  Camelot key, phase alignment, energy arc — and decides what to
+  do next.
+- It acts through a tool set — `queue_track`, `set_crossfader`,
+  `nudge`, etc. — that maps onto the same mixer surface you use
+  by hand.
+
+Nothing about Claude DJ is opaque or magic. Every tool call is
+logged to the DJ Log panel on the dashboard and to
+`~/.mixr/mixr.log`. You can watch it think in real time, and you
+can `Esc` your way back to manual control at any moment.
+
+## The three modes
+
+Set in **Settings → DJ Mode**. The choice changes how much of the
+mix Claude actually controls.
+
+### Auto — Claude picks tracks, engine drives the mix
+
+The engine handles everything physical: beatmatching, crossfade
+curves, phase sync, deck swaps. Claude's job is to **curate** —
+browse Beatport, queue tracks that fit, watch the energy arc,
+flag transitions worth comment.
+
+You get this if you want a DJ partner that handles the *taste*
+side without ever taking the faders away from the engine's tested
+crossfade machinery. This is the default and a good starting
+point.
+
+Available tools include the full Prep set — browse, queue, set
+crossfade bars, pick a transition type — plus phase-correction
+tools (`nudge`, `adjust_tempo`) for the rare case the engine
+asks for help.
+
+### Assist — Claude comments only, doesn't control
+
+Claude watches the same engine state, runs the same energy-arc
+reasoning, and surfaces commentary in the DJ Log panel — but
+**does not move faders**. No queueing, no transition picks, no
+crossfader sweeps. You see what it would do; you decide.
+
+Useful for two situations. First, learning — you mix, Claude
+narrates what it would have done differently. Second, sets where
+you want full creative control but appreciate a second opinion in
+the log.
+
+### Manual — Claude operates the decks
+
+The serious mode. Claude treats Deck A and Deck B as physical
+decks and runs the whole show:
+
+- **Loads** the next track onto whichever deck is idle
+  (`load_to_deck a` / `load_to_deck b`).
+- **Previews** that deck in the monitor (headphone) bus
+  (`preview_deck` → `stop_preview`) — requires a configured
+  monitor device.
+- **Beatmatches** by tempo-adjusting the cued deck
+  (`adjust_tempo`) and nudging it into phase (`nudge`).
+- **Reads alignment** continuously — `read_alignment` returns
+  beat phase in ms, beat-in-bar (0–3), bar-in-phrase (0–15).
+- **Sweeps the crossfader** over a musical interval
+  (`sweep_crossfader(target, bars)`) when it's time to mix.
+
+The engine still runs phase-sync and downbeat-align math
+underneath — those are safety rails, not autopilot. The
+`transition.apply()` crossfade curves are skipped (the crossfader
+moves only when Claude moves it), and a **30-second stall
+detector** falls back to auto if the crossfader sits idle.
+
+When you're testing the model's chops or letting it run a long
+set unattended, this is the mode. When you're playing live, it's
+also the mode — assuming you trust it enough.
+
+## Required setup
+
+You bring your own Anthropic API key. Store it once:
+
+```sh
+mixr --claude-key sk-ant-api03-...
+```
+
+This writes the key to `~/.mixr/claude_key` (mode 0600,
+gitignored). mixr reads from that file on every launch. No
+environment variable; no cloud sync; no telemetry.
+
+To remove it, delete the file:
+
+```sh
+rm ~/.mixr/claude_key
+```
+
+Without a key, Claude DJ is disabled — the rest of mixr still
+works fine; you just don't get the AI surface.
+
+## Turning it on
+
+Two toggles, two scopes:
+
+- **`C`** (capital) on the dashboard — enable / disable Claude DJ
+  for this session. The statusline shows the state. Disabled by
+  default at launch.
+- **Settings → DJ Mode → Auto / Assist / Manual** — pick the
+  operating mode. Takes effect immediately.
+
+Once enabled, Claude starts firing on its own based on the
+triggers below. You don't usually have to ask it to do anything;
+the engine asks for you.
+
+If you do want to talk to it directly, press `/` from the
+dashboard to open the **ask mode** prompt. Type a free-form
+instruction ("more peak-hour energy", "wind it down", "find
+something in 4A"), hit Enter. Claude takes the direction into
+account on the next trigger.
+
+## Trigger modes — Prep vs Performance
+
+Claude DJ runs in two phases, set per call based on engine state.
+
+### Prep (between mixes)
+
+The reflective phase — Claude has time to browse, search, queue,
+think about the arc. Round cap **10**. Full tool set: `browse_screen`,
+`select_item`, `go_back`, `search_tracks`, `queue_track`,
+`queue_all`, `read_phase`, `adjust_tempo`, `nudge`,
+`set_crossfade_bars`, `extend_playback`, `set_eq`, `set_filter`,
+`set_transition`, `loop_beats`, `loop_release`, `cue`, plus all
+manual-mode tools.
+
+System prompt includes curation guidance — style, Camelot
+strictness, BPM-gap strictness, training memory.
+
+### Performance (during a crossfade)
+
+The reactive phase — a crossfade is live and Claude's job is to
+keep phase and phrase aligned until the sweep finishes. Round cap
+**20** (beatmatch loops legitimately need more iterations than
+track selection). Slim tool set: `read_alignment`, `read_phase`,
+`nudge`, `jump_beats`, `adjust_tempo`, `set_eq`, `set_filter`,
+`set_crossfader`, `sweep_crossfader`.
+
+System prompt is **slim** — no memory injection, no style
+guidance, no recent-sources block. Mid-mix, none of that matters;
+all that matters is whether the beats are in phase.
+
+## Auto-triggers
+
+You don't tell Claude when to act. The engine tells it. Five
+triggers fire automatically:
+
+| Trigger | Mode | Condition |
+|---|---|---|
+| Low queue | Prep | Queue < 3 tracks (30s debounce) |
+| Crossfade start | Performance | Engine enters `Crossfading` |
+| Mid-mix check | Performance | Crossfade ~30% complete |
+| Mid-mix check | Performance | Crossfade ~70% complete |
+| Stall watchdog | Performance | Manual-mode crossfade idle > 10s |
+
+The **30s debounce on low-queue** prevents thrash if the user
+clears the queue and refills it manually. The **mid-mix checks
+at 30% and 70%** are when phase drift is most likely to need a
+correction. The **stall watchdog** is manual-mode insurance — if
+Claude forgets to call `sweep_crossfader` and the mix hangs, the
+engine falls back to auto so the music keeps moving.
+
+## Rate limiting
+
+Anthropic rate-limits the API, so mixr does too:
+
+- **Auto / Assist:** 2 seconds minimum between calls.
+- **Manual:** 1 second minimum (beatmatching iterates faster).
+- **On HTTP 429:** exponential backoff, max 60 seconds.
+
+The 429 path also clears the in-memory conversation — a long
+chain piling up tool_use/tool_result bodies is usually what blew
+the input token rate, so the next trigger starts clean.
+
+Per-tool-result bodies are capped at 500 chars (fresh) and 80
+chars (after retro-compaction). System prompt + tool schemas are
+prompt-cached on Anthropic's side; the messages array isn't (the
+retro-compaction would invalidate it anyway).
+
+## Training memory
+
+mixr learns from your taste over time.
+
+After every crossfade, rate it:
+
+- **`+`** or **`=`** — that mix was **good**. Remember the
+  shape (artists, BPM gap, key distance, transition type).
+- **`-`** or **`_`** — that mix was **bad**. Remember not to do
+  that again.
+
+Memory lives at `~/.mixr/dj_memory.json` — append-only, capped at
+50 entries per category (good / bad), with the top 10 of each
+injected into the Prep system prompt. So on every fresh trigger,
+Claude gets a summary like "you've liked ARTBAT → Innellea
+transitions before; you've disliked Top-100 → Top-100 chains."
+
+To opt out, set **Settings → DJ Memory → Off**. The rating keys
+still work but no entries are stored.
+
+To delete the file outright (start over):
+
+```sh
+rm ~/.mixr/dj_memory.json
+```
+
+There's also an IPC equivalent — `{"rate_mix":"+"}` or
+`{"rate_mix":"-"}` written to `~/.mixr/command` — for
+shell-scripted training or Stream Deck bindings.
+
+## The manual-mode tool set
+
+These are what Claude calls when it's running the decks. All map
+to physical decks A and B (not playing/incoming roles — the
+engine translates).
+
+| Tool | What it does |
+|---|---|
+| `load_to_deck` | Load a track from the current browse screen onto deck A or B, regardless of which is playing. |
+| `preview_deck` | Start the deck playing in the **monitor bus only** (headphones). Needs `monitor_device` configured in Settings. |
+| `stop_preview` | Stop the previewing deck (returns it to cued/paused). |
+| `play_deck` | Start a deck on the **main output** — this is how the mix goes live. |
+| `seek_deck` | Move a deck's playhead. Accepts seconds (float) or labels: `first_beat`, `drop`, `middle`, `start`. |
+| `set_channel_fader` | Per-deck channel fader 0..1 — independent of the crossfader. |
+| `set_crossfader` | **Snap** the crossfader to an absolute position (−1 = full A, +1 = full B). Use for hard cuts or nudges. |
+| `sweep_crossfader(target, bars)` | **Preferred for live mixes.** Move the crossfader smoothly to `target` over `bars` bars of musical time. The engine paces the move. **Call ONCE per mix.** |
+| `jump_beats` | Shift a deck ±N beats — fixes "off by one bar" without touching tempo. |
+| `read_alignment` | Returns `beat_phase_ms`, `beat_phase_fraction`, `beat_in_bar` (0–3 per deck), `bar_in_phrase` (0–15 per deck). |
+
+The "call sweep_crossfader ONCE" rule is the single biggest thing
+to internalize about manual mode. Five `set_crossfader` calls in
+a row don't sweep — they execute in milliseconds and produce a
+hard cut. The system prompt repeats this loudly because earlier
+versions of the model got it wrong.
+
+## The full Prep tool set
+
+Every tool above, plus the curation surface:
+
+- `browse_screen` — read the current browse view (breadcrumb +
+  20 items).
+- `select_item(index)` — drill into an item.
+- `go_back` — back up one level.
+- `search_tracks(query)` — Beatport text search (artist / title
+  only; BPM numbers and Camelot keys are rejected).
+- `queue_track(index)` — queue from the current screen.
+- `queue_all` — queue every track on the current screen.
+- `mix_now` — trigger a crossfade immediately.
+- `skip_track` — skip the playing track.
+- `read_phase` — current phase + BPM + time remaining.
+- `adjust_tempo(deck, bpm)` — set a deck's BPM.
+- `nudge(direction)` — nudge incoming for phase alignment.
+- `set_crossfade_bars(bars)` — change crossfade duration (4–64).
+- `extend_playback(bars)` — delay the next crossfade by N bars.
+- `set_eq(deck, low, mid, high)` — per-deck 3-band EQ in dB
+  (−24 to +12). Omit bands to leave unchanged.
+- `set_filter(deck, pos)` — per-deck single-knob filter
+  (−1 LP, 0 bypass, +1 HP).
+- `set_transition(type)` — pick the next transition style:
+  `BeatMatched`, `EchoOut`, `BassSwap`, `FilterSweep`, `LoopRoll`.
+- `loop_beats(deck, beats)` — beat-aligned loop on the deck.
+- `loop_release(deck)` — release the active loop.
+- `cue(deck, slot, action)` — hot-cue slot 1–4 — `set`, `jump`,
+  or `clear`.
+
+## DJ-side Settings
+
+All in **Settings → Claude DJ**:
+
+| Setting | Choices | What it shapes |
+|---|---|---|
+| **DJ Mode** | Auto / Assist / Manual | Which mode Claude runs in. |
+| **DJ Camelot** | Strict / Prefer / Off | Camelot-key compatibility enforcement. Strict refuses key clashes; Prefer favors compatible keys but allows deliberate jumps; Off leaves the choice to Claude. |
+| **DJ BPM Gap** | Strict / Prefer / Off | BPM gap enforcement. Strict caps at 8%; Prefer suggests EchoOut for larger gaps; Off leaves it to Claude. |
+| **DJ Transitions** | Engine / Claude | Who picks the next transition type. Engine = mixr's rule list; Claude = Claude decides via `set_transition`. |
+| **DJ Style** | Underground / Mainstream / Exploratory | Curation flavor. Underground digs deep (DJ-curated charts, ranks 20–100, label searches); Mainstream stays near Top 10; Exploratory crosses genres. |
+| **DJ Quick Mix** | Off / On | Auto-fires a crossfade after `DEFAULT_QUICK_MIX_BARS` (16) — for iteration on the bench, not live sets. |
+| **DJ Memory** | Off / On | Whether the `+`/`-` rating keys persist to `~/.mixr/dj_memory.json` and inject into the Prep prompt. |
+
+All Settings rows take effect immediately — no save/cancel split.
+`Esc` returns to the dashboard.
+
+## What to expect, mode by mode
+
+A quick mental model of who-does-what:
+
+|  | Track selection | Crossfade trigger | Crossfader curve | Phase nudge | EQ / filter |
+|---|---|---|---|---|---|
+| **Auto** | Claude | Engine | Engine | Engine (Claude fallback) | Engine (Claude can override) |
+| **Assist** | You | You | Engine | Engine | You |
+| **Manual** | Claude | Claude (`mix_now` or `sweep_crossfader`) | Claude (`sweep_crossfader`) | Claude (`nudge`, `jump_beats`) | Claude |
+
+The pattern: **Auto = Claude is your A&R**; **Assist = Claude is
+your studio engineer in your ear**; **Manual = Claude is the DJ**.
+
+## When things go sideways
+
+A few failure modes worth knowing about.
+
+- **Round-cap stop.** A trigger chain that exceeds the round cap
+  (10 Prep / 20 Performance) hard-stops and logs at INFO. The
+  next trigger fires fresh; the in-progress chain is abandoned.
+  If you see this often in `mixr.log`, the model is probably
+  thrashing on `browse_screen` → `go_back` cycles — try a
+  more specific User Direction via the `/` prompt.
+- **HTTP 429.** Rate-limited. mixr backs off exponentially (max
+  60s) and clears the conversation. Behavior resumes
+  automatically; no action needed.
+- **HTTP 400.** Conversation corruption (usually a dangling
+  `tool_use` from an interrupted prior chain). mixr clears the
+  conversation to recover. You'll see this in the DJ Log.
+- **Manual-mode stall.** Claude forgets to call
+  `sweep_crossfader`; the crossfader sits idle. After 10
+  seconds the watchdog fires a stall-recovery trigger; after
+  30 seconds the engine falls back to auto-mode so the music
+  keeps moving.
+- **Disabled mid-mix.** `C` toggles Claude off. Whatever the
+  engine was doing keeps doing it — the crossfade in flight
+  completes via the engine's transition curve. The next mix is
+  fully under your control.
+
+You can `C` Claude off at any moment without anything breaking.
+That's a deliberate design choice — there is no state Claude DJ
+owns that the engine can't recover from on its own.
+
+## Where to go next
+
+- **Settings reference** — every Settings row, what it does,
+  what it persists as.
+- **Manual mode walkthrough** — building a 90-minute set with
+  Claude in manual mode, from a cold queue.
+- **Training memory deep dive** — what gets stored, how the
+  prompt summary is built, how to curate your `dj_memory.json`
+  by hand.
+
+(These are coming as separate chapters — until then, the
+[FEATURES.md](https://github.com/chris-mclennan/mixr/blob/main/FEATURES.md)
+file is the searchable inventory of everything mixr ships.)

@@ -39,6 +39,9 @@ export default defineConfig({
           label: 'Manual',
           items: [
             { label: 'Getting Started', slug: 'manual/getting-started' },
+            { label: 'Mixing', slug: 'manual/mixing' },
+            { label: 'Library Imports', slug: 'manual/library-imports' },
+            { label: 'Claude DJ', slug: 'manual/ai-dj' },
           ],
         },
         {
