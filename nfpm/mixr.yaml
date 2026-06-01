@@ -1,0 +1,19 @@
+# nfpm package config — used by .github/workflows/package-linux.yml
+# to generate .deb + .rpm packages on release. ARCH / VERSION are
+# substituted from env vars by nfpm at config-parse time.
+name: mixr
+arch: ${ARCH}
+version: ${VERSION}
+maintainer: Chris McLennan <chrismclennan@mac.com>
+description: |
+  Lean terminal DJ app for electronic music — Beatport streaming,
+  AI-assisted mixing, hardware controllers.
+homepage: https://mixr.sh
+license: MIT
+section: sound
+priority: optional
+contents:
+  - src: staging/mixr
+    dst: /usr/bin/mixr
+    file_info:
+      mode: 0755
