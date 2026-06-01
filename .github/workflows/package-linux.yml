@@ -68,8 +68,10 @@ jobs:
           VERSION: ${{ steps.ver.outputs.version }}
           ARCH: ${{ matrix.arch }}
         run: |
-          .nfpm-bin/nfpm pkg --config nfpm/mixr.yaml --packager deb --target "mixr_${VERSION}_${ARCH}.deb"
-          .nfpm-bin/nfpm pkg --config nfpm/mixr.yaml --packager rpm --target "mixr-${VERSION}-1.${{ matrix.rpm_arch }}.rpm"
+          # Versionless filenames so `releases/latest/download/<name>` is stable
+          # across releases (matches cargo-dist's tarball naming convention).
+          .nfpm-bin/nfpm pkg --config nfpm/mixr.yaml --packager deb --target "mixr-rs-${{ matrix.triple }}.deb"
+          .nfpm-bin/nfpm pkg --config nfpm/mixr.yaml --packager rpm --target "mixr-rs-${{ matrix.triple }}.rpm"
           ls -la *.deb *.rpm
 
       - name: Upload to release
@@ -78,6 +80,6 @@ jobs:
         run: |
           v="${{ steps.ver.outputs.version }}"
           gh release upload "v${v}" \
-            "mixr_${v}_${{ matrix.arch }}.deb" \
-            "mixr-${v}-1.${{ matrix.rpm_arch }}.rpm" \
+            "mixr-rs-${{ matrix.triple }}.deb" \
+            "mixr-rs-${{ matrix.triple }}.rpm" \
             --clobber
