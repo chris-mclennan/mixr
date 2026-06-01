@@ -10,10 +10,17 @@
 }
 
 .install-row {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+  display: grid;
+  grid-template-columns: minmax(0, 14rem) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
   margin: 0.75rem 0 1rem;
+}
+
+@media (max-width: 700px) {
+  .install-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 .install-os-heading {
@@ -32,9 +39,6 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  align-self: flex-start;
-  width: 100%;
-  max-width: 22rem;
   background: var(--sl-color-bg-inline-code);
   border: 1px solid var(--sl-color-hairline);
   border-radius: 0.5rem;
