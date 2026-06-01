@@ -1,13 +1,17 @@
 ---
 title: mixr
-description: A terminal DJ app for electronic music — Beatport streaming, beat-locked crossfades, Claude DJ, and hardware controller support.
+description: A terminal DJ app for electronic music — Beatport streaming, beat-locked crossfades, Claude DJ, MIDI/HID controllers, and file-IPC scripting.
 template: splash
 hero:
-  tagline: A full DJ rig in one terminal binary. Beatport streaming, beat-locked crossfades, Claude DJ, MIDI controllers.
+  tagline: A full DJ rig in one terminal binary. Beatport streaming, beat-locked crossfades, Claude DJ, MIDI/HID controllers.
   actions:
     - text: Install
       link: /install/
       icon: right-arrow
+    - text: First mix in 10 minutes
+      link: /manual/getting-started/
+      icon: open-book
+      variant: secondary
     - text: GitHub
       link: https://github.com/chris-mclennan/mixr
       icon: external
@@ -27,61 +31,93 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
 ```
 
 <CardGrid stagger>
-  <Card title="Beatport streaming via OAuth" icon="rocket">
-    Sign in with your own Beatport account (PKCE OAuth in an embedded WebView — credentials never touch mixr). Browse Beatport's catalog top to bottom: Discover, Genres, Decades, My Beatport, My Library. Tokens at `~/.mixr/auth.json`, refreshed automatically. 256k HLS audio (FLAC requires a higher-tier scope only available to Beatport's own clients).
-  </Card>
-  <Card title="Five transition types, beat-locked" icon="random">
-    16-bar phase-locked crossfades, auto-selected per mix by BPM gap and Camelot key distance:
-    - **BeatMatched** — cos/sin equal-power
-    - **EchoOut** — echo tail + hard cut (for big BPM gaps)
-    - **BassSwap** — EQ lows swap at midpoint (matched BPM, key dist ≤ 1)
-    - **FilterSweep** — LP → HP sweep (matched BPM, key dist = 2)
-    - **LoopRoll** — 4-beat loop on the outgoing deck
+  <Card title="Beatport streaming" icon="rocket">
+    Sign in with your own Beatport account — PKCE OAuth in an embedded
+    WebView, so your password never touches mixr. Then browse the whole
+    Beatport catalog: Discover, Genres, Decades, My Beatport, My Library.
+    Tokens cached at `~/.mixr/auth.json` and refreshed automatically.
 
-    Override per-mix via IPC; configurable rule engine at `~/.mixr/transitions.json`.
+    **Honest caveat:** playback is 256 kbps HLS. FLAC needs a higher-tier
+    Beatport scope only available to Beatport's own clients.
   </Card>
-  <Card title="Claude DJ" icon="puzzle">
-    Claude picks tracks, beatmatches, and operates the mixer. Three modes:
+  <Card title="Claude DJ — three modes" icon="puzzle">
+    Bring your own Anthropic API key. Claude picks tracks, beatmatches,
+    and operates the mixer at the level you choose:
+
     - **Auto** — Claude runs the whole set unattended
     - **Assist** — Claude suggests, you confirm
     - **Manual** — Claude operates physical-deck tools while you steer
 
-    ~20 tools, Prep vs Performance call modes, adaptive rate-limit backoff, training memory (rate mixes `+`/`-` to teach what works), mid-mix phase checks, stall watchdog. Bring your own Anthropic API key.
+    ~20 tools, adaptive rate-limit backoff, training memory (rate mixes
+    with `+`/`-` to teach what works), mid-mix phase checks, stall
+    watchdog. Prompt-cached for fast re-triggers.
   </Card>
-  <Card title="Library imports + local browser" icon="document">
+  <Card title="Five transitions, beat-locked" icon="random">
+    16-bar phase-locked crossfades, auto-picked from BPM gap + Camelot
+    key distance:
+
+    - **BeatMatched** — cos/sin equal-power
+    - **EchoOut** — echo tail + hard cut (big BPM gaps)
+    - **BassSwap** — EQ lows swap at midpoint (matched BPM, key dist ≤ 1)
+    - **FilterSweep** — LP → HP sweep (matched BPM, key dist = 2)
+    - **LoopRoll** — 4-beat loop on the outgoing deck
+
+    Configurable rule engine at `~/.mixr/transitions.json` — override
+    when/then logic per-style.
+  </Card>
+  <Card title="Bring your own library" icon="document">
     Already have a library? Import it:
+
     - **rekordbox.xml** — full hierarchy + cue points
     - **Engine DJ DB** — desktop + USB drive layouts
     - **Serato Database V2**
 
-    Plus a recursive local-files browser with symphonia tag extraction (BPM / key / artist / title / duration in-line). Browse your own music side-by-side with Beatport.
+    Plus a recursive local-files browser with symphonia tag extraction
+    (BPM / key / artist / title / duration inline). Browse your own
+    music side-by-side with Beatport.
   </Card>
-  <Card title="MIDI controllers" icon="setting">
-    Any controller, any binding — TOML mapping per device. Bundled preset for **Numark Mixstream Pro Go Plus** plus a generic 2-channel layout. Built-in MIDI Learn (`K` from the dashboard).
+  <Card title="MIDI + HID controllers" icon="setting">
+    Any controller, any binding — TOML mapping per device. Bundled
+    preset for **Numark Mixstream Pro Go Plus** plus a generic
+    2-channel layout. Built-in MIDI Learn (`K` from the dashboard) so
+    you can map a new controller without touching files.
   </Card>
-  <Card title="Recording, hot cues, EQ + filter" icon="laptop">
-    Record your set to WAV / AIFF / .cue sheet, save as a Beatport playlist on the fly. Hot cues 0–3 on each deck (set with `!@#$`, jump with `1234`). 3-band EQ per deck (-24..+12 dB), single-knob filter, beat-aligned loop, delay FX, master limiter (Soft Knee), monitor device for headphone cue, pitch stretching (Off / Rubberband / Timestretch).
+  <Card title="Script the whole rig (file-IPC)" icon="seti:json">
+    mixr exposes a file-based IPC at `~/.mixr/command`. Drop a JSON line,
+    mixr reads + acts. Works from any language, any tool — same surface
+    Claude DJ and the dashboard use internally.
+
+    ```sh
+    echo '{"skip":1}'           > ~/.mixr/command
+    echo '{"crossfader":-0.5}'  > ~/.mixr/command
+    echo '{"transition":"echoout"}' > ~/.mixr/command
+    ```
+  </Card>
+  <Card title="Record sets, hot cues, EQ + filter" icon="laptop">
+    Record your set to WAV / AIFF with a `.cue` sheet — optionally save
+    as a Beatport playlist on the fly. Hot cues 0–3 per deck (set with
+    `!@#$`, jump with `1234`). 3-band EQ (-24..+12 dB), single-knob
+    filter, beat-aligned loop, delay FX, soft-knee master limiter,
+    monitor device for headphone cue, optional pitch stretching
+    (Rubberband).
+  </Card>
+  <Card title="Lives in the terminal" icon="seti:powershell">
+    One binary. No window, no system tray, no daemon. Quit with
+    `Ctrl+C`. Runs in any terminal — and inside
+    [tmnl](https://tmnl.sh) specifically, mixr gets native-tab
+    integration via the `tmnl-protocol` cell-streaming layer (full
+    graphics, no nested-emulator weirdness).
   </Card>
 </CardGrid>
 
-## Script the whole rig
-
-mixr exposes a file-based IPC at `~/.mixr/command`. Drop a JSON line, mixr reads + acts. Works from any language, any tool:
-
-```sh
-echo '{"skip":1}'           > ~/.mixr/command   # next track
-echo '{"crossfader":-0.5}'  > ~/.mixr/command   # fader toward deck A
-echo '{"transition":"echoout"}' > ~/.mixr/command   # force the next mix
-```
-
-Used internally by the dashboard, by Claude DJ's tool calls, and by your scripts.
-
 ## The family
 
-mixr is one of three small Rust tools by Chris McLennan:
+mixr is one of three small Rust tools by Chris McLennan — see [the
+family page](/family/) for the full picture.
 
 - **mixr** — this DJ app
-- **[tmnl](https://tmnl.sh)** — a GPU-rendered terminal that lets mixr render as a native tab (full graphics) instead of nested in some other terminal emulator
-- **[mnml](https://mnml.sh)** — a NvChad-style terminal IDE
+- **[tmnl](https://tmnl.sh)** — GPU-rendered terminal that hosts mixr (and friends) as native tabs
+- **[mnml](https://mnml.sh)** — NvChad-style terminal IDE
 
-mixr runs fine in any terminal. Inside tmnl specifically, mixr gets native-tab integration via the `tmnl-protocol` cell-streaming layer.
+mixr runs fine in any terminal. Inside tmnl, it gets a native-tab
+treatment — same cell-streaming protocol mnml uses.
