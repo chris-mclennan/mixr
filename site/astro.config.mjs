@@ -8,6 +8,7 @@ export default defineConfig({
   integrations: [
     starlight({
       title: 'mixr',
+      customCss: ['./src/styles/install.css'],
       description:
         'Lean terminal DJ app for electronic music — Beatport streaming, AI-assisted mixing, hardware controllers.',
       head: [
