@@ -10,8 +10,41 @@ Day-to-day development notes live in [`CLAUDE.md`](CLAUDE.md); the roadmap in
 
 ## [Unreleased]
 
-mixr has not yet had a tagged release. The `0.1.0` line below summarises the
-capabilities present in the current `main`.
+## [0.1.3] - 2026-05-31
+
+### Added
+
+- **Settings — Library section.** New text/path rows for `local_library_dir`,
+  `rekordbox_xml`, `engine_dj_db`, `serato_db`. Enter on a row → edit mode →
+  type the path → Enter saves. No more editing `~/.mixr/config.toml` by hand.
+
+### Changed
+
+- macOS `.dmg` artifact now ships with cargo-dist's standard naming.
+- Install page's macOS download button points at the DMG (drag-to-install).
+
+## [0.1.2] - 2026-05-31
+
+### Changed
+
+- macOS `.dmg` ships with the cargo-dist standard naming
+  (`mixr-rs-<triple>.dmg`); install page URLs now resolve.
+- Smaller fixes (release pipeline cleanup).
+
+## [0.1.1] - 2026-05-31
+
+### Added
+
+- **Folder-drill-down for Local Library** (replaces the 10k-track flat dump):
+  subfolders show as menu rows, leaves resolve to rich `TrackList`
+  (BPM / key / artist / title / duration), "All tracks (recursive)" at every
+  level to flatten the subtree.
+- First `.app` bundle + DMG artifacts shipping with releases.
+
+### Fixed
+
+- Settings overlay scroll — focused row stays visible when navigating past
+  the bottom of the visible window.
 
 ## [0.1.0]
 
