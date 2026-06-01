@@ -1,0 +1,398 @@
+---
+title: Mixing
+description: How a mix actually works in mixr — the queue-and-autoplay model, the transport, the five transitions, and when to grab the wheel.
+---
+
+This is the core product manual: how mixr actually mixes. Read this
+once and you'll understand what mixr is doing during your set and
+when (if ever) you need to step in.
+
+## The model: queue, then sit back
+
+mixr is **not** a "pick a deck, drop a track, load the next one"
+app. It's an **autoplay-from-queue** app.
+
+You queue tracks. mixr loads the first one onto Deck A and starts
+playing it. As that track approaches its mix-in point, mixr
+preloads the next queued track onto Deck B, picks a transition,
+and rides the crossfader from A to B over a beat-locked 8-, 16-,
+32-, or 64-bar window. When the crossfade finishes, Deck B becomes
+the "playing" deck and the next queued track preloads onto Deck A.
+The cycle repeats until you stop it or the queue runs dry.
+
+Two implications worth keeping in mind:
+
+- **You don't pick which deck a track goes on.** mixr does that.
+  Deck A is always physically on the left of the dashboard and
+  Deck B is always on the right, but which one is *playing* swaps
+  every mix.
+- **There is always one playing deck and (usually) one incoming
+  deck.** The "incoming" deck is preloaded and silent until the
+  crossfade begins. You can preview, EQ-prep, or hot-cue the
+  incoming deck without disturbing the main output.
+
+You steer this model in two ways: **quick controls** (transport,
+jump, force-mix-now, force-transition) for the common 95% case,
+and **hand control** via the Mixer overlay for the rest.
+
+## Queueing tracks
+
+There are four ways to fill the queue.
+
+**Browse the Beatport catalog (`b` key).** Press `b` from the
+dashboard to open the full browse view. Drill into **Genres**, pick
+a genre, drill into **Top 100** or **Charts** or **Releases**, and
+press `Enter` on a track to queue it. Press `a` (lower-case) to
+**queue every track on the current screen** at once — handy for
+top-100 lists.
+
+**Search (`/` or `s`).** Type an artist or track name, press
+`Enter`, browse the results, queue with `Enter` or `a`.
+
+**Your own library.** Once you've pointed mixr at your local music
+folder via **Settings → Library → Local Library Directory**,
+**Local Library** appears at the bottom of the browse root. It
+opens as a folder tree — each level has its own tracks and a
+trailing `⇲ All tracks (recursive)` row that flattens the subtree.
+The same Settings → Library section accepts rekordbox XML, Engine
+DJ databases, and Serato databases.
+
+**Beatport playlists, charts, your favorites, your cart.** Browse
+into **My Beatport**, **My Library**, or **Favorites** and queue
+from there the same way.
+
+> Once you've queued anything, the dashboard becomes the place to
+> be. Press `d` to return to it.
+
+A few queue management keys worth knowing:
+
+| Key | What it does |
+|---|---|
+| `q` | Open the queue view |
+| `a` | Queue all on the current screen |
+| `x` | Smart shuffle the queue (BPM + key aware) |
+| `X` | Clear the queue (Y/N confirm) |
+| `{` / `}` | Grab a queue row and drop it elsewhere — reorders |
+| `L` | Load Next — replaces the incoming track with the highlighted one |
+
+## The transport
+
+These are the four keys you'll use during every set.
+
+| Key | What it does |
+|---|---|
+| `p` | Play / pause the currently-playing deck |
+| `n` | **Skip** — abandon the playing deck, swap to the next queued track immediately |
+| `m` | **Mix now** — start the crossfade right now, don't wait for the mix-in point |
+| `t` | **Teleport** — fast-forward the playing deck to its mix-in point |
+
+`m` and `t` are the two you'll reach for most often. `t` is for
+"I'm done with this track, get me to where the mix happens."
+`m` is for "actually, start the mix this instant."
+
+A couple of secondary transport keys:
+
+| Key | What it does |
+|---|---|
+| `<` / `>` | Jump back / forward by N bars on the playing deck (N from Settings → Jump Bars, defaults to 16, cycles 4/8/16/32) |
+| `[` / `]` | Nudge the incoming deck slightly slower / faster (manual phase fix) |
+| `;` / `'` | Shift the beat grid ±2 ms |
+| `(` / `)` | Shift the beat grid ±1 beat (the big one — when the analyzer put the grid on the off-beat) |
+| `T` | **Rewind last mix** — pull the previous track back to start a do-over |
+| `B` | **Bail** — force the current crossfade to EchoOut and salvage it |
+
+## Crossfading
+
+mixr starts a crossfade automatically when the playing track gets
+within `crossfade_bars` of its mix-out point. The fade is
+beat-locked: it begins on a downbeat and the per-sample volume
+curves are equal-power (constant total loudness through the blend).
+
+**The bar count** — how long the fade lasts — comes from
+**Settings → Crossfade Bars**, and you can pick `8`, `16`, `32`,
+`64`, or `Auto`. `Auto` adapts per-mix based on the genre and
+tempo of the two tracks (longer for melodic / techno, shorter for
+DnB / breaks). 16 bars is a good default for most styles.
+
+**The dashboard tells you what's coming.** Above the crossfader
+you'll see a `MIX IN N bars` countdown — that's how many bars of
+the source track remain until the crossfade kicks off. The line
+below it shows the chosen transition type plus the BPM gap and
+Camelot key distance between the two tracks.
+
+If you want a different fade length than the global setting for
+*just this one mix*, open the command prompt with `:` and type:
+
+```
+:crossfade 32
+```
+
+…then `Enter`. Note: that changes the global setting; this is
+mostly useful when you want to flip between two values quickly.
+
+## The five transitions
+
+mixr picks one of five transition types for each mix. The choice
+is automatic — based on the BPM gap and Camelot key distance
+between playing and incoming — but you can override it at any
+time.
+
+### BeatMatched
+Equal-power crossfade with phase-locked beat sync. Cosine-shaped
+on the way out, sine-shaped on the way in — the loudness stays
+constant through the blend. The classic, safe DJ transition;
+incoming deck rides on a phase-corrected rate so the beats land
+on top of each other.
+
+**Picked when**: BPMs match (≤ 8% apart, or a 2:1 / 1:2 ratio)
+and the key distance is ≥ 3 (or unknown).
+
+### EchoOut
+A hard cut on the outgoing deck plus an echo / delay tail that
+rings out for ~8 bars, while the incoming deck enters dry under
+the decay. Sonically it's a "drop out and slam in" — useful
+between tracks that *don't* beat-match cleanly, because nothing
+needs to phase-lock.
+
+**Picked when**: the BPM gap exceeds 8% (or 14% with pitch
+stretching enabled). Always **8 bars** regardless of your
+`crossfade_bars` setting — it's a cut, not a fade. EchoOut is
+also what `B` (bail) and Auto-Bail train-wreck recovery fall back
+to.
+
+### BassSwap
+Both decks play at full volume through the middle of the mix, but
+the **EQ lows are killed** on the incoming deck until the
+midpoint, at which point the lows on the outgoing deck drop and
+the incoming bass slams in. A drop-swap moment — works in
+harmonically-related tracks where doubling the mids/highs sounds
+musical, not muddy.
+
+**Picked when**: BPMs match and Camelot key distance is 0–1
+(same key or one step on the wheel).
+
+### FilterSweep
+The outgoing deck sweeps from bypass up to a high-pass filter
+(progressively losing bass), while the incoming deck sweeps from
+a low-pass (only bass) up to bypass. They meet in the middle —
+the outgoing track gets thinner as the incoming track gets
+brighter.
+
+**Picked when**: BPMs match and Camelot key distance is 2 — a
+small mood shift where you want a smoother transition than
+BassSwap.
+
+### LoopRoll
+The outgoing deck enters a **4-beat loop** at the crossfade start,
+which stalls it in place while the incoming track fades up over
+the full bar count. The loop is released at ~85% of the way
+through so the playing deck has runway to fade out cleanly.
+Useful when the outgoing track is running out of song before the
+crossfade window completes.
+
+**Picked when**: never automatic. Set it explicitly with `:transition looproll`.
+
+### Forcing a transition type
+
+Three ways:
+
+- Command prompt: `:` then `transition beatmatched` / `echoout` /
+  `bassswap` / `filtersweep` / `looproll` (or shortcuts `beat` /
+  `echo` / `bass` / `filter` / `loop`).
+- IPC: `{"transition":"echoout"}` written to `~/.mixr/command`.
+- Disable a transition entirely in **Settings → Transitions** —
+  rows for each of the 5 types, on/off — and mixr will skip it
+  when picking.
+
+For deeper control over *when* a given transition fires, see the
+**Transition Rules editor** under Settings — first-match rules
+keyed on BPM gap, key distance, mix count, and previous
+transition.
+
+## Manual control — the Mixer overlay
+
+`m` triggers a crossfade. `B` bails one. `t` teleports. But when
+you want to ride the EQs and filters yourself — kill the bass on
+the incoming deck, sweep the playing track's highs out — you want
+the Mixer overlay.
+
+Press `z` or `Z` to open it. The overlay shows EQ Low / EQ Mid /
+EQ High / Filter / Fader for **one deck at a time**.
+
+Keys inside the overlay:
+
+| Key | What it does |
+|---|---|
+| `Tab` | Swap between Deck A and Deck B |
+| `↑` / `↓` | Move between rows (EQ Low → EQ Mid → EQ High → Filter → Fader) |
+| `←` / `→` | Adjust the focused row's value |
+| `r` | Reset the focused row to its default |
+| `0` | Reset every row on every deck (Y/N confirm) |
+| `Esc` / `z` / `Z` | Close the overlay |
+
+EQ ranges from −24 dB (kill) to +12 dB (boost) per band. Filter
+is a single-knob design: −1.0 is fully low-pass, 0 is bypass,
++1.0 is fully high-pass. Fader is the per-deck channel volume,
+0 to 1.
+
+### The crossfader and channel faders are on the dashboard
+
+The Mixer overlay covers per-deck tone and volume. The
+**crossfader**, **channel faders**, **tempo faders**, **hot cues**,
+**play/pause** and **jump/nudge** buttons all live on the
+Controller panel of the dashboard itself.
+
+To drive them from the keyboard: press `Tab` from the dashboard
+until **Controller** is focused (it'll light up in cyan). Now
+`↑` / `↓` cycle through the controls (`tempo A`, `volume A`,
+`cue A`, `play A`, `jump A`, `nudge A`, EQ/filter A, **crossfader**,
+EQ/filter B, nudge B, jump B, play B, cue B, volume B, tempo B).
+`←` / `→` adjust the focused control.
+
+Or use the mouse — click and drag any control. The crossfader bar
+in particular is click-and-drag along its full width.
+
+## Preview / cue
+
+Press `Space` on a track in browse, search, queue, or history to
+**preview** it. The preview plays through the **monitor bus only**
+— if you've set up a separate monitor device (Settings → Monitor
+Device), it goes to your headphones. If not, the preview shares
+the main output.
+
+To stop the preview, press `Space` again.
+
+For previewing the **incoming deck** during a live mix (without
+disturbing the main mix), enable **Split Cue** with `S`. With
+split cue on, the monitor bus sends Deck A to your left
+headphone and Deck B to your right — you can hear what's coming
+in *and* what's currently playing, on separate ears.
+
+The toast confirms `Split cue: ON (L=deck A, R=deck B)` /
+`Split cue: OFF`.
+
+## Hot cues
+
+Once a track is loaded, the playing deck has four hot cue slots.
+
+| Key | What it does |
+|---|---|
+| `1` / `2` / `3` / `4` | Jump to hot cue 1–4 on the playing deck |
+| `!` / `@` / `#` / `$` (Shift+1..4) | **Set** hot cue 1–4 at the current position |
+
+The dashboard MIXER row shows the state per deck:
+`CUE ●1 ○2 ○3 ●4` — filled dots are set, empty are unset. You
+can also click the dots on the dashboard (click jumps,
+Shift-click sets).
+
+## BPM, key, and the Camelot wheel
+
+mixr's auto-transition picker uses two musical-compatibility
+signals:
+
+- **BPM gap percent** — how far apart the playing and incoming
+  tempos are. < 8% → mixr beat-matches them. > 8% (or > 14% with
+  the pitch stretcher) → it forces EchoOut, because phase-locking
+  that big a gap will warble.
+- **Camelot key distance** — how many steps apart the two tracks
+  are on the Camelot wheel. 0 (same key) and 1 (adjacent on the
+  wheel) are the most consonant; 2 is a small mood shift; 3+ is
+  enough that mixr picks the safer BeatMatched fade rather than a
+  swap.
+
+Camelot codes live alongside the BPM in every browse track list
+(e.g. `9A 124`). If you tag your local library files with key
+metadata, mixr reads them; for Beatport tracks the key ships with
+the catalog metadata.
+
+When you've got Claude DJ enabled and want to constrain its
+**track selection** by tempo and key, the **DJ BPM Gap** and **DJ
+Camelot** settings (Settings → Claude DJ) take `Strict` / `Prefer`
+/ `Off` — `Strict` rejects anything off-key or off-tempo, `Prefer`
+favors compatible tracks but allows misfits, `Off` lets Claude
+pick freely. These settings only affect Claude DJ; the engine's
+own auto-transition picker always uses the BPM gap and Camelot
+distance unconditionally.
+
+## Train-wreck handling
+
+A "train wreck" is when two decks are playing audibly out of
+phase — the beats are flammed instead of stacked. mixr can detect
+this during a crossfade and either warn you or auto-recover.
+
+**Settings → Train Wreck** has three modes:
+
+- **Off** — mixr doesn't watch for it.
+- **Detect** — mixr watches and pops a toast when it sees one, so
+  you can decide what to do.
+- **Auto Bail** *(default)* — mixr watches and, on detection,
+  automatically switches the in-progress transition to EchoOut.
+  EchoOut is a hard cut, so the train wreck stops sounding like a
+  train wreck.
+
+Auto-bail fires at most once per crossfade.
+
+You can also bail manually any time with `B` (capital B) on the
+dashboard during a crossfade. The toast confirms `⚠ Bailed to
+EchoOut`. If you press `B` when not crossfading, you get a
+`Nothing to bail (not crossfading)` toast.
+
+## Quantize, glide, and jump
+
+These three settings shape *how musical* your mid-mix actions
+are.
+
+**Quantize** (Settings → Quantize, on/off) tells mixr to align
+mid-mix actions — jumps, loop activates, hot-cue sets — to the
+next beat boundary, instead of firing the instant you press the
+key. Beats granularity is set by **Settings → Quantize Beats**:
+`1/8`, `1/4`, `1/2`, `1`, `2`, `4`, or `8`. `1` aligns to the
+next beat; `4` aligns to the next bar; `8` aligns to the next
+two-bar boundary.
+
+**Glide Bars** (8 / 16 / 32 / 64 / Max) controls how long mixr
+takes to ease the incoming deck's rate back to 1.0× after a
+crossfade finishes. Longer = smoother return to the track's
+original tempo; `Max` glides until the next mix.
+
+**Jump Bars** (4 / 8 / 16 / 32) is the bar count used by the
+`<` / `>` keys when you jump on the playing deck. The dashboard's
+`◀ JUMP N ▶` widget shows the current setting and clicking its
+center cycles through the values.
+
+## Master out, monitor device, headphone bus
+
+mixr's audio routing has two cpal output streams.
+
+**Master out** — the main mix that goes to your speakers (or to
+your venue PA via your interface). Pick the device in
+**Settings → Output Device**. Apply the **Master Limiter**
+(Off / Soft Knee) to round off peaks without hard-clipping; soft
+knee is transparent at normal levels and folds peaks smoothly to
+± 1.0.
+
+**Monitor device** — an optional second output for your
+headphones. Pick it in **Settings → Monitor Device** (or omit,
+and previews / cue share the master out). The monitor stream
+takes effect on the next launch.
+
+What flows to the monitor bus:
+
+- The currently-previewed track (when you press `Space` on a
+  track row).
+- With **Split Cue** on (`S`), the playing deck on the left
+  channel and the incoming deck on the right channel — so you
+  can pre-listen the mix in your headphones while the main mix
+  plays through the PA.
+
+A note on **audio quality**: when you're signed in via
+`dj.beatport.com` (mixr's default), the OAuth scope tops out at
+256 kbps HLS (AAC). FLAC requires a higher-tier Beatport scope.
+Set the quality you want under **Settings → Audio Quality**.
+
+---
+
+That's everything you need to mix on mixr. The rest of the
+manual covers specific topics in depth — Claude DJ, MIDI
+controllers, recording, the IPC scripting surface — but if you
+just want to play music, you've now got it.

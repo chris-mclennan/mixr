@@ -1,0 +1,351 @@
+---
+title: Library Imports
+description: Bring your rekordbox, Engine DJ, Serato, USB-stick, or plain-folder library into mixr without re-tagging anything.
+---
+
+You almost certainly already have a library. Years of tags, BPMs,
+keys, cue points, ratings, crates. Maybe in rekordbox, maybe in
+Engine DJ, maybe in Serato, maybe just a `~/Music/DJ` folder full
+of FLACs. mixr reads all of it. Nothing gets copied, moved, or
+re-tagged — mixr opens the source library, pulls the metadata, and
+points at the files in place.
+
+This page covers each library type one by one, where to find it on
+your machine, and where to paste the path into mixr's Settings.
+
+> **mixr never modifies the source library.** Every importer is
+> read-only — open the file, parse it, close it. Your rekordbox /
+> Engine / Serato install stays exactly as it was. You can keep
+> using both apps side by side.
+
+## What mixr imports
+
+For every track, in every format, mixr pulls:
+
+- **Title** and **mix name** (e.g. "Element (Original Mix)")
+- **Artist** and **album / label**
+- **BPM** (analyzed BPM where available, falling back to user-set)
+- **Musical key** (Camelot notation — 7A, 8B, etc.)
+- **Duration**
+- **Genre**
+- **File path** — mixr plays the audio file straight off disk
+
+Beat grids, hot cues, ratings, and waveforms are **not** imported
+in v0.1.3 — those live in formats specific to each source app and
+aren't broadly portable. mixr re-analyzes BPM and beat-grids itself
+on first play if it needs to.
+
+Tracks whose files no longer exist on disk (dead links — common
+after a drive move) are silently filtered out. You'll see a
+smaller count than the source app shows; that's the dead-link
+filter doing its job.
+
+## Where to set paths
+
+All four import settings live in the same place:
+
+1. Press `,` to open Settings.
+2. Scroll to the **`── Library ──`** section.
+3. Each row is a **Text row** — press `Enter` to edit, type the
+   path, press `Enter` again to save. `Esc` cancels.
+4. `Esc` again closes Settings.
+
+The four rows:
+
+| Row | What it points at |
+|---|---|
+| **Local Library Directory** | A folder of audio files |
+| **Rekordbox XML** | Your exported rekordbox `.xml` |
+| **Engine DJ Database** | The Engine `m.db` SQLite file |
+| **Serato Database** | The Serato `database V2` binary |
+
+Each one is independent. Set all four if you've got data in all
+four — they show up as separate entries in the Browse menu so you
+can switch between them.
+
+When a path is set, the corresponding entry appears in **Browse**
+(`b`) under the main menu. When a path is empty, that entry is
+hidden. So unconfigured importers don't clutter your view.
+
+## Local Library — a folder of audio files
+
+The simplest case. If your music lives in a folder, point mixr at
+the folder.
+
+**Paths to try first:**
+
+- macOS: `/Users/you/Music/DJ` or `/Users/you/Music`
+- Linux: `/home/you/music` or `/home/you/Music/DJ`
+- An external drive: `/Volumes/Music` (macOS), `/media/you/Music`
+  (Linux)
+
+Set it in **Settings → Library → Local Library Directory**.
+
+mixr scans the directory recursively up to four levels deep
+(typical layout: `Music/Genre/Artist/Album/track.flac`), picking
+up `.flac`, `.aac`, `.m4a`, `.mp3`, `.wav`, `.ogg`, `.opus`.
+Metadata comes from the files' tags (via symphonia — same
+metadata library used by every serious audio Rust project).
+
+**In the Browse view**, this shows up as **Local Library** (last
+item in the menu when configured). Drilling in:
+
+- Subfolders appear as menu rows: `▸ Techno/`, `▸ House/`, …
+- At a leaf folder, you get a rich **TrackList** with BPM / key /
+  duration columns — identical to a Beatport browse screen, so
+  the same keys work (`Enter` to queue, `a` to queue all, `Space`
+  to preview, `Ctrl+F` to filter).
+- Each level also has a `⇲ All tracks (recursive)` row that
+  flattens the entire subtree into one flat TrackList. Useful for
+  "show me everything in House" when you don't care about the
+  artist breakdown.
+- Mixed folders (subfolders **and** audio files at the same level)
+  show a `♪ Tracks here (N)` row so you can jump to the files in
+  the current folder without drilling further.
+
+Tracks queued from Local Library play the same way Beatport tracks
+play — straight into the decks, beat-matched, blended.
+
+## Rekordbox XML — Pioneer desktop export
+
+If you DJ with rekordbox on the desktop, you've got everything you
+need to share your library with mixr.
+
+**Export from rekordbox:**
+
+1. Open rekordbox.
+2. **File → Export Collection in xml format**.
+3. Pick a path — anywhere stable. macOS users often park it at
+   `~/Music/rekordbox.xml`; Linux/Windows wherever you prefer.
+4. Click Save.
+
+**Set in mixr:**
+
+- Settings → Library → **Rekordbox XML** → paste the path → `Enter`.
+
+The file's a UTF-8 XML dump of every track in your collection
+with all 30-ish rekordbox attributes per track. mixr reads `Name`,
+`Artist`, `Album`, `AverageBpm`, `Tonality` (key), `TotalTime`,
+`Location` (the audio file path), and `Genre`. Other attributes
+(playlists, hot cues, beat grids, ratings) are skipped in v0.1.3.
+
+**In Browse**, this shows up as **Rekordbox**. Selecting it parses
+the XML synchronously (typically under a second for libraries up
+to ~50MB / ~10k tracks) and pushes a flat TrackList of every track
+that still has a file on disk.
+
+Re-export from rekordbox whenever you want to push library changes
+through — mixr re-reads on each open, so a fresh export is all you
+need.
+
+## Engine DJ — Numark Mixstream / Denon Prime
+
+Engine DJ is the library format Numark Mixstream and Denon Prime
+hardware consume. It's a SQLite database.
+
+**Desktop install:**
+
+- macOS / Linux: `~/Music/Engine Library/Database2/m.db`
+- Same on Windows under `%USERPROFILE%\Music\Engine Library\Database2\m.db`
+
+**USB stick** (when you've prepped a stick for the controller):
+
+- `<mount>/Engine Library/Database2/m.db` (modern firmware)
+- `<mount>/m.db` at the stick root (older firmware)
+
+But for USB sticks, you usually don't need to set a path at all —
+mixr auto-detects the stick (see [USB sticks](#usb-sticks) below).
+The **Settings → Library → Engine DJ Database** row is for
+pointing at your *desktop* Engine library.
+
+**Set in mixr:**
+
+- Settings → Library → **Engine DJ Database** → paste the m.db
+  path → `Enter`.
+
+mixr reads the modern Engine v3 schema by default (`Track` table —
+title, artist, album, genre, `bpmAnalyzed` (preferred) or `bpm`
+(fallback), `key` as Camelot wheel integer 0-23, `length`, `path`).
+Engine stores paths relative to the database root, so mixr resolves
+them against `<root>/Engine Library/`. On older databases it falls
+back to a legacy schema query — best-effort.
+
+**In Browse**, this shows up as **Engine DJ**.
+
+The `key` integer round-trips to Camelot: 0 → 1A, 1 → 1B, 2 → 2A,
+… 23 → 12B — so what you see in mixr matches what Engine shows you
+on the controller.
+
+## Serato Database V2
+
+If you DJ with Serato, your library lives at:
+
+- macOS: `~/Music/_Serato_/database V2`
+- Windows: `%USERPROFILE%\Music\_Serato_\database V2`
+- Linux: rare (Serato isn't officially supported), but if you've
+  hand-installed it, look under `~/Music/_Serato_/database V2`
+
+(Yes, "database V2" with a space and no extension — Serato's
+choice, not ours.)
+
+**Set in mixr:**
+
+- Settings → Library → **Serato Database** → paste the full path
+  including the space → `Enter`.
+
+The file is a proprietary tag/length/value binary (reverse-
+engineered by the mixxx project). mixr reads the `otrk` track
+records and pulls `pfil` (path), `tsng` (title), `tart` (artist),
+`talb` (album), `tbpm` (BPM as string), `tkey` (key), `tlen`
+(duration in "MM:SS" or seconds), `tgen` (genre). Track paths
+resolve against the `_Serato_` parent (so the library root is
+typically `~/Music/`).
+
+**In Browse**, this shows up as **Serato**.
+
+Crates and smart crates aren't surfaced in v0.1.3 — you get one
+flat list of every track in the database. If a crate-aware view is
+something you'd use, ping in.
+
+## USB sticks — auto-detected
+
+Plug in a USB stick that's been formatted for a DJ controller, and
+mixr finds it. No config needed.
+
+mixr polls mount roots every 2 seconds:
+
+- macOS: `/Volumes/*`
+- Linux: `/media/$USER/*`, `/run/media/$USER/*`, `/media/*`, `/mnt/*`
+- Windows: drive letters `D:` through `Z:`
+
+For each mounted volume, mixr looks for two known marker layouts:
+
+| Marker file | Recognized as |
+|---|---|
+| `<mount>/Engine Library/Database2/m.db` | **Engine DJ** stick |
+| `<mount>/Engine Library/m.db` | Engine DJ (legacy) |
+| `<mount>/m.db` | Engine DJ (older firmware) |
+| `<mount>/PIONEER/rekordbox/export.pdb` | **Rekordbox** stick |
+| `<mount>/PIONEER/USBANLZ/` | Rekordbox (newer layout) |
+
+When detected, the stick shows up in **Browse** as an entry like
+`USB: SANDISK_64GB (Rekordbox)` or `USB: STICK1 (Engine DJ)`,
+listed below your configured library entries. Drill in to load
+every track that's still on the stick.
+
+Pioneer's `export.pdb` is the DeviceSQL binary format CDJs read
+straight off the stick. mixr's `.pdb` parser handles the standard
+layout (Tracks / Artists / Genres / Keys tables, page-and-row-group
+walk, both DeviceSQL string encodings). Paths inside the `.pdb`
+are stored relative to the stick root, so mixr joins them against
+the mount.
+
+Eject the stick and mixr drops it from Browse on the next 2s scan.
+
+> Serato USB sticks aren't auto-detected — Serato doesn't have a
+> standard USB layout the way rekordbox and Engine do. If you've
+> got a Serato library on an external drive, point at it manually
+> with **Settings → Library → Serato Database** (the path will
+> look like `/Volumes/SANDISK/_Serato_/database V2`).
+
+## Browse semantics across all libraries
+
+Every library entry in Browse behaves the same way once you're
+inside:
+
+- **Drilldown** with `Enter` or `→`. Back out with `Esc` or `←`.
+- A **TrackList** is the rich four-column view (artist, title,
+  BPM, key, duration). Press `Enter` on a track to queue it. `a`
+  queues every track on screen. `Space` previews. `Ctrl+F`
+  filters live as you type.
+- mixr's queue and dashboard don't care which library a track came
+  from — it's all just tracks. You can queue one off rekordbox,
+  then one off a USB stick, then one off Beatport, and mixr will
+  blend the three the same way.
+
+## Troubleshooting
+
+**The library entry doesn't appear in Browse.**
+
+The corresponding Settings row is empty. Open Settings (`,`),
+scroll to Library, paste a path, press `Enter` to save. Browse
+rebuilds automatically next time you open it (`b`).
+
+**The library entry appears but is empty.**
+
+Most likely the source library is full of dead links — tracks the
+source app remembers but whose files no longer exist on disk
+(drives moved, files renamed outside the app, external drive
+detached). mixr filters dead links because it can't play them.
+Re-mount the external drive or re-sync the source app to its
+files.
+
+**A USB stick doesn't show up in Browse.**
+
+Check three things:
+
+1. The stick is actually mounted. On macOS, it should be visible
+   in Finder's sidebar. On Linux, run `mount | grep -i <stickname>`.
+2. The stick has one of the marker files mixr looks for (see the
+   table above). A USB stick formatted as plain music with no DJ
+   software exporter on it **won't** be detected — that's a Local
+   Library case (point Settings → Local Library Directory at
+   `/Volumes/STICKNAME`).
+3. Wait 2 seconds and re-open Browse. The poll runs at 0.5Hz, so
+   right after plugging in there's a small lag.
+
+**A path with spaces doesn't work.**
+
+mixr handles spaces in paths fine — paste the whole thing including
+the space, no quoting needed. The most likely failure is a typo or
+trailing whitespace. The placeholder text in each Settings row
+(`/path/to/database V2`, etc.) shows the expected shape.
+
+**macOS vs Linux path formats.**
+
+mixr uses native filesystem paths — no URL encoding, no `file://`
+prefix.
+
+- macOS: `/Users/you/Music/...`, `/Volumes/...`
+- Linux: `/home/you/music/...`, `/media/you/...`, `/mnt/...`
+- Windows: `C:\Users\you\Music\...` (forward or backslashes both
+  work)
+
+The one exception is the *contents* of a rekordbox XML, which
+stores paths as `file://localhost/Users/...` URLs — that's
+rekordbox's choice, and mixr decodes them transparently. You
+don't need to touch the XML.
+
+**Re-scanning after I added tracks.**
+
+mixr re-reads the library file every time you open the
+corresponding Browse entry — `b` then drill into Rekordbox /
+Engine DJ / Serato / Local Library. There's no cache to bust. For
+rekordbox specifically, you need to **re-export** the XML from
+rekordbox first (it doesn't auto-update) — File → Export
+Collection in xml format → overwrite the file mixr points at.
+
+**Multiple libraries with the same track.**
+
+A track will show up in every library that knows about it. Queueing
+it twice from two different sources will queue it twice (mixr
+treats them as separate queue entries since the paths might
+differ). Use the queue view (`q`) to clear duplicates.
+
+## What's next
+
+Once you've got a library mixr can see, the rest of the app works
+exactly the same as it does for Beatport:
+
+- Queue a couple of tracks with `Enter` or `a`.
+- Press `d` to return to the dashboard and watch them mix.
+- Recording (`R`), hot cues (`Shift+1`..`Shift+4`), mixer overlay
+  (`z`), Claude DJ (`C`), MIDI controllers — all of it works on
+  your local library the same way it works on Beatport. The
+  source of the audio is the only thing that changes.
+
+If you want to dig into the Beatport side specifically, see the
+[Getting Started](/manual/getting-started/) page. If you want the
+exhaustive list of every importer field and code path,
+[FEATURES.md](https://github.com/chris-mclennan/mixr/blob/main/FEATURES.md)
+is the source of truth.
