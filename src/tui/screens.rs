@@ -446,45 +446,51 @@ pub fn render_now_playing(
 /// in the hand-maintained `legacy_help_lines()` below. As more
 /// chords migrate, the hand-list shrinks. See
 /// `docs/COMMAND_MIGRATION.md`.
-pub fn help_lines() -> Vec<(&'static str, &'static str)> {
+pub fn help_lines() -> Vec<(String, String)> {
     use crate::tui::command::help_rows;
 
     let registry_rows = help_rows();
-    // Chords already covered by the registry — used to skip
-    // duplicate rows in the hand-maintained legacy section.
-    let migrated_keys: std::collections::HashSet<&'static str> =
-        registry_rows.iter().map(|(k, _, _)| *k).collect();
 
-    let mut out: Vec<(&'static str, &'static str)> = Vec::new();
+    // Set of *individual* chords already covered by the registry
+    // (split out of the `"+ / ="` form). Used to skip duplicate
+    // rows in the hand-maintained legacy section.
+    let migrated_chords: std::collections::HashSet<String> = registry_rows
+        .iter()
+        .flat_map(|(keys, _, _)| keys.split(" / ").map(str::trim).map(String::from))
+        .collect();
+
+    let mut out: Vec<(String, String)> = Vec::new();
 
     // ── Registry-driven section ────────────────────────────────
     // Walk commands group-by-group, emitting a section header on
     // each group change. Order is `builtin_commands` order.
     let mut last_group: &str = "";
-    for (key, title, group) in &registry_rows {
+    for (keys, title, group) in &registry_rows {
         if *group != last_group {
             if !last_group.is_empty() {
-                out.push(("", ""));
+                out.push((String::new(), String::new()));
             }
-            out.push((*group, ""));
+            out.push((group.to_string(), String::new()));
             last_group = group;
         }
-        out.push((*key, *title));
+        out.push((keys.clone(), title.to_string()));
     }
     if !registry_rows.is_empty() {
-        out.push(("", ""));
+        out.push((String::new(), String::new()));
     }
 
     // ── Legacy hand-maintained section ─────────────────────────
     for (key, desc) in legacy_help_lines() {
         let is_section = desc.is_empty() && !key.is_empty();
         let is_blank = key.is_empty();
-        // Section / blank rows pass through (layout); only data
-        // rows are de-duped against the registry.
-        if !is_section && !is_blank && migrated_keys.contains(key) {
+        // Section / blank rows pass through (layout). Data rows
+        // are skipped if their chord is already in the registry —
+        // checked by looking for an exact match against any
+        // individual chord we extracted above.
+        if !is_section && !is_blank && migrated_chords.contains(key) {
             continue;
         }
-        out.push((key, desc));
+        out.push((key.to_string(), desc.to_string()));
     }
 
     out
@@ -726,21 +732,21 @@ mod tests {
 
     /// Drift-prevention: every `Command` in the registry that's bound
     /// to at least one default chord must show up in `help_lines()`
-    /// under its *first* key. Catches "I migrated a chord but forgot
-    /// the help row." Alternate chords (e.g. `=` for `+`) aren't
-    /// required to have their own row.
+    /// with its joined key form (e.g. `"+ / ="` for a command bound
+    /// to both `+` and `=`).
     #[test]
     fn every_migrated_command_has_a_help_row() {
         let lines = help_lines();
         for cmd in registry().all() {
-            let Some(&primary) = cmd.keys.first() else {
+            if cmd.keys.is_empty() {
                 continue;
-            };
-            let present = lines.iter().any(|(k, _)| *k == primary);
+            }
+            let expected = cmd.keys.join(" / ");
+            let present = lines.iter().any(|(k, _)| k == &expected);
             assert!(
                 present,
-                "migrated command {:?} (primary key {:?}) missing from help_lines()",
-                cmd.id, primary,
+                "migrated command {:?} (keys {:?}) missing from help_lines() — expected row with key {:?}",
+                cmd.id, cmd.keys, expected,
             );
         }
     }
