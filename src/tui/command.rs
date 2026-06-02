@@ -962,6 +962,58 @@ fn builtin_commands() -> Vec<Command> {
             },
             when: Some(no_modal_capture),
         },
+        // Toggle favorite on the highlighted track (Browse view).
+        // Dashboard `f`/`*` has different focus-aware behavior — that
+        // arm is not yet migrated; it lives in keys.rs:739.
+        Command {
+            id: "favorites.toggle_track",
+            title: "Toggle favorite on highlighted track",
+            group: "BROWSING",
+            keys: &["f", "*"],
+            run: |app| {
+                use crate::beatport::catalog::BrowseScreen;
+                let track = match app.current_screen() {
+                    BrowseScreen::TrackList { tracks, .. } => tracks.get(app.selected).cloned(),
+                    _ => None,
+                };
+                if let Some(track) = track {
+                    let added = app.favorites.toggle(&track);
+                    let name = format!("{} - {}", track.artist_name(), track.full_title());
+                    let msg = if added {
+                        format!("★ {name}")
+                    } else {
+                        format!("Unfavorited: {name}")
+                    };
+                    app.toast.show(&msg, 1.5);
+                }
+            },
+            when: Some(|app| {
+                use super::app::ViewMode;
+                !matches!(app.view_mode, ViewMode::Dashboard) && no_modal_capture(app)
+            }),
+        },
+        // Add the highlighted track to the Beatport cart for later
+        // purchase. Browse-state, non-Dashboard.
+        Command {
+            id: "browse.add_to_cart",
+            title: "Add track to Beatport cart",
+            group: "BROWSING",
+            keys: &["&"],
+            run: |app| {
+                use crate::beatport::catalog::BrowseScreen;
+                let track = match app.current_screen() {
+                    BrowseScreen::TrackList { tracks, .. } => tracks.get(app.selected).cloned(),
+                    _ => None,
+                };
+                if let Some(track) = track {
+                    app.add_track_to_cart(track);
+                }
+            },
+            when: Some(|app| {
+                use super::app::ViewMode;
+                !matches!(app.view_mode, ViewMode::Dashboard) && no_modal_capture(app)
+            }),
+        },
         // Copy the current screen dump (~/.mixr/screen.txt) to the
         // OS clipboard via `pbcopy`.
         Command {

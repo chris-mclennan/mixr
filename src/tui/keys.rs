@@ -1617,34 +1617,8 @@ impl App {
             // `when` predicates (one fires on Dashboard, one off).
             // `L` (load more pagination) → browse.load_more,
             // `+` (add to playlist outside Dashboard) → playlist.add_track.
-            KeyCode::Char('f') | KeyCode::Char('*') => {
-                // Toggle favorite on current track
-                let track = match self.current_screen() {
-                    BrowseScreen::TrackList { tracks, .. } => tracks.get(self.selected).cloned(),
-                    _ => None,
-                };
-                if let Some(track) = track {
-                    let added = self.favorites.toggle(&track);
-                    let name = format!("{} - {}", track.artist_name(), track.full_title());
-                    let msg = if added {
-                        format!("★ {name}")
-                    } else {
-                        format!("Unfavorited: {name}")
-                    };
-                    self.toast.show(&msg, 1.5);
-                }
-            }
-
-            KeyCode::Char('&') => {
-                // Add current track to Beatport cart for later purchase.
-                let track = match self.current_screen() {
-                    BrowseScreen::TrackList { tracks, .. } => tracks.get(self.selected).cloned(),
-                    _ => None,
-                };
-                if let Some(track) = track {
-                    self.add_track_to_cart(track);
-                }
-            }
+            // Global `f`/`*` (toggle favorite) → favorites.toggle_track.
+            // Global `&` (add to cart) → browse.add_to_cart.
 
             // `o` → browse.open_in_browser, `c` → view.claude_dj,
             // `C` → claude.toggle. All migrated via try_dispatch.
