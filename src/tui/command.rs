@@ -938,6 +938,38 @@ fn builtin_commands() -> Vec<Command> {
             },
             when: Some(no_modal_capture),
         },
+        // Nudge incoming deck — `[` left, `]` right (hold to keep
+        // nudging). Returns the cumulative shift if a beat is captured.
+        Command {
+            id: "engine.nudge_left",
+            title: "Nudge incoming ← (hold to keep nudging)",
+            group: "PLAYBACK",
+            keys: &["["],
+            run: |app| {
+                if let Some((shift, pos)) = app.engine.nudge(-1) {
+                    app.toast
+                        .show(&format!("{shift:+.0}ms  beat@{:.0}ms", pos * 1000.0), 1.0);
+                } else {
+                    app.toast.show("Nudge ◀", 0.5);
+                }
+            },
+            when: Some(no_modal_capture),
+        },
+        Command {
+            id: "engine.nudge_right",
+            title: "Nudge incoming → (hold to keep nudging)",
+            group: "PLAYBACK",
+            keys: &["]"],
+            run: |app| {
+                if let Some((shift, pos)) = app.engine.nudge(1) {
+                    app.toast
+                        .show(&format!("{shift:+.0}ms  beat@{:.0}ms", pos * 1000.0), 1.0);
+                } else {
+                    app.toast.show("Nudge ▶", 0.5);
+                }
+            },
+            when: Some(no_modal_capture),
+        },
         // Beat-grid fine shifts (±2ms) on `;` / `'`. Use when the 1s
         // don't quite land together.
         Command {

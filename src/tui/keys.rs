@@ -1249,22 +1249,8 @@ impl App {
             // Space (preview track) → engine.preview_track,
             // `a` (queue all on screen) → engine.queue_all.
             // Both migrated to the registry.
-            KeyCode::Char('[') => {
-                if let Some((shift, pos)) = self.engine.nudge(-1) {
-                    self.toast
-                        .show(&format!("{shift:+.0}ms  beat@{:.0}ms", pos * 1000.0), 1.0);
-                } else {
-                    self.toast.show("Nudge ◀", 0.5);
-                }
-            }
-            KeyCode::Char(']') => {
-                if let Some((shift, pos)) = self.engine.nudge(1) {
-                    self.toast
-                        .show(&format!("{shift:+.0}ms  beat@{:.0}ms", pos * 1000.0), 1.0);
-                } else {
-                    self.toast.show("Nudge ▶", 0.5);
-                }
-            }
+            // `[` (nudge left) → engine.nudge_left,
+            // `]` (nudge right) → engine.nudge_right.
 
             // Grid shift — phase adjustment that bypasses the rate
             // controller. Targets incoming during crossfade, playing
