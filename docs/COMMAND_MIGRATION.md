@@ -64,13 +64,23 @@ semantics of `?` / `d` / `b` mid-session). All 6 stub commands have
   input, no filtering, no DJ-ask buffer. The legacy
   `KeyCode::Char('?')` arm in `keys.rs` is gone.
 
-### Phase 2c — in progress (18 chords migrated so far)
+### Phase 2c — in progress (~55 chords migrated)
 
-**Done:** `?`, `B`, `m`, `G`, `S`, `M`, `p`, `n`, `t`, `T`, `d`, `b`,
-`h`, `,`, `q`, `e`, `x`, `K`. All use `no_modal_capture` (global) or
-`dashboard_normal` (dashboard-nested) guards.
+**Done:** `?` (two variants), `B`, `m`, `G`, `S`, `M`, `p`, `n`, `t`,
+`T`, `d`, `b`, `h`, `,`, `q`, `e`, `x`, `K`, `Tab`, `w` (dashboard),
+`v` (two variants), `+` (two variants), `-`, `/` (two variants),
+`s`, `o`, `c`, `C`, `i`, `I`, `u`, `U`, `O`, `;`, `'`, `(`, `)`,
+`<`, `>`, `:`, `1`-`4`, `!`/`@`/`#`/`$`, `X`, `{`, `}`, `r`, `L`,
+`Ctrl+F`/`F`, `y`. All use `no_modal_capture` (global) or
+`dashboard_normal` (dashboard-nested) guards or custom predicates
+(e.g. `!Dashboard && no_modal_capture` for non-Dashboard variants).
 
-**Still in `keys.rs`** (rough categories):
+The multi-value keymap (one chord → multiple commands, first
+matching `when` wins) was added in 2b mid-stream to support
+chords like `?`, `v`, `+`, `/` where the same chord has different
+meanings on Dashboard vs elsewhere.
+
+**Still in `keys.rs`** (rough categories — fewer than at start):
 - Dashboard-nested with focus-sensitivity: `Up`/`Down`/`Enter`/`Left`/
   `Right`, `L` (load next), `&` (add to cart), `f`/`*` (favorite),
   `+`/`-` (rate mix), `A` (AI analyze, async), `1`–`4` (hot cues),
