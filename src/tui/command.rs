@@ -374,6 +374,37 @@ fn builtin_commands() -> Vec<Command> {
             },
             when: Some(dashboard_normal),
         },
+        // Rate a past mix in the History view — `+`/`-` operate on the
+        // highlighted history entry instead of the dashboard's
+        // most-recent-mix rating. Same chord, history-specific `when`.
+        Command {
+            id: "history.rate_good",
+            title: "Rate selected history entry: good",
+            group: "QUEUE",
+            keys: &["+", "="],
+            run: |app| {
+                let sel = app.selected;
+                app.rate_history_entry(sel, true);
+            },
+            when: Some(|app| {
+                use super::app::ViewMode;
+                matches!(app.view_mode, ViewMode::History) && no_modal_capture(app)
+            }),
+        },
+        Command {
+            id: "history.rate_bad",
+            title: "Rate selected history entry: bad",
+            group: "QUEUE",
+            keys: &["-", "_"],
+            run: |app| {
+                let sel = app.selected;
+                app.rate_history_entry(sel, false);
+            },
+            when: Some(|app| {
+                use super::app::ViewMode;
+                matches!(app.view_mode, ViewMode::History) && no_modal_capture(app)
+            }),
+        },
         // Rate the most-recent mix good (only on dashboard — elsewhere
         // `+` / `-` mean other things, e.g. add to playlist, history
         // rating). `=` / `_` accepted as unshifted alternatives.

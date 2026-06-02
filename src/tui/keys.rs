@@ -935,22 +935,12 @@ impl App {
             return;
         }
 
-        // History view: intercept rating keys before falling through
-        // to the global `+` (playlist picker). Lets users rate any
-        // past mix in the list, not just the most-recent one.
-        if matches!(self.view_mode, ViewMode::History) {
-            match key.code {
-                KeyCode::Char('+') | KeyCode::Char('=') => {
-                    self.rate_history_entry(self.selected, true);
-                    return;
-                }
-                KeyCode::Char('-') | KeyCode::Char('_') => {
-                    self.rate_history_entry(self.selected, false);
-                    return;
-                }
-                _ => {}
-            }
-        }
+        // History-view `+`/`=`/`-`/`_` (rate history entry) migrated
+        // to history.rate_good / history.rate_bad. The multi-value
+        // keymap routes `+` based on view_mode:
+        //   Dashboard  → engine.rate_mix_good
+        //   History    → history.rate_good
+        //   elsewhere  → playlist.add_track
 
         if matches!(self.view_mode, ViewMode::Search) {
             match key.code {
