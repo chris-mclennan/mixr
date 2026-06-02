@@ -664,61 +664,14 @@ impl App {
                 return;
             }
 
-            match key.code {
-                // Tab (cycle dash_focus) migrated to dash.cycle_focus
-                // — handled by try_dispatch above.
-                KeyCode::Char('d') => {
-                    self.view_mode = ViewMode::Browse;
-                }
-                // Dashboard Esc migrated to dash.escape.
-                // `w` (cycle waveform — dashboard) migrated to
-                // view.cycle_waveform — handled by try_dispatch above.
-                // Dashboard `v` (cycle layout) migrated to
-                // view.cycle_dash_layout — handled by try_dispatch.
-                // `?` → `view.help`, `B` → `engine.bail_crossfade`,
-                // `m` → `engine.mix_now`. All migrated to the command
-                // registry in `src/tui/command.rs` and handled by the
-                // `try_dispatch` call above.
-                // Load Next — only on mini-browse panel. State-aware:
-                // - Idle:    starts this track
-                // - Playing without incoming: loads as incoming
-                // - Incoming loaded waiting: replaces it (displaced
-                //   goes back to queue front+1 to preserve user choice)
-                // - Crossfading: queues at front (plays after this mix)
-                // Dashboard `L` (load next from mini-browse) migrated
-                // to dash.play_next — handled by try_dispatch above.
-                // Favorite — focus-aware. On the mini-browse panel,
-                // favorite the highlighted track. Otherwise act on the
-                // decks: one loaded → favorite it; both loaded → open
-                // a small picker overlay (a/b/Esc); none → do nothing.
-                // Add to Beatport cart. Same focus model as favorite —
-                // mini-browse panel acts on the highlighted track.
-                // Shift+7 (&) avoids the $ collision with hot cue 4 set.
-                // Dashboard `&` and `f`/`*` migrated to dash.add_to_cart
-                // and dash.favorite — handled by try_dispatch above.
-                // Rate the most-recent mix for training memory. Only
-                // active on the dashboard — elsewhere `+` opens the
-                // playlist picker. `=` is accepted as an unshifted
-                // alternative so users don't have to hold shift.
-                // `+`/`=` (rate good), `-`/`_` (rate bad) migrated to
-                // engine.rate_mix_{good,bad} — handled by try_dispatch
-                // above with a `dashboard_normal` guard so the
-                // history-view + browse-view `+`/`-` arms below still
-                // fire in those modes.
-                // Dashboard arrows (Up/Down/Enter/Right/Left) migrated
-                // to dash.{up,down,right,left} — handled by try_dispatch.
-                // Dashboard `/` migrated to dash.slash — handled by
-                // try_dispatch above.
-                // Dashboard `A` (AI analyze) → engine.ai_analyze,
-                // Dashboard `b` (focus-aware browse) → dash.focus_browse,
-                // Dashboard `z` / `Z` (mixer overlay) → view.mixer.
-                // All handled by try_dispatch above.
-                _ => {
-                    // Fall through to general key handler for keys
-                    // not dashboard-specific (y=clipboard, w=waveform,
-                    // +/-=rate mix, etc.)
-                }
-            }
+            // ── Every dashboard chord is now in the registry. ──
+            // The legacy `match key.code { ... }` block that lived
+            // here is gone — its 20+ arms moved to `tui::command` as
+            // `view.*` / `dash.*` / `engine.*` Commands with a
+            // `dashboard_normal` `when` guard (or a more specific
+            // variant). Chords that fall through this block are
+            // intentionally global (y / w / +/- when not in
+            // history-view / etc.) and handled below.
         }
 
         // Local filter mode

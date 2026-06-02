@@ -197,7 +197,24 @@ fn builtin_commands() -> Vec<Command> {
             run: |app| {
                 app.view_mode = super::app::ViewMode::Dashboard;
             },
-            when: Some(no_modal_capture),
+            // `d` ON Dashboard goes to Browse (dash.toggle_d below) —
+            // this command only fires elsewhere.
+            when: Some(|app| {
+                use super::app::ViewMode;
+                !matches!(app.view_mode, ViewMode::Dashboard) && no_modal_capture(app)
+            }),
+        },
+        // Dashboard `d`: switch to Browse view (opposite of the
+        // global `d` which goes to Dashboard).
+        Command {
+            id: "dash.toggle_d",
+            title: "Dashboard d: jump to Browse view",
+            group: "VIEWS",
+            keys: &["d"],
+            run: |app| {
+                app.view_mode = super::app::ViewMode::Browse;
+            },
+            when: Some(dashboard_normal),
         },
         Command {
             id: "view.browse",
