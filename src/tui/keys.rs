@@ -802,20 +802,8 @@ impl App {
                         self.pop_screen();
                     }
                 }
-                KeyCode::Char('/') => {
-                    // On dashboard: ask Claude DJ if enabled, otherwise search
-                    let dj_on = self.claude_dj.is_some() && self.config.claude_dj_enabled;
-                    if dj_on {
-                        self.dj_asking = true;
-                        self.dj_ask_buffer.clear();
-                        self.toast.show("Ask Claude DJ...", 1.0);
-                    } else {
-                        self.view_mode = ViewMode::Search;
-                        self.search_query.clear();
-                        self.search_results.clear();
-                        self.selected = 0;
-                    }
-                }
+                // Dashboard `/` migrated to dash.slash — handled by
+                // try_dispatch above.
                 KeyCode::Char('A') => {
                     if let Some(data) = self.engine.alignment_peaks() {
                         self.toast.show("AI analyzing mix alignment...", 2.0);
@@ -1652,12 +1640,7 @@ impl App {
             // migrated to engine.clear_queue / queue.grab / queue.drop.
             // `q`/`h`/`d` (view switchers) migrated to view.{queue,
             // history,dashboard} — handled by `try_dispatch` above.
-            KeyCode::Char('/') | KeyCode::Char('s') => {
-                self.view_mode = ViewMode::Search;
-                self.search_query.clear();
-                self.search_results.clear();
-                self.selected = 0;
-            }
+            // Global `/` / `s` (Search) migrated to view.search.
             // `?` (open Help view in non-Dashboard contexts) migrated
             // to view.open_help — handled by try_dispatch above. The
             // multi-value keymap routes Dashboard `?` to view.help

@@ -897,6 +897,47 @@ fn builtin_commands() -> Vec<Command> {
             },
             when: Some(no_modal_capture),
         },
+        // Dashboard `/`: ask Claude DJ if enabled, otherwise switch to
+        // Search view. Different from the global `/`/`s` below — same
+        // chord, different `when`.
+        Command {
+            id: "dash.slash",
+            title: "Ask Claude DJ (dashboard /) or Search",
+            group: "VIEWS",
+            keys: &["/"],
+            run: |app| {
+                let dj_on = app.claude_dj.is_some() && app.config.claude_dj_enabled;
+                if dj_on {
+                    app.dj_asking = true;
+                    app.dj_ask_buffer.clear();
+                    app.toast.show("Ask Claude DJ...", 1.0);
+                } else {
+                    app.view_mode = super::app::ViewMode::Search;
+                    app.search_query.clear();
+                    app.search_results.clear();
+                    app.selected = 0;
+                }
+            },
+            when: Some(dashboard_normal),
+        },
+        // Global search shortcut — `/` or `s` from any non-Dashboard
+        // view. Switches to Search and clears state.
+        Command {
+            id: "view.search",
+            title: "Search Beatport",
+            group: "VIEWS",
+            keys: &["/", "s"],
+            run: |app| {
+                app.view_mode = super::app::ViewMode::Search;
+                app.search_query.clear();
+                app.search_results.clear();
+                app.selected = 0;
+            },
+            when: Some(|app| {
+                use super::app::ViewMode;
+                !matches!(app.view_mode, ViewMode::Dashboard) && no_modal_capture(app)
+            }),
+        },
         // Open URL under the column-aware browse cursor in the OS
         // default browser.
         Command {
