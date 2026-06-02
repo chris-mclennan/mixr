@@ -378,6 +378,48 @@ fn builtin_commands() -> Vec<Command> {
             },
             when: Some(no_modal_capture),
         },
+        // Export the play history (to a file the engine knows about).
+        Command {
+            id: "engine.export_history",
+            title: "Export play history",
+            group: "QUEUE",
+            keys: &["e"],
+            run: |app| {
+                let count = app.engine.export_history();
+                if count > 0 {
+                    app.toast
+                        .show(&format!("History exported: {count} tracks"), 2.0);
+                } else {
+                    app.toast.show("No history to export", 1.0);
+                }
+            },
+            when: Some(no_modal_capture),
+        },
+        // Smart-shuffle the queue (BPM + key).
+        Command {
+            id: "engine.smart_shuffle",
+            title: "Smart shuffle queue (BPM + key)",
+            group: "QUEUE",
+            keys: &["x"],
+            run: |app| {
+                app.engine.smart_shuffle();
+                app.toast.show("Queue shuffled (BPM+key)", 1.5);
+            },
+            when: Some(no_modal_capture),
+        },
+        // Open MIDI Learn view.
+        Command {
+            id: "view.midi_learn",
+            title: "MIDI Learn (bind controllers)",
+            group: "VIEWS",
+            keys: &["K"],
+            run: |app| {
+                app.view_mode = super::app::ViewMode::MidiLearn;
+                app.midi_learn_action_sel = 0;
+                app.midi_learn_captured = None;
+            },
+            when: Some(no_modal_capture),
+        },
         // Cycle the analyzer engine (built-in ⇄ stratum) and
         // re-analyze the playing deck in-place. Used to A/B detectors
         // on a bad mix.

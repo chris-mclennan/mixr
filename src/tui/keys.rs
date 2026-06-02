@@ -1733,19 +1733,8 @@ impl App {
                     }
                 }
             }
-            KeyCode::Char('e') => {
-                let count = self.engine.export_history();
-                if count > 0 {
-                    self.toast
-                        .show(&format!("History exported: {count} tracks"), 2.0);
-                } else {
-                    self.toast.show("No history to export", 1.0);
-                }
-            }
-            KeyCode::Char('x') => {
-                self.engine.smart_shuffle();
-                self.toast.show("Queue shuffled (BPM+key)", 1.5);
-            }
+            // `e` (export history) → engine.export_history,
+            // `x` (smart shuffle) → engine.smart_shuffle. Migrated.
             KeyCode::Char('X') => {
                 let n = self.engine.queue.len();
                 if n == 0 {
@@ -1828,13 +1817,8 @@ impl App {
             // handler above (`if matches!(ViewMode::Dashboard)`) for the
             // real z/Z binding; out here it'd collide with per-mode
             // shortcuts and confuse users browsing.
-            // `,` → view.settings, `b` → view.browse — handled by
-            // `try_dispatch` above.
-            KeyCode::Char('K') => {
-                self.view_mode = ViewMode::MidiLearn;
-                self.midi_learn_action_sel = 0;
-                self.midi_learn_captured = None;
-            }
+            // `,` → view.settings, `b` → view.browse, `K` → view.midi_learn
+            // — handled by `try_dispatch` above.
             // Dashboard's `v` is dashboard-layout cycle (handled in the
             // dashboard arm above); skip the compact-view toggle here so
             // the two don't double-fire.
