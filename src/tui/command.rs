@@ -547,6 +547,67 @@ fn builtin_commands() -> Vec<Command> {
             },
             when: Some(no_modal_capture),
         },
+        // Clear the queue (with Y/N confirm).
+        Command {
+            id: "engine.clear_queue",
+            title: "Clear queue (with confirmation)",
+            group: "QUEUE",
+            keys: &["X"],
+            run: |app| {
+                let n = app.engine.queue.len();
+                if n == 0 {
+                    app.toast.show("Queue already empty", 0.6);
+                } else {
+                    app.pending_confirm = Some(super::app::ConfirmAction::ClearQueue);
+                    app.toast.show(
+                        &format!(
+                            "Clear queue ({n} track{})? Y/N",
+                            if n == 1 { "" } else { "s" }
+                        ),
+                        5.0,
+                    );
+                }
+            },
+            when: Some(no_modal_capture),
+        },
+        // Queue grab — moves into Queue view if not there. `{` grabs
+        // / drops the highlighted entry; `}` finishes the move.
+        Command {
+            id: "queue.grab",
+            title: "Grab / drop queue entry (reorder)",
+            group: "QUEUE",
+            keys: &["{"],
+            run: |app| {
+                use super::app::ViewMode;
+                if !matches!(app.view_mode, ViewMode::Queue) {
+                    app.view_mode = ViewMode::Queue;
+                    app.selected = 0;
+                }
+                if app.queue_grab_index.is_some() {
+                    app.queue_grab_index = None;
+                    app.toast.show("Dropped", 0.5);
+                } else {
+                    app.queue_grab_index = Some(app.selected);
+                    app.toast
+                        .show("Grabbed — move with ↑↓, press } to drop", 2.0);
+                }
+            },
+            when: Some(no_modal_capture),
+        },
+        Command {
+            id: "queue.drop",
+            title: "Drop grabbed queue entry at cursor",
+            group: "QUEUE",
+            keys: &["}"],
+            run: |app| {
+                if let Some(from) = app.queue_grab_index.take() {
+                    let to = app.selected;
+                    app.engine.move_queue_item(from, to);
+                    app.toast.show("Moved", 0.5);
+                }
+            },
+            when: Some(no_modal_capture),
+        },
         // Smart-shuffle the queue (BPM + key).
         Command {
             id: "engine.smart_shuffle",

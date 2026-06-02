@@ -1648,46 +1648,8 @@ impl App {
             }
             // `e` (export history) → engine.export_history,
             // `x` (smart shuffle) → engine.smart_shuffle. Migrated.
-            KeyCode::Char('X') => {
-                let n = self.engine.queue.len();
-                if n == 0 {
-                    self.toast.show("Queue already empty", 0.6);
-                } else {
-                    self.pending_confirm = Some(super::app::ConfirmAction::ClearQueue);
-                    self.toast.show(
-                        &format!(
-                            "Clear queue ({n} track{})? Y/N",
-                            if n == 1 { "" } else { "s" }
-                        ),
-                        5.0,
-                    );
-                }
-            }
-            // `S` (split cue) → `engine.toggle_split_cue`,
-            // `M` (metronome) → `engine.toggle_metronome`. Migrated to
-            // the command registry and handled by `try_dispatch` above.
-            KeyCode::Char('{') => {
-                // Queue grab/drop — works globally, switches to queue view
-                if !matches!(self.view_mode, ViewMode::Queue) {
-                    self.view_mode = ViewMode::Queue;
-                    self.selected = 0;
-                }
-                if self.queue_grab_index.is_some() {
-                    self.queue_grab_index = None;
-                    self.toast.show("Dropped", 0.5);
-                } else {
-                    self.queue_grab_index = Some(self.selected);
-                    self.toast
-                        .show("Grabbed — move with ↑↓, press } to drop", 2.0);
-                }
-            }
-            KeyCode::Char('}') => {
-                if let Some(from) = self.queue_grab_index.take() {
-                    let to = self.selected;
-                    self.engine.move_queue_item(from, to);
-                    self.toast.show("Moved", 0.5);
-                }
-            }
+            // X / { / } (clear queue, queue grab, queue drop) all
+            // migrated to engine.clear_queue / queue.grab / queue.drop.
             // `q`/`h`/`d` (view switchers) migrated to view.{queue,
             // history,dashboard} — handled by `try_dispatch` above.
             KeyCode::Char('/') | KeyCode::Char('s') => {
