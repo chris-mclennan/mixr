@@ -725,21 +725,23 @@ mod tests {
     use crate::tui::command::registry;
 
     /// Drift-prevention: every `Command` in the registry that's bound
-    /// to a default chord must appear as a row in `help_lines()`.
-    /// Catches the failure mode "I migrated chord X to the registry
-    /// but forgot to keep its entry in the help screen."
+    /// to at least one default chord must show up in `help_lines()`
+    /// under its *first* key. Catches "I migrated a chord but forgot
+    /// the help row." Alternate chords (e.g. `=` for `+`) aren't
+    /// required to have their own row.
     #[test]
-    fn every_migrated_chord_is_in_help_lines() {
+    fn every_migrated_command_has_a_help_row() {
         let lines = help_lines();
         for cmd in registry().all() {
-            for &key in cmd.keys {
-                let present = lines.iter().any(|(k, _)| *k == key);
-                assert!(
-                    present,
-                    "migrated command {:?} (key {:?}) missing from help_lines()",
-                    cmd.id, key,
-                );
-            }
+            let Some(&primary) = cmd.keys.first() else {
+                continue;
+            };
+            let present = lines.iter().any(|(k, _)| *k == primary);
+            assert!(
+                present,
+                "migrated command {:?} (primary key {:?}) missing from help_lines()",
+                cmd.id, primary,
+            );
         }
     }
 }

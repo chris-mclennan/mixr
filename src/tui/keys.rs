@@ -792,12 +792,11 @@ impl App {
                 // active on the dashboard — elsewhere `+` opens the
                 // playlist picker. `=` is accepted as an unshifted
                 // alternative so users don't have to hold shift.
-                KeyCode::Char('+') | KeyCode::Char('=') => {
-                    self.handle_ipc_command(crate::ipc::IpcCommand::RateMix(true));
-                }
-                KeyCode::Char('-') | KeyCode::Char('_') => {
-                    self.handle_ipc_command(crate::ipc::IpcCommand::RateMix(false));
-                }
+                // `+`/`=` (rate good), `-`/`_` (rate bad) migrated to
+                // engine.rate_mix_{good,bad} — handled by try_dispatch
+                // above with a `dashboard_normal` guard so the
+                // history-view + browse-view `+`/`-` arms below still
+                // fire in those modes.
                 KeyCode::Up => {
                     if self.dash_focus == DashFocus::Controller {
                         self.dash_section = self.dash_section.prev();

@@ -258,6 +258,29 @@ fn builtin_commands() -> Vec<Command> {
             },
             when: Some(dashboard_normal),
         },
+        // Rate the most-recent mix good (only on dashboard — elsewhere
+        // `+` / `-` mean other things, e.g. add to playlist, history
+        // rating). `=` / `_` accepted as unshifted alternatives.
+        Command {
+            id: "engine.rate_mix_good",
+            title: "Rate most-recent mix: good (DJ memory)",
+            group: "PLAYBACK",
+            keys: &["+", "="],
+            run: |app| {
+                app.handle_ipc_command(crate::ipc::IpcCommand::RateMix(true));
+            },
+            when: Some(dashboard_normal),
+        },
+        Command {
+            id: "engine.rate_mix_bad",
+            title: "Rate most-recent mix: bad (DJ memory)",
+            group: "PLAYBACK",
+            keys: &["-", "_"],
+            run: |app| {
+                app.handle_ipc_command(crate::ipc::IpcCommand::RateMix(false));
+            },
+            when: Some(dashboard_normal),
+        },
         // Manual panic / train-wreck bail. Forces the in-progress
         // crossfade onto EchoOut to salvage a bad mix. No-op when not
         // currently crossfading.
