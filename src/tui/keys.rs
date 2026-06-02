@@ -1154,17 +1154,10 @@ impl App {
                     KeyCode::Enter => {
                         if let Some(value) = self.settings_editing_text.take()
                             && let Some(super::settings::SettingsRowEntry::Text(row)) =
-                                super::settings::settings_row_entry_at(
-                                    &self.config,
-                                    self.selected,
-                                )
+                                super::settings::settings_row_entry_at(&self.config, self.selected)
                         {
                             let key_id = row.key;
-                            super::settings::apply_text_setting(
-                                &mut self.config,
-                                key_id,
-                                value,
-                            );
+                            super::settings::apply_text_setting(&mut self.config, key_id, value);
                             // Persist to ~/.mixr/config.toml so the edit
                             // sticks across restarts.
                             self.config.save();

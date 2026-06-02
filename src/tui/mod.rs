@@ -1,10 +1,12 @@
 pub mod app;
 pub mod blit;
 pub mod claude_screen;
+pub mod command;
 pub mod dashboard;
 mod dj_bridge;
 pub mod download;
 mod ipc_handler;
+mod keymap;
 mod keys;
 pub mod midi_learn;
 pub mod rules_editor;

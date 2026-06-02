@@ -138,6 +138,14 @@ pub struct AppConfig {
     /// master toggle) — these tune *how* Claude DJs when active.
     #[serde(default)]
     pub claude_dj: ClaudeDjSettings,
+
+    /// Keybinding overlays. Outer key is the section (currently only
+    /// `"global"`), inner is a chord-spec → command-id table:
+    ///   `"keys": { "global": { "?": "view.help", "ctrl+q": "app.quit" } }`
+    /// A value of `""` / `"none"` / `"unbound"` removes whatever the
+    /// `Command::keys` defaults bound. See `src/tui/keymap.rs`.
+    #[serde(default)]
+    pub keys: std::collections::HashMap<String, std::collections::BTreeMap<String, String>>,
 }
 
 /// Tunables for Claude DJ behavior. Composed into the system prompt and
@@ -419,6 +427,7 @@ impl Default for AppConfig {
             resume_behavior: ResumeBehavior::default(),
             analyzer_engine: AnalyzerEngine::default(),
             claude_dj: ClaudeDjSettings::default(),
+            keys: std::collections::HashMap::new(),
         }
     }
 }
