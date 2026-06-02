@@ -1011,6 +1011,56 @@ fn builtin_commands() -> Vec<Command> {
             },
             when: Some(no_modal_capture),
         },
+        // Space: toggle track preview (4 bars from first beat with
+        // metronome) on the highlighted Browse track.
+        Command {
+            id: "engine.preview_track",
+            title: "Preview track (4-bar metronome)",
+            group: "PLAYBACK",
+            keys: &["space"],
+            run: |app| {
+                use super::app::ViewMode;
+                if app.engine.is_previewing() {
+                    app.engine.stop_preview();
+                    app.toast.show("Preview stopped", 1.0);
+                } else if matches!(app.view_mode, ViewMode::Browse)
+                    && let Some(track) = app.current_screen().track_at(app.selected).cloned()
+                {
+                    app.download_for_preview(track);
+                }
+            },
+            when: Some(no_modal_capture),
+        },
+        // Queue all tracks on the current screen (skips duplicates
+        // already queued or loaded on a deck).
+        Command {
+            id: "engine.queue_all",
+            title: "Queue all tracks on screen",
+            group: "QUEUE",
+            keys: &["a"],
+            run: |app| {
+                use crate::audio::engine::QueueEntry;
+                if let Some(tracks) = app.current_screen().tracks() {
+                    let total = tracks.len();
+                    let mut added = 0;
+                    #[allow(clippy::unnecessary_to_owned)]
+                    for track in tracks.to_vec() {
+                        if app.engine.enqueue(QueueEntry::from(track)) {
+                            added += 1;
+                        }
+                    }
+                    let msg = match (added, total - added) {
+                        (0, _) => "All tracks already queued".to_string(),
+                        (a, 0) => format!("Queued {a} tracks"),
+                        (a, skipped) => {
+                            format!("Queued {a}, skipped {skipped} duplicates")
+                        }
+                    };
+                    app.toast.show(&msg, 1.5);
+                }
+            },
+            when: Some(no_modal_capture),
+        },
         // Open the `:` command prompt overlay.
         Command {
             id: "prompt.command",

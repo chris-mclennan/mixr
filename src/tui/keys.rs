@@ -5,7 +5,6 @@ use crossterm::event::{KeyCode, KeyEvent};
 
 use super::app::{App, AppAction, ClickAction, DashFocus, ViewMode};
 use super::dashboard::CtrlSection;
-use crate::audio::engine::QueueEntry;
 use crate::beatport::catalog::{self, BrowseScreen, MenuAction};
 
 impl App {
@@ -1247,41 +1246,9 @@ impl App {
                 }
             }
 
-            // Space: preview track (4 bars from first beat with metronome)
-            KeyCode::Char(' ') => {
-                if self.engine.is_previewing() {
-                    self.engine.stop_preview();
-                    self.toast.show("Preview stopped", 1.0);
-                } else if matches!(self.view_mode, ViewMode::Browse)
-                    && let Some(track) = self.current_screen().track_at(self.selected).cloned()
-                {
-                    self.download_for_preview(track);
-                }
-            }
-
-            // Enter on track list: queue track
-            // (Enter is already handled above for browse navigation)
-
-            // Queue all (skips duplicates already queued or loaded on a deck).
-            KeyCode::Char('a') => {
-                if let Some(tracks) = self.current_screen().tracks() {
-                    let total = tracks.len();
-                    let mut added = 0;
-                    #[allow(clippy::unnecessary_to_owned)]
-                    for track in tracks.to_vec() {
-                        if self.engine.enqueue(QueueEntry::from(track)) {
-                            added += 1;
-                        }
-                    }
-                    let msg = match (added, total - added) {
-                        (0, _) => "All tracks already queued".to_string(),
-                        (a, 0) => format!("Queued {a} tracks"),
-                        (a, skipped) => format!("Queued {a}, skipped {skipped} duplicates"),
-                    };
-                    self.toast.show(&msg, 1.5);
-                }
-            }
-
+            // Space (preview track) → engine.preview_track,
+            // `a` (queue all on screen) → engine.queue_all.
+            // Both migrated to the registry.
             KeyCode::Char('[') => {
                 if let Some((shift, pos)) = self.engine.nudge(-1) {
                     self.toast
