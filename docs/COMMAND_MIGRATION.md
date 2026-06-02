@@ -64,21 +64,49 @@ semantics of `?` / `d` / `b` mid-session). All 6 stub commands have
   input, no filtering, no DJ-ask buffer. The legacy
   `KeyCode::Char('?')` arm in `keys.rs` is gone.
 
-### Phase 2c — in progress (~55 chords migrated)
+### Phase 2c — in progress (~85 chords migrated, dashboard match block empty)
 
-**Done:** `?` (two variants), `B`, `m`, `G`, `S`, `M`, `p`, `n`, `t`,
-`T`, `d`, `b`, `h`, `,`, `q`, `e`, `x`, `K`, `Tab`, `w` (dashboard),
-`v` (two variants), `+` (two variants), `-`, `/` (two variants),
-`s`, `o`, `c`, `C`, `i`, `I`, `u`, `U`, `O`, `;`, `'`, `(`, `)`,
-`<`, `>`, `:`, `1`-`4`, `!`/`@`/`#`/`$`, `X`, `{`, `}`, `r`, `L`,
-`Ctrl+F`/`F`, `y`. All use `no_modal_capture` (global) or
-`dashboard_normal` (dashboard-nested) guards or custom predicates
-(e.g. `!Dashboard && no_modal_capture` for non-Dashboard variants).
+**Major milestone**: every chord in the dashboard-mode match block
+has migrated to the registry. The block in `keys.rs` is now an
+empty placeholder containing just a marker comment.
 
-The multi-value keymap (one chord → multiple commands, first
-matching `when` wins) was added in 2b mid-stream to support
-chords like `?`, `v`, `+`, `/` where the same chord has different
-meanings on Dashboard vs elsewhere.
+**Done (by category):**
+- **Views**: `d` (two variants), `b` (two variants), `h`, `,`, `q`,
+  `Tab`, `?` (two variants), `K`, `/` (two variants), `s`, `c`,
+  arrows (`↑↓←→/↩` Dashboard focus-aware)
+- **Playback**: `B`, `m`, `S`, `M`, `G`, `p`, `n`, `t`, `T`, `A`,
+  `1`-`4`, `!@#$`, `i`/`I`/`u`/`U`/`O`, `;`/`'`/(/), `<`/`>`,
+  `+`/`=`/`-`/`_` (three variants each), `[`/`]`, `space`, `w`
+  (dashboard), `v` (two variants)
+- **Queue**: `e`, `x`, `X`, `{`, `}`, `L` (dashboard), `a`
+- **Browsing**: `o`, `r`, `+` (non-Dashboard), `Ctrl+F`/`F`,
+  `f`/`*` (two variants), `&` (two variants), Dashboard Esc
+- **App**: `y`, `C`, `:`
+- **Quit**: `Ctrl+C` (event-loop owned, registered for help only)
+
+**Helper predicates**: `no_modal_capture(app)` and
+`dashboard_normal(app)` cover ~80% of guards. Inline custom guards
+handle the rest (`!Dashboard && no_modal_capture`,
+`view_mode == History && ...`).
+
+The multi-value keymap was added in 2b mid-stream — same chord →
+list of commands, first matching `when` wins. Critical for chords
+like `d`, `b`, `?`, `v`, `+`, `/`, `f` where the same chord has
+different meanings on Dashboard vs elsewhere.
+
+**What's left**:
+- Modal-capture handlers (mixer overlay rows, rules editor, search
+  input, command prompt body, filter input, MIDI learn capture,
+  resume prompt, midi map confirm). These are inherently context-
+  greedy and not a good fit for a registered `Command`.
+- Browse-view arrow nav + Enter (complex multi-screen, multi-column
+  logic). Doable but each Command would be ~50 lines.
+- Async chords still in `keys.rs`: `w`/`W` (follow/unfollow artist
+  /label, three nested match arms with tokio::spawn each).
+
+These could all migrate eventually but the value-per-effort ratio
+drops sharply after this point. The registry already drives every
+chord a user typically encounters outside of an active modal.
 
 **Still in `keys.rs`** (rough categories — fewer than at start):
 - Dashboard-nested with focus-sensitivity: `Up`/`Down`/`Enter`/`Left`/
