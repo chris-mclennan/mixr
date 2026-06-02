@@ -993,6 +993,38 @@ fn builtin_commands() -> Vec<Command> {
             },
             when: Some(no_modal_capture),
         },
+        // Dashboard `L`: play-next the mini-browse-highlighted track
+        // (focus-aware). Routes through engine.play_next which
+        // chooses StartedFresh / LoadedAsIncoming / ReplacedIncoming /
+        // QueuedAtFront based on the current mix state.
+        Command {
+            id: "dash.play_next",
+            title: "Load next from mini-browse",
+            group: "BROWSING",
+            keys: &["L"],
+            run: |app| {
+                use super::app::DashFocus;
+                use crate::audio::engine::PlayNextOutcome;
+                if app.dash_focus == DashFocus::Browse
+                    && let Some(track) = app.current_screen().track_at(app.dash_browse_sel).cloned()
+                {
+                    let name = format!("{} - {}", track.artist_name(), track.full_title());
+                    let outcome = app.engine.play_next(track);
+                    let msg = match outcome {
+                        PlayNextOutcome::StartedFresh => format!("Playing next: {name}"),
+                        PlayNextOutcome::LoadedAsIncoming => {
+                            format!("Loaded as incoming: {name}")
+                        }
+                        PlayNextOutcome::ReplacedIncoming => {
+                            format!("Replaced incoming with {name} (prev moved to queue)")
+                        }
+                        PlayNextOutcome::QueuedAtFront => format!("Queued next: {name}"),
+                    };
+                    app.toast.show(&msg, 2.0);
+                }
+            },
+            when: Some(dashboard_normal),
+        },
         // Dashboard `&`: add the mini-browse-highlighted track to the
         // Beatport cart (only when browse-focused). Mirrors the global
         // `&` in spirit but acts on dash_browse_sel.

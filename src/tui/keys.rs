@@ -696,32 +696,8 @@ impl App {
                 // - Incoming loaded waiting: replaces it (displaced
                 //   goes back to queue front+1 to preserve user choice)
                 // - Crossfading: queues at front (plays after this mix)
-                KeyCode::Char('L') => {
-                    if self.dash_focus == DashFocus::Browse
-                        && let Some(track) = self
-                            .current_screen()
-                            .track_at(self.dash_browse_sel)
-                            .cloned()
-                    {
-                        let name = format!("{} - {}", track.artist_name(), track.full_title());
-                        let outcome = self.engine.play_next(track);
-                        let msg = match outcome {
-                            crate::audio::engine::PlayNextOutcome::StartedFresh => {
-                                format!("Playing next: {name}")
-                            }
-                            crate::audio::engine::PlayNextOutcome::LoadedAsIncoming => {
-                                format!("Loaded as incoming: {name}")
-                            }
-                            crate::audio::engine::PlayNextOutcome::ReplacedIncoming => {
-                                format!("Replaced incoming with {name} (prev moved to queue)")
-                            }
-                            crate::audio::engine::PlayNextOutcome::QueuedAtFront => {
-                                format!("Queued next: {name}")
-                            }
-                        };
-                        self.toast.show(&msg, 2.0);
-                    }
-                }
+                // Dashboard `L` (load next from mini-browse) migrated
+                // to dash.play_next — handled by try_dispatch above.
                 // Favorite — focus-aware. On the mini-browse panel,
                 // favorite the highlighted track. Otherwise act on the
                 // decks: one loaded → favorite it; both loaded → open
