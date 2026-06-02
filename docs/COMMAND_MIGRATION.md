@@ -39,14 +39,25 @@ outer scope). Mixr doesn't have that abstraction yet.
 
 ## Path forward
 
-### Phase 1 — current (done)
+### Phase 1 — done
 Foundation files + config field. Zero dispatch changes. Help overlay
 unchanged.
 
-### Phase 2 — context-guarded commands
-Add a `when: fn(&App) -> bool` field to `Command`. Keymap returns only
-commands whose guard passes. At each call site in `handle_key`, replace
-the literal match arm with `if command::try_dispatch(&self.keymap, key, self)`.
+### Phase 2a — done
+`Command::when: Option<fn(&App) -> bool>` field added. `try_dispatch`
+primitive landed in `command.rs` — looks up `key` in `keymap`, resolves
+to a registry entry, checks the `when` guard, runs the handler. **Not
+yet called from `handle_key`** (one wrong move there would change the
+semantics of `?` / `d` / `b` mid-session). All 6 stub commands have
+`when: None` for now since their handlers are still no-ops.
+
+### Phase 2b — next session
+Wire `if try_dispatch(&self.keymap, &key, self) { return; }` into
+`handle_key` immediately *after* the modal early-returns
+(`pending_midi_map`, `pending_confirm`, `command_prompt`, prompts) and
+*before* the per-view match. Then migrate bindings one context group
+at a time, replacing the legacy match arm with a real `Command` handler
++ a `when` guard that captures the context the legacy match was inside.
 
 Migration order (lowest-risk first):
 1. **Globally unambiguous chords**: `ctrl+c` (quit) — these have one

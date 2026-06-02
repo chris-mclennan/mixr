@@ -19,12 +19,19 @@
 // `handle_key`). The dead-code warnings lift as bindings migrate.
 #![allow(dead_code)]
 
+use crossterm::event::KeyEvent;
+
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
 use super::app::App;
+use super::keymap::Keymap;
 
 pub type CommandFn = fn(&mut App);
+/// Context predicate. Returns true when the command is eligible to fire
+/// for the current `App` state. `None` ⇒ "always eligible" (rare; most
+/// mixr chords are state-dependent — see `docs/COMMAND_MIGRATION.md`).
+pub type WhenFn = fn(&App) -> bool;
 
 #[derive(Clone)]
 pub struct Command {
@@ -36,6 +43,10 @@ pub struct Command {
     /// (command-prompt-only). [`crate::tui::keymap::Keymap`] parses these.
     pub keys: &'static [&'static str],
     pub run: CommandFn,
+    /// State guard. `try_dispatch` only runs the command when this
+    /// returns `true` (or it's `None`). Lets the same chord mean
+    /// different things in different states — see #59 plan.
+    pub when: Option<WhenFn>,
 }
 
 impl Command {
@@ -77,6 +88,8 @@ pub fn registry() -> &'static Registry {
 }
 
 /// Run a command by id against `app`. Returns `true` if dispatched.
+/// Ignores `when` — direct invocation by id assumes the caller has
+/// already verified the context (typical use: command palette).
 pub fn run(id: &str, app: &mut App) -> bool {
     if let Some(cmd) = registry().get(id) {
         (cmd.run)(app);
@@ -84,6 +97,29 @@ pub fn run(id: &str, app: &mut App) -> bool {
     } else {
         false
     }
+}
+
+/// Look up `key` in `keymap`, resolve the resulting id in the registry,
+/// check the command's `when` guard, and run it. Returns `true` when
+/// dispatched — the caller (typically `App::handle_key`) should then
+/// `return` so the legacy match doesn't double-fire.
+///
+/// Not yet called from `handle_key`; staged for the next migration
+/// phase. See `docs/COMMAND_MIGRATION.md`.
+pub fn try_dispatch(keymap: &Keymap, key: &KeyEvent, app: &mut App) -> bool {
+    let Some(id) = keymap.resolve(key) else {
+        return false;
+    };
+    let Some(cmd) = registry().get(id) else {
+        return false;
+    };
+    if let Some(when) = cmd.when
+        && !when(app)
+    {
+        return false;
+    }
+    (cmd.run)(app);
+    true
 }
 
 /// Initial command set — these are the *labels* the keymap binds against.
@@ -101,6 +137,7 @@ fn builtin_commands() -> Vec<Command> {
             group: "VIEWS",
             keys: &["d"],
             run: |_app| { /* TODO: migrate from keys.rs */ },
+            when: None,
         },
         Command {
             id: "view.browse",
@@ -108,6 +145,7 @@ fn builtin_commands() -> Vec<Command> {
             group: "VIEWS",
             keys: &["b"],
             run: |_app| { /* TODO: migrate from keys.rs */ },
+            when: None,
         },
         Command {
             id: "view.history",
@@ -115,6 +153,7 @@ fn builtin_commands() -> Vec<Command> {
             group: "VIEWS",
             keys: &["h"],
             run: |_app| { /* TODO: migrate from keys.rs */ },
+            when: None,
         },
         Command {
             id: "view.settings",
@@ -122,6 +161,7 @@ fn builtin_commands() -> Vec<Command> {
             group: "VIEWS",
             keys: &[","],
             run: |_app| { /* TODO: migrate from keys.rs */ },
+            when: None,
         },
         Command {
             id: "view.help",
@@ -129,6 +169,7 @@ fn builtin_commands() -> Vec<Command> {
             group: "VIEWS",
             keys: &["?"],
             run: |_app| { /* TODO: migrate from keys.rs */ },
+            when: None,
         },
         Command {
             id: "app.quit",
@@ -136,6 +177,7 @@ fn builtin_commands() -> Vec<Command> {
             group: "APP",
             keys: &["ctrl+c"],
             run: |_app| { /* TODO: migrate from keys.rs */ },
+            when: None,
         },
     ]
 }
