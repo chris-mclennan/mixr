@@ -1758,17 +1758,8 @@ impl App {
                 }
             }
 
-            KeyCode::Char('o') => {
-                // Open in browser — column-aware
-                self.open_in_browser();
-            }
-
-            KeyCode::Char('c') => {
-                // Open the full Claude DJ screen (log scrollback + state).
-                self.view_mode = ViewMode::ClaudeDj;
-                self.scroll_offset = 0;
-            }
-            // `C` (toggle Claude DJ) migrated to claude.toggle.
+            // `o` → browse.open_in_browser, `c` → view.claude_dj,
+            // `C` → claude.toggle. All migrated via try_dispatch.
             _ => {}
         }
 

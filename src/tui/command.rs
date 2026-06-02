@@ -836,6 +836,30 @@ fn builtin_commands() -> Vec<Command> {
             },
             when: Some(no_modal_capture),
         },
+        // Open URL under the column-aware browse cursor in the OS
+        // default browser.
+        Command {
+            id: "browse.open_in_browser",
+            title: "Open in browser (column-aware)",
+            group: "BROWSING",
+            keys: &["o"],
+            run: |app| {
+                app.open_in_browser();
+            },
+            when: Some(no_modal_capture),
+        },
+        // Open the full Claude DJ screen.
+        Command {
+            id: "view.claude_dj",
+            title: "Claude DJ screen (log scrollback + state)",
+            group: "VIEWS",
+            keys: &["c"],
+            run: |app| {
+                app.view_mode = super::app::ViewMode::ClaudeDj;
+                app.scroll_offset = 0;
+            },
+            when: Some(no_modal_capture),
+        },
         // Toggle Claude DJ.
         Command {
             id: "claude.toggle",
