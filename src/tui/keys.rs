@@ -1506,13 +1506,7 @@ impl App {
             // try_dispatch above.
             // `p`, `n`, `t`, `T` migrated to engine.{pause,skip,
             // teleport,rewind_last} — handled by `try_dispatch` above.
-            KeyCode::Char('r') => {
-                // Favorites are metadata-only on main — there's no
-                // local audio to sync. Tracks are re-fetched (in
-                // memory) from Beatport when played.
-                self.toast
-                    .show("Favorites are metadata-only on main — no sync needed", 2.5);
-            }
+            // `r` (favorites sync hint) migrated to favorites.sync_hint.
             // `G` (cycle analyzer engine + re-grid) migrated to
             // `engine.cycle_analyzer` — handled by `try_dispatch` above.
             // `m` (mix now) migrated to `engine.mix_now` — handled by
@@ -1595,23 +1589,8 @@ impl App {
                 }
             }
 
-            KeyCode::Char('F')
-                if key
-                    .modifiers
-                    .contains(crossterm::event::KeyModifiers::CONTROL)
-                    | key
-                        .modifiers
-                        .contains(crossterm::event::KeyModifiers::SHIFT) =>
-            {
-                // Ctrl+F or Shift+F: start local filter
-                if matches!(self.view_mode, ViewMode::Browse) {
-                    self.filtering = true;
-                    self.filter_text.clear();
-                    self.selected = 0;
-                    self.toast.show("Filter: type to filter", 1.5);
-                }
-            }
-
+            // Ctrl+F / Shift+F (start filter) migrated to
+            // browse.start_filter.
             KeyCode::Char('y') => {
                 // Copy screen dump to clipboard
                 let path = dirs::home_dir()
@@ -1657,23 +1636,8 @@ impl App {
             // view.toggle_compact — handled by try_dispatch above. Two
             // commands share the `v` chord with mutually-exclusive
             // `when` predicates (one fires on Dashboard, one off).
-            KeyCode::Char('L') => {
-                // Load more (pagination) — works on track, chart, release lists
-                if matches!(self.view_mode, ViewMode::Browse)
-                    && let Some(ref action) = self.last_load_action.clone()
-                {
-                    self.load_more(action);
-                }
-            }
-
-            KeyCode::Char('+') => {
-                // Add track to playlist
-                if let Some(track) = self.current_screen().track_at(self.selected) {
-                    let track_id = track.id;
-                    self.open_playlist_picker(track_id);
-                }
-            }
-
+            // `L` (load more pagination) → browse.load_more,
+            // `+` (add to playlist outside Dashboard) → playlist.add_track.
             KeyCode::Char('f') | KeyCode::Char('*') => {
                 // Toggle favorite on current track
                 let track = match self.current_screen() {

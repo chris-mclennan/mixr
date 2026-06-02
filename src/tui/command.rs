@@ -962,6 +962,71 @@ fn builtin_commands() -> Vec<Command> {
             },
             when: Some(no_modal_capture),
         },
+        // No-op "favorites sync" — favorites are metadata-only on
+        // main. The chord shows a hint toast.
+        Command {
+            id: "favorites.sync_hint",
+            title: "Favorites sync (metadata-only — no-op hint)",
+            group: "BROWSING",
+            keys: &["r"],
+            run: |app| {
+                app.toast
+                    .show("Favorites are metadata-only on main — no sync needed", 2.5);
+            },
+            when: Some(no_modal_capture),
+        },
+        // Load more (pagination) — fires on Browse view when a
+        // last_load_action is captured.
+        Command {
+            id: "browse.load_more",
+            title: "Load more (pagination)",
+            group: "BROWSING",
+            keys: &["L"],
+            run: |app| {
+                use super::app::ViewMode;
+                if matches!(app.view_mode, ViewMode::Browse)
+                    && let Some(action) = app.last_load_action.clone()
+                {
+                    app.load_more(&action);
+                }
+            },
+            when: Some(no_modal_capture),
+        },
+        // Add the highlighted track to a playlist (opens picker).
+        // Dashboard `+` is rate-mix-good — guarded against here.
+        Command {
+            id: "playlist.add_track",
+            title: "Add track to playlist (opens picker)",
+            group: "BROWSING",
+            keys: &["+"],
+            run: |app| {
+                if let Some(track) = app.current_screen().track_at(app.selected) {
+                    let track_id = track.id;
+                    app.open_playlist_picker(track_id);
+                }
+            },
+            when: Some(|app| {
+                use super::app::ViewMode;
+                !matches!(app.view_mode, ViewMode::Dashboard) && no_modal_capture(app)
+            }),
+        },
+        // Start the local browse filter (Ctrl+F or Shift+F).
+        Command {
+            id: "browse.start_filter",
+            title: "Local filter (Ctrl+F or Shift+F)",
+            group: "BROWSING",
+            keys: &["ctrl+f", "F"],
+            run: |app| {
+                use super::app::ViewMode;
+                if matches!(app.view_mode, ViewMode::Browse) {
+                    app.filtering = true;
+                    app.filter_text.clear();
+                    app.selected = 0;
+                    app.toast.show("Filter: type to filter", 1.5);
+                }
+            },
+            when: Some(no_modal_capture),
+        },
         // Toggle Claude DJ.
         Command {
             id: "claude.toggle",
