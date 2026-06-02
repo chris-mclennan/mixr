@@ -757,50 +757,10 @@ impl App {
                 }
                 // Dashboard `/` migrated to dash.slash — handled by
                 // try_dispatch above.
-                KeyCode::Char('A') => {
-                    if let Some(data) = self.engine.alignment_peaks() {
-                        self.toast.show("AI analyzing mix alignment...", 2.0);
-                        let tx = self.action_tx.clone();
-                        tokio::spawn(async move {
-                            match crate::audio::ai_beat::analyze_mix_alignment(
-                                &data.playing_peaks,
-                                &data.incoming_peaks,
-                                data.playing_bpm,
-                                data.incoming_bpm,
-                            )
-                            .await
-                            {
-                                Ok(a) => {
-                                    tx.send(AppAction::AlignmentResult {
-                                        nudge_ms: a.nudge_ms,
-                                        is_aligned: a.is_aligned,
-                                        rate_correction: a.rate_correction,
-                                        details: a.details,
-                                    })
-                                    .ok();
-                                }
-                                Err(e) => {
-                                    tx.send(AppAction::Toast(format!("Alignment error: {e}")))
-                                        .ok();
-                                }
-                            }
-                        });
-                    } else {
-                        self.toast.show("Not crossfading", 1.0);
-                    }
-                }
-                KeyCode::Char('b') => {
-                    // If focused on browse, switch to full browser. Otherwise focus browse.
-                    if self.dash_focus == DashFocus::Browse {
-                        self.view_mode = ViewMode::Browse;
-                        self.selected = 0;
-                    } else {
-                        self.dash_focus = DashFocus::Browse;
-                    }
-                }
-                KeyCode::Char('z') | KeyCode::Char('Z') => {
-                    self.view_mode = ViewMode::Mixer;
-                }
+                // Dashboard `A` (AI analyze) → engine.ai_analyze,
+                // Dashboard `b` (focus-aware browse) → dash.focus_browse,
+                // Dashboard `z` / `Z` (mixer overlay) → view.mixer.
+                // All handled by try_dispatch above.
                 _ => {
                     // Fall through to general key handler for keys
                     // not dashboard-specific (y=clipboard, w=waveform,

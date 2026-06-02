@@ -208,7 +208,84 @@ fn builtin_commands() -> Vec<Command> {
                 app.view_mode = super::app::ViewMode::Browse;
                 app.selected = 0;
             },
-            when: Some(no_modal_capture),
+            // Non-Dashboard guard — Dashboard `b` is focus-aware (see
+            // dash.focus_browse below).
+            when: Some(|app| {
+                use super::app::ViewMode;
+                !matches!(app.view_mode, ViewMode::Dashboard) && no_modal_capture(app)
+            }),
+        },
+        // Dashboard `b`: focus-aware. If already on the mini-browse
+        // panel, switch to full Browse view; otherwise just move
+        // focus to the mini-browse panel.
+        Command {
+            id: "dash.focus_browse",
+            title: "Dashboard: focus mini-browse (or switch to Browse)",
+            group: "VIEWS",
+            keys: &["b"],
+            run: |app| {
+                use super::app::{DashFocus, ViewMode};
+                if app.dash_focus == DashFocus::Browse {
+                    app.view_mode = ViewMode::Browse;
+                    app.selected = 0;
+                } else {
+                    app.dash_focus = DashFocus::Browse;
+                }
+            },
+            when: Some(dashboard_normal),
+        },
+        // Dashboard `z`/`Z`: open the virtual mixer overlay.
+        Command {
+            id: "view.mixer",
+            title: "Virtual mixer overlay (Dashboard)",
+            group: "VIEWS",
+            keys: &["z", "Z"],
+            run: |app| {
+                app.view_mode = super::app::ViewMode::Mixer;
+            },
+            when: Some(dashboard_normal),
+        },
+        // Dashboard `A`: AI analyze the current mix alignment. Spawns
+        // an async task that sends results back via action_tx.
+        Command {
+            id: "engine.ai_analyze",
+            title: "AI analyze mix alignment",
+            group: "PLAYBACK",
+            keys: &["A"],
+            run: |app| {
+                use super::app::AppAction;
+                if let Some(data) = app.engine.alignment_peaks() {
+                    app.toast.show("AI analyzing mix alignment...", 2.0);
+                    let tx = app.action_tx.clone();
+                    tokio::spawn(async move {
+                        match crate::audio::ai_beat::analyze_mix_alignment(
+                            &data.playing_peaks,
+                            &data.incoming_peaks,
+                            data.playing_bpm,
+                            data.incoming_bpm,
+                        )
+                        .await
+                        {
+                            Ok(a) => {
+                                tx.send(AppAction::AlignmentResult {
+                                    nudge_ms: a.nudge_ms,
+                                    is_aligned: a.is_aligned,
+                                    rate_correction: a.rate_correction,
+                                    details: a.details,
+                                })
+                                .ok();
+                            }
+                            Err(e) => {
+                                tx.send(AppAction::Toast(format!("Alignment error: {e}")))
+                                    .ok();
+                            }
+                        }
+                    });
+                } else {
+                    app.toast.show("Not crossfading", 1.0);
+                }
+            },
+            when: Some(dashboard_normal),
         },
         Command {
             id: "view.history",
