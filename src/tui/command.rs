@@ -151,6 +151,82 @@ pub fn try_dispatch(key: &KeyEvent, app: &mut App) -> bool {
     false
 }
 
+// ── Shared run helpers ────────────────────────────────────────────
+// Some handlers share non-trivial bodies (e.g. `w` and `W` only
+// differ by an `unfollow` flag). Factoring here keeps the Command
+// rows skim-readable.
+
+/// Browse-view-aware `w`/`W` handler. On an ArtistList or LabelList
+/// (un)follows the highlighted entry via the Beatport API; on any
+/// other screen (or any non-Browse view) cycles the waveform mode.
+fn follow_or_cycle_waveform(app: &mut App, unfollow: bool) {
+    use super::app::{AppAction, ViewMode};
+    use crate::beatport::catalog::BrowseScreen;
+    if matches!(app.view_mode, ViewMode::Browse) {
+        match app.current_screen() {
+            BrowseScreen::ArtistList { artists, .. } => {
+                if let Some(artist) = artists.get(app.selected) {
+                    let aid = artist.id;
+                    let name = artist.name.clone();
+                    if let Some(api) = app.api.clone() {
+                        let tx = app.action_tx.clone();
+                        tokio::spawn(async move {
+                            let mut api = api.lock().await;
+                            let result = if unfollow {
+                                api.unfollow_artist(aid).await
+                            } else {
+                                api.follow_artist(aid).await
+                            };
+                            let verb = if unfollow { "Unfollowed" } else { "Followed" };
+                            match result {
+                                Ok(()) => {
+                                    tx.send(AppAction::Toast(format!("{verb}: {name}"))).ok();
+                                }
+                                Err(e) => {
+                                    tx.send(AppAction::Toast(format!("Error: {e}"))).ok();
+                                }
+                            }
+                        });
+                    }
+                    return;
+                }
+            }
+            BrowseScreen::LabelList { labels, .. } => {
+                if let Some(label) = labels.get(app.selected) {
+                    let lid = label.id;
+                    let name = label.name.clone();
+                    if let Some(api) = app.api.clone() {
+                        let tx = app.action_tx.clone();
+                        tokio::spawn(async move {
+                            let mut api = api.lock().await;
+                            let result = if unfollow {
+                                api.unfollow_label(lid).await
+                            } else {
+                                api.follow_label(lid).await
+                            };
+                            let verb = if unfollow { "Unfollowed" } else { "Followed" };
+                            match result {
+                                Ok(()) => {
+                                    tx.send(AppAction::Toast(format!("{verb}: {name}"))).ok();
+                                }
+                                Err(e) => {
+                                    tx.send(AppAction::Toast(format!("Error: {e}"))).ok();
+                                }
+                            }
+                        });
+                    }
+                    return;
+                }
+            }
+            _ => { /* fall through to waveform cycle */ }
+        }
+    }
+    // Non-Browse or non-Artist/Label screen → cycle waveform mode.
+    app.waveform_mode = app.waveform_mode.next();
+    app.toast
+        .show(&format!("Waveform: {}", app.waveform_mode.label()), 1.0);
+}
+
 // ── Shared `when` predicates ──────────────────────────────────────
 // Most chords on a given view share a precondition ("we're in
 // Dashboard mode and nothing is capturing input"). Factoring those
@@ -1135,6 +1211,32 @@ fn builtin_commands() -> Vec<Command> {
                 app.selected = (app.selected + 10).min(item_count.saturating_sub(1));
             },
             when: Some(global_nav_view),
+        },
+        // `w` / `W`: in Browse view on an Artist/Label list, follow /
+        // unfollow the highlighted entry via the Beatport API
+        // (async). On any other screen (or non-Browse view), cycle
+        // the waveform mode. Two commands because `w` and `W` only
+        // differ by an `unfollow` flag.
+        Command {
+            id: "engine.follow_or_waveform",
+            title: "Follow artist/label (Browse) or cycle waveform",
+            group: "BROWSING",
+            keys: &["w"],
+            run: |app| follow_or_cycle_waveform(app, false),
+            // Dashboard `w` is view.cycle_waveform (different — just
+            // cycles). This fires elsewhere.
+            when: Some(|app| {
+                use super::app::ViewMode;
+                !matches!(app.view_mode, ViewMode::Dashboard) && no_modal_capture(app)
+            }),
+        },
+        Command {
+            id: "engine.unfollow_or_waveform",
+            title: "Unfollow artist/label (Browse) or cycle waveform",
+            group: "BROWSING",
+            keys: &["W"],
+            run: |app| follow_or_cycle_waveform(app, true),
+            when: Some(no_modal_capture),
         },
         // Nudge incoming deck — `[` left, `]` right (hold to keep
         // nudging). Returns the cumulative shift if a beat is captured.

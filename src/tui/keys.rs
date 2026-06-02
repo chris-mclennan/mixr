@@ -3,7 +3,7 @@
 
 use crossterm::event::{KeyCode, KeyEvent};
 
-use super::app::{App, AppAction, ClickAction, DashFocus, ViewMode};
+use super::app::{App, ClickAction, DashFocus, ViewMode};
 use super::dashboard::CtrlSection;
 use crate::beatport::catalog::{self, BrowseScreen, MenuAction};
 
@@ -1161,152 +1161,11 @@ impl App {
             return;
         }
 
-        // item_count was computed here for the legacy Up/Down/Home/
-        // End nav. Now those chords live in `nav.*` commands which
-        // recompute item_count inline.
-        match key.code {
-            // Esc / Enter / Right / Left (global Browse navigation)
-            // migrated to nav.escape / browse.{enter,right,left}.
-
-            // Space (preview track) → engine.preview_track,
-            // `a` (queue all on screen) → engine.queue_all.
-            // Both migrated to the registry.
-            // `[` (nudge left) → engine.nudge_left,
-            // `]` (nudge right) → engine.nudge_right.
-
-            // Grid shift — phase adjustment that bypasses the rate
-            // controller. Targets incoming during crossfade, playing
-            // otherwise. Unlike nudge, this is persistent; each tap
-            // moves first_beat_time by 2ms.
-            // Loop hotkeys. `i` toggles a 4-beat loop on the playing
-            // deck (most common length). Shift+number gives different
-            // beat lengths: I/O double/halve, J/K/L for 1/4/8 beats.
-            // i / I / u / U / O (loop toggles 4/8/1/2/16 beats),
-            // ; / ' (grid shift ±2ms), ( / ) (grid shift ±1 beat),
-            // < / > (jump bars), : (command prompt). All migrated to
-            // the registry — see engine.loop_*, engine.grid_shift_*,
-            // engine.jump_*_bars, prompt.command. Handled by
-            // try_dispatch above.
-            // `p`, `n`, `t`, `T` migrated to engine.{pause,skip,
-            // teleport,rewind_last} — handled by `try_dispatch` above.
-            // `r` (favorites sync hint) migrated to favorites.sync_hint.
-            // `G` (cycle analyzer engine + re-grid) migrated to
-            // `engine.cycle_analyzer` — handled by `try_dispatch` above.
-            // `m` (mix now) migrated to `engine.mix_now` — handled by
-            // `try_dispatch` above.
-            KeyCode::Char('w') | KeyCode::Char('W') => {
-                let unfollow = key.code == KeyCode::Char('W');
-                if matches!(self.view_mode, ViewMode::Browse) {
-                    match self.current_screen() {
-                        BrowseScreen::ArtistList { artists, .. } => {
-                            if let Some(artist) = artists.get(self.selected) {
-                                let aid = artist.id;
-                                let name = artist.name.clone();
-                                if let Some(api) = self.api.clone() {
-                                    let tx = self.action_tx.clone();
-                                    tokio::spawn(async move {
-                                        let mut api = api.lock().await;
-                                        let result = if unfollow {
-                                            api.unfollow_artist(aid).await
-                                        } else {
-                                            api.follow_artist(aid).await
-                                        };
-                                        let verb = if unfollow { "Unfollowed" } else { "Followed" };
-                                        match result {
-                                            Ok(()) => {
-                                                tx.send(AppAction::Toast(format!(
-                                                    "{verb}: {name}"
-                                                )))
-                                                .ok();
-                                            }
-                                            Err(e) => {
-                                                tx.send(AppAction::Toast(format!("Error: {e}")))
-                                                    .ok();
-                                            }
-                                        }
-                                    });
-                                }
-                            }
-                        }
-                        BrowseScreen::LabelList { labels, .. } => {
-                            if let Some(label) = labels.get(self.selected) {
-                                let lid = label.id;
-                                let name = label.name.clone();
-                                if let Some(api) = self.api.clone() {
-                                    let tx = self.action_tx.clone();
-                                    tokio::spawn(async move {
-                                        let mut api = api.lock().await;
-                                        let result = if unfollow {
-                                            api.unfollow_label(lid).await
-                                        } else {
-                                            api.follow_label(lid).await
-                                        };
-                                        let verb = if unfollow { "Unfollowed" } else { "Followed" };
-                                        match result {
-                                            Ok(()) => {
-                                                tx.send(AppAction::Toast(format!(
-                                                    "{verb}: {name}"
-                                                )))
-                                                .ok();
-                                            }
-                                            Err(e) => {
-                                                tx.send(AppAction::Toast(format!("Error: {e}")))
-                                                    .ok();
-                                            }
-                                        }
-                                    });
-                                }
-                            }
-                        }
-                        _ => {
-                            self.waveform_mode = self.waveform_mode.next();
-                            self.toast
-                                .show(&format!("Waveform: {}", self.waveform_mode.label()), 1.0);
-                        }
-                    }
-                } else {
-                    // Not in browse — toggle waveform mode
-                    self.waveform_mode = self.waveform_mode.next();
-                    self.toast
-                        .show(&format!("Waveform: {}", self.waveform_mode.label()), 1.0);
-                }
-            }
-
-            // Ctrl+F / Shift+F (start filter) migrated to
-            // browse.start_filter.
-            // `y` (copy screen to clipboard) migrated to app.copy_screen.
-            // `e` (export history) → engine.export_history,
-            // `x` (smart shuffle) → engine.smart_shuffle. Migrated.
-            // X / { / } (clear queue, queue grab, queue drop) all
-            // migrated to engine.clear_queue / queue.grab / queue.drop.
-            // `q`/`h`/`d` (view switchers) migrated to view.{queue,
-            // history,dashboard} — handled by `try_dispatch` above.
-            // Global `/` / `s` (Search) migrated to view.search.
-            // `?` (open Help view in non-Dashboard contexts) migrated
-            // to view.open_help — handled by try_dispatch above. The
-            // multi-value keymap routes Dashboard `?` to view.help
-            // (toggle legend) and elsewhere to view.open_help.
-            // Hot cues (1..4 jump, !@#$ set) migrated to
-            // engine.cue_jump_{1..4} / engine.cue_set_{1..4}.
-            // Virtual Mixer overlay is dashboard-only. See the dashboard
-            // handler above (`if matches!(ViewMode::Dashboard)`) for the
-            // real z/Z binding; out here it'd collide with per-mode
-            // shortcuts and confuse users browsing.
-            // `,` → view.settings, `b` → view.browse, `K` → view.midi_learn
-            // — handled by `try_dispatch` above.
-            // Non-dashboard `v` (toggle compact view) migrated to
-            // view.toggle_compact — handled by try_dispatch above. Two
-            // commands share the `v` chord with mutually-exclusive
-            // `when` predicates (one fires on Dashboard, one off).
-            // `L` (load more pagination) → browse.load_more,
-            // `+` (add to playlist outside Dashboard) → playlist.add_track.
-            // Global `f`/`*` (toggle favorite) → favorites.toggle_track.
-            // Global `&` (add to cart) → browse.add_to_cart.
-
-            // `o` → browse.open_in_browser, `c` → view.claude_dj,
-            // `C` → claude.toggle. All migrated via try_dispatch.
-            _ => {}
-        }
+        // ── The global match block is empty. ──
+        // Every chord that used to live here has migrated to a
+        // `Command` in `tui::command`, dispatched via `try_dispatch`
+        // at the top of this function. The historical chord map is
+        // preserved in `docs/COMMAND_MIGRATION.md`.
 
         // Update scroll
         let visible = 20usize; // approximate
