@@ -1700,31 +1700,8 @@ impl App {
             // to view.open_help — handled by try_dispatch above. The
             // multi-value keymap routes Dashboard `?` to view.help
             // (toggle legend) and elsewhere to view.open_help.
-            // Hot cues on the currently-playing deck. 1..4 jump, !@#$ set.
-            KeyCode::Char(c @ '1'..='4') => {
-                let slot = (c as u8 - b'1') as usize;
-                let is_a = self.cached_info.playing_is_a;
-                self.engine.cue_jump(is_a, slot);
-                self.toast.show(
-                    &format!("Cue {} jump ({})", slot + 1, Self::deck_label(is_a)),
-                    0.5,
-                );
-            }
-            KeyCode::Char(c @ ('!' | '@' | '#' | '$')) => {
-                let slot = match c {
-                    '!' => 0,
-                    '@' => 1,
-                    '#' => 2,
-                    '$' => 3,
-                    _ => 0,
-                };
-                let is_a = self.cached_info.playing_is_a;
-                self.engine.cue_set(is_a, slot);
-                self.toast.show(
-                    &format!("Cue {} set ({})", slot + 1, Self::deck_label(is_a)),
-                    0.8,
-                );
-            }
+            // Hot cues (1..4 jump, !@#$ set) migrated to
+            // engine.cue_jump_{1..4} / engine.cue_set_{1..4}.
             // Virtual Mixer overlay is dashboard-only. See the dashboard
             // handler above (`if matches!(ViewMode::Dashboard)`) for the
             // real z/Z binding; out here it'd collide with per-mode

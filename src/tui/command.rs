@@ -572,6 +572,130 @@ fn builtin_commands() -> Vec<Command> {
             },
             when: Some(no_modal_capture),
         },
+        // Hot cues on the currently-playing deck — 1..4 jump, !@#$
+        // set. 8 separate Commands (one per chord) because the
+        // `keys` field is a static slice; pattern-matching ranges
+        // (`'1'..='4'`) can't be expressed in the registry directly.
+        Command {
+            id: "engine.cue_jump_1",
+            title: "Jump to hot cue 1",
+            group: "PLAYBACK",
+            keys: &["1"],
+            run: |app| {
+                let is_a = app.cached_info.playing_is_a;
+                app.engine.cue_jump(is_a, 0);
+                app.toast.show(
+                    &format!("Cue 1 jump ({})", super::app::App::deck_label(is_a)),
+                    0.5,
+                );
+            },
+            when: Some(no_modal_capture),
+        },
+        Command {
+            id: "engine.cue_jump_2",
+            title: "Jump to hot cue 2",
+            group: "PLAYBACK",
+            keys: &["2"],
+            run: |app| {
+                let is_a = app.cached_info.playing_is_a;
+                app.engine.cue_jump(is_a, 1);
+                app.toast.show(
+                    &format!("Cue 2 jump ({})", super::app::App::deck_label(is_a)),
+                    0.5,
+                );
+            },
+            when: Some(no_modal_capture),
+        },
+        Command {
+            id: "engine.cue_jump_3",
+            title: "Jump to hot cue 3",
+            group: "PLAYBACK",
+            keys: &["3"],
+            run: |app| {
+                let is_a = app.cached_info.playing_is_a;
+                app.engine.cue_jump(is_a, 2);
+                app.toast.show(
+                    &format!("Cue 3 jump ({})", super::app::App::deck_label(is_a)),
+                    0.5,
+                );
+            },
+            when: Some(no_modal_capture),
+        },
+        Command {
+            id: "engine.cue_jump_4",
+            title: "Jump to hot cue 4",
+            group: "PLAYBACK",
+            keys: &["4"],
+            run: |app| {
+                let is_a = app.cached_info.playing_is_a;
+                app.engine.cue_jump(is_a, 3);
+                app.toast.show(
+                    &format!("Cue 4 jump ({})", super::app::App::deck_label(is_a)),
+                    0.5,
+                );
+            },
+            when: Some(no_modal_capture),
+        },
+        Command {
+            id: "engine.cue_set_1",
+            title: "Set hot cue 1 at current position",
+            group: "PLAYBACK",
+            keys: &["!"],
+            run: |app| {
+                let is_a = app.cached_info.playing_is_a;
+                app.engine.cue_set(is_a, 0);
+                app.toast.show(
+                    &format!("Cue 1 set ({})", super::app::App::deck_label(is_a)),
+                    0.8,
+                );
+            },
+            when: Some(no_modal_capture),
+        },
+        Command {
+            id: "engine.cue_set_2",
+            title: "Set hot cue 2 at current position",
+            group: "PLAYBACK",
+            keys: &["@"],
+            run: |app| {
+                let is_a = app.cached_info.playing_is_a;
+                app.engine.cue_set(is_a, 1);
+                app.toast.show(
+                    &format!("Cue 2 set ({})", super::app::App::deck_label(is_a)),
+                    0.8,
+                );
+            },
+            when: Some(no_modal_capture),
+        },
+        Command {
+            id: "engine.cue_set_3",
+            title: "Set hot cue 3 at current position",
+            group: "PLAYBACK",
+            keys: &["#"],
+            run: |app| {
+                let is_a = app.cached_info.playing_is_a;
+                app.engine.cue_set(is_a, 2);
+                app.toast.show(
+                    &format!("Cue 3 set ({})", super::app::App::deck_label(is_a)),
+                    0.8,
+                );
+            },
+            when: Some(no_modal_capture),
+        },
+        Command {
+            id: "engine.cue_set_4",
+            title: "Set hot cue 4 at current position",
+            group: "PLAYBACK",
+            keys: &["$"],
+            run: |app| {
+                let is_a = app.cached_info.playing_is_a;
+                app.engine.cue_set(is_a, 3);
+                app.toast.show(
+                    &format!("Cue 4 set ({})", super::app::App::deck_label(is_a)),
+                    0.8,
+                );
+            },
+            when: Some(no_modal_capture),
+        },
         // Quantized loop toggles — i/u/U/I/O = 4/1/2/8/16 beats.
         Command {
             id: "engine.loop_4",
