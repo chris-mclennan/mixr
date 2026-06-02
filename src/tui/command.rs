@@ -267,6 +267,25 @@ fn builtin_commands() -> Vec<Command> {
             },
             when: Some(dashboard_normal),
         },
+        // Open the full Help view (filterable / scrollable). Fires
+        // when `?` is pressed outside Dashboard. Two commands share
+        // the chord — `view.help` wins on Dashboard via the
+        // multi-value keymap; this one wins elsewhere.
+        Command {
+            id: "view.open_help",
+            title: "Open Help view (filter / scroll)",
+            group: "VIEWS",
+            keys: &["?"],
+            run: |app| {
+                app.view_mode = super::app::ViewMode::Help;
+                app.help_filter.clear();
+                app.help_scroll = 0;
+            },
+            when: Some(|app| {
+                use super::app::ViewMode;
+                !matches!(app.view_mode, ViewMode::Dashboard) && no_modal_capture(app)
+            }),
+        },
         // Cycle the dashboard layout: Full → Panel(Queue → History →
         // Browse → Log) → Full. Saves to config so next launch
         // restores the user's choice.

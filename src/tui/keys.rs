@@ -1748,11 +1748,10 @@ impl App {
                 self.search_results.clear();
                 self.selected = 0;
             }
-            KeyCode::Char('?') => {
-                self.view_mode = ViewMode::Help;
-                self.help_filter.clear();
-                self.help_scroll = 0;
-            }
+            // `?` (open Help view in non-Dashboard contexts) migrated
+            // to view.open_help — handled by try_dispatch above. The
+            // multi-value keymap routes Dashboard `?` to view.help
+            // (toggle legend) and elsewhere to view.open_help.
             // Hot cues on the currently-playing deck. 1..4 jump, !@#$ set.
             KeyCode::Char(c @ '1'..='4') => {
                 let slot = (c as u8 - b'1') as usize;
