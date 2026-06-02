@@ -1591,28 +1591,7 @@ impl App {
 
             // Ctrl+F / Shift+F (start filter) migrated to
             // browse.start_filter.
-            KeyCode::Char('y') => {
-                // Copy screen dump to clipboard
-                let path = dirs::home_dir()
-                    .unwrap_or_default()
-                    .join(".mixr/screen.txt");
-                if let Ok(content) = std::fs::read_to_string(&path) {
-                    match std::process::Command::new("pbcopy")
-                        .stdin(std::process::Stdio::piped())
-                        .spawn()
-                    {
-                        Ok(mut child) => {
-                            if let Some(ref mut stdin) = child.stdin {
-                                use std::io::Write;
-                                stdin.write_all(content.as_bytes()).ok();
-                            }
-                            child.wait().ok();
-                            self.toast.show("Screen copied to clipboard", 1.0);
-                        }
-                        Err(_) => self.toast.show("Failed to copy", 1.0),
-                    }
-                }
-            }
+            // `y` (copy screen to clipboard) migrated to app.copy_screen.
             // `e` (export history) → engine.export_history,
             // `x` (smart shuffle) → engine.smart_shuffle. Migrated.
             // X / { / } (clear queue, queue grab, queue drop) all

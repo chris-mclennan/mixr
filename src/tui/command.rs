@@ -962,6 +962,36 @@ fn builtin_commands() -> Vec<Command> {
             },
             when: Some(no_modal_capture),
         },
+        // Copy the current screen dump (~/.mixr/screen.txt) to the
+        // OS clipboard via `pbcopy`.
+        Command {
+            id: "app.copy_screen",
+            title: "Copy screen dump to clipboard",
+            group: "APP",
+            keys: &["y"],
+            run: |app| {
+                let path = dirs::home_dir()
+                    .unwrap_or_default()
+                    .join(".mixr/screen.txt");
+                if let Ok(content) = std::fs::read_to_string(&path) {
+                    match std::process::Command::new("pbcopy")
+                        .stdin(std::process::Stdio::piped())
+                        .spawn()
+                    {
+                        Ok(mut child) => {
+                            if let Some(ref mut stdin) = child.stdin {
+                                use std::io::Write;
+                                stdin.write_all(content.as_bytes()).ok();
+                            }
+                            child.wait().ok();
+                            app.toast.show("Screen copied to clipboard", 1.0);
+                        }
+                        Err(_) => app.toast.show("Failed to copy", 1.0),
+                    }
+                }
+            },
+            when: Some(no_modal_capture),
+        },
         // No-op "favorites sync" — favorites are metadata-only on
         // main. The chord shows a hint toast.
         Command {
