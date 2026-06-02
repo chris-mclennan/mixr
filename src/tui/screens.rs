@@ -663,3 +663,28 @@ pub fn render_help(frame: &mut Frame, area: Rect, filter: &str, scroll: &mut u16
 
     frame.render_widget(Paragraph::new(text).scroll((*scroll, 0)), area);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::help_lines;
+    use crate::tui::command::registry;
+
+    /// Drift-prevention: every `Command` in the registry that's bound
+    /// to a default chord must appear as a row in `help_lines()`.
+    /// Catches the failure mode "I migrated chord X to the registry
+    /// but forgot to keep its entry in the help screen."
+    #[test]
+    fn every_migrated_chord_is_in_help_lines() {
+        let lines = help_lines();
+        for cmd in registry().all() {
+            for &key in cmd.keys {
+                let present = lines.iter().any(|(k, _)| *k == key);
+                assert!(
+                    present,
+                    "migrated command {:?} (key {:?}) missing from help_lines()",
+                    cmd.id, key,
+                );
+            }
+        }
+    }
+}
