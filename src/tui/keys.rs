@@ -720,18 +720,10 @@ impl App {
                     self.config.save();
                     self.toast.show(label, 1.0);
                 }
-                // `?` (toggle dash_help) migrated to `view.help` in
-                // src/tui/command.rs — handled by `try_dispatch` above.
-                // Manual panic / train-wreck bail. Forces the in-progress
-                // crossfade onto EchoOut to salvage a bad mix. No-op
-                // when not currently crossfading.
-                KeyCode::Char('B') => {
-                    if self.engine.bail_crossfade() {
-                        self.toast.show("⚠ Bailed to EchoOut", 2.0);
-                    } else {
-                        self.toast.show("Nothing to bail (not crossfading)", 1.0);
-                    }
-                }
+                // `?` → `view.help`, `B` → `engine.bail_crossfade`,
+                // `m` → `engine.mix_now`. All migrated to the command
+                // registry in `src/tui/command.rs` and handled by the
+                // `try_dispatch` call above.
                 // Load Next — only on mini-browse panel. State-aware:
                 // - Idle:    starts this track
                 // - Playing without incoming: loads as incoming
@@ -1651,48 +1643,10 @@ impl App {
                     }
                 }
             }
-            KeyCode::Char('G') => {
-                // Cycle analyzer engine + re-analyze the playing deck
-                // in-place. Used to A/B the built-in onset detector
-                // vs stratum-dsp on a bad mix: press `G`, hear the
-                // re-gridded playback, press `G` again to flip back.
-                use crate::config::AnalyzerEngine;
-                self.config.analyzer_engine = match self.config.analyzer_engine {
-                    AnalyzerEngine::Builtin => AnalyzerEngine::Stratum,
-                    AnalyzerEngine::Stratum => AnalyzerEngine::Builtin,
-                };
-                self.config.save();
-                let label = match self.config.analyzer_engine {
-                    AnalyzerEngine::Builtin => "built-in",
-                    AnalyzerEngine::Stratum => "stratum",
-                };
-                // Flag when the feature isn't compiled — the config
-                // flip is honored but resolve_bpm silently falls back
-                // to built-in, which would otherwise look like "G does
-                // nothing on re-press."
-                let fallback_note =
-                    if matches!(self.config.analyzer_engine, AnalyzerEngine::Stratum)
-                        && !cfg!(feature = "stratum")
-                    {
-                        " (not compiled — using built-in)"
-                    } else {
-                        ""
-                    };
-                match self.engine.reanalyze_playing(self.config.analyzer_engine) {
-                    Some(bpm) => self.toast.show(
-                        &format!("Engine: {label}{fallback_note} — re-gridded @ {bpm:.1} BPM"),
-                        3.0,
-                    ),
-                    None => self.toast.show(
-                        &format!("Engine: {label}{fallback_note} (no track loaded)"),
-                        2.0,
-                    ),
-                }
-            }
-            KeyCode::Char('m') => {
-                self.engine.mix_now();
-                self.toast.show("Mix now", 1.0);
-            }
+            // `G` (cycle analyzer engine + re-grid) migrated to
+            // `engine.cycle_analyzer` — handled by `try_dispatch` above.
+            // `m` (mix now) migrated to `engine.mix_now` — handled by
+            // `try_dispatch` above.
             KeyCode::Char('w') | KeyCode::Char('W') => {
                 let unfollow = key.code == KeyCode::Char('W');
                 if matches!(self.view_mode, ViewMode::Browse) {
@@ -1838,28 +1792,9 @@ impl App {
                     );
                 }
             }
-            KeyCode::Char('S') => {
-                let on = self.engine.toggle_split_cue();
-                self.toast.show(
-                    if on {
-                        "Split cue: ON (L=deck A, R=deck B)"
-                    } else {
-                        "Split cue: OFF"
-                    },
-                    2.0,
-                );
-            }
-            KeyCode::Char('M') => {
-                let on = self.engine.toggle_metronome();
-                self.toast.show(
-                    if on {
-                        "Metronome: ON"
-                    } else {
-                        "Metronome: OFF"
-                    },
-                    1.0,
-                );
-            }
+            // `S` (split cue) → `engine.toggle_split_cue`,
+            // `M` (metronome) → `engine.toggle_metronome`. Migrated to
+            // the command registry and handled by `try_dispatch` above.
             KeyCode::Char('{') => {
                 // Queue grab/drop — works globally, switches to queue view
                 if !matches!(self.view_mode, ViewMode::Queue) {

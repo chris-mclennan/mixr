@@ -129,6 +129,31 @@ pub fn try_dispatch(key: &KeyEvent, app: &mut App) -> bool {
     true
 }
 
+// ── Shared `when` predicates ──────────────────────────────────────
+// Most chords on a given view share a precondition ("we're in
+// Dashboard mode and nothing is capturing input"). Factoring those
+// predicates here keeps `Command` rows skim-readable.
+
+/// True when no modal / prompt / filter is capturing keystrokes —
+/// safe to dispatch any chord with global semantics (e.g. `S` toggle
+/// split cue) regardless of `view_mode`.
+fn no_modal_capture(app: &App) -> bool {
+    !app.dash_fav_picker
+        && !app.dj_asking
+        && !app.filtering
+        && app.command_prompt.is_none()
+        && app.pending_midi_map.is_none()
+        && app.pending_confirm.is_none()
+}
+
+/// `no_modal_capture` AND we're on the dashboard. The default guard
+/// for chords that were nested inside the legacy
+/// `if matches!(self.view_mode, ViewMode::Dashboard) { ... }` block.
+fn dashboard_normal(app: &App) -> bool {
+    use super::app::ViewMode;
+    matches!(app.view_mode, ViewMode::Dashboard) && no_modal_capture(app)
+}
+
 /// Initial command set — these are the *labels* the keymap binds against.
 /// Handlers are intentionally no-op stubs for now; the actual dispatch
 /// happens through `handle_key`'s existing match. As bindings are migrated
@@ -184,10 +209,9 @@ fn builtin_commands() -> Vec<Command> {
             run: |_app| { /* TODO: migrate from keys.rs */ },
             when: None,
         },
-        // First fully-migrated command. Toggles the dashboard's inline
-        // help legend. Active only when on Dashboard and no modal is
-        // capturing input — the legacy `KeyCode::Char('?')` arm at
-        // `keys.rs` would have been gated on the same conditions.
+        // Toggle the dashboard's inline help legend. Active only on
+        // Dashboard with no modal capturing input — matches the
+        // conditions the legacy `KeyCode::Char('?')` arm was gated on.
         Command {
             id: "view.help",
             title: "Toggle dashboard help legend",
@@ -196,16 +220,114 @@ fn builtin_commands() -> Vec<Command> {
             run: |app| {
                 app.dash_help = !app.dash_help;
             },
-            when: Some(|app| {
-                use super::app::ViewMode;
-                matches!(app.view_mode, ViewMode::Dashboard)
-                    && !app.dash_fav_picker
-                    && !app.dj_asking
-                    && !app.filtering
-                    && app.command_prompt.is_none()
-                    && app.pending_midi_map.is_none()
-                    && app.pending_confirm.is_none()
-            }),
+            when: Some(dashboard_normal),
+        },
+        // Manual panic / train-wreck bail. Forces the in-progress
+        // crossfade onto EchoOut to salvage a bad mix. No-op when not
+        // currently crossfading.
+        Command {
+            id: "engine.bail_crossfade",
+            title: "Bail crossfade (manual panic → EchoOut)",
+            group: "PLAYBACK",
+            keys: &["B"],
+            run: |app| {
+                if app.engine.bail_crossfade() {
+                    app.toast.show("⚠ Bailed to EchoOut", 2.0);
+                } else {
+                    app.toast.show("Nothing to bail (not crossfading)", 1.0);
+                }
+            },
+            when: Some(dashboard_normal),
+        },
+        // Force the crossfade to start now. Fires from any view (the
+        // legacy arm was outside the Dashboard-only block).
+        Command {
+            id: "engine.mix_now",
+            title: "Mix now (force crossfade)",
+            group: "PLAYBACK",
+            keys: &["m"],
+            run: |app| {
+                app.engine.mix_now();
+                app.toast.show("Mix now", 1.0);
+            },
+            when: Some(no_modal_capture),
+        },
+        // Toggle split cue (deck A → left, deck B → right). Global.
+        Command {
+            id: "engine.toggle_split_cue",
+            title: "Toggle split cue (A=L, B=R)",
+            group: "PLAYBACK",
+            keys: &["S"],
+            run: |app| {
+                let on = app.engine.toggle_split_cue();
+                app.toast.show(
+                    if on {
+                        "Split cue: ON (L=deck A, R=deck B)"
+                    } else {
+                        "Split cue: OFF"
+                    },
+                    2.0,
+                );
+            },
+            when: Some(no_modal_capture),
+        },
+        // Toggle the metronome click. Global.
+        Command {
+            id: "engine.toggle_metronome",
+            title: "Toggle metronome",
+            group: "PLAYBACK",
+            keys: &["M"],
+            run: |app| {
+                let on = app.engine.toggle_metronome();
+                app.toast.show(
+                    if on {
+                        "Metronome: ON"
+                    } else {
+                        "Metronome: OFF"
+                    },
+                    1.0,
+                );
+            },
+            when: Some(no_modal_capture),
+        },
+        // Cycle the analyzer engine (built-in ⇄ stratum) and
+        // re-analyze the playing deck in-place. Used to A/B detectors
+        // on a bad mix.
+        Command {
+            id: "engine.cycle_analyzer",
+            title: "Toggle analyzer engine + re-grid",
+            group: "PLAYBACK",
+            keys: &["G"],
+            run: |app| {
+                use crate::config::AnalyzerEngine;
+                app.config.analyzer_engine = match app.config.analyzer_engine {
+                    AnalyzerEngine::Builtin => AnalyzerEngine::Stratum,
+                    AnalyzerEngine::Stratum => AnalyzerEngine::Builtin,
+                };
+                app.config.save();
+                let label = match app.config.analyzer_engine {
+                    AnalyzerEngine::Builtin => "built-in",
+                    AnalyzerEngine::Stratum => "stratum",
+                };
+                let fallback_note = if matches!(app.config.analyzer_engine, AnalyzerEngine::Stratum)
+                    && !cfg!(feature = "stratum")
+                {
+                    " (not compiled — using built-in)"
+                } else {
+                    ""
+                };
+                match app.engine.reanalyze_playing(app.config.analyzer_engine) {
+                    Some(bpm) => app.toast.show(
+                        &format!("Engine: {label}{fallback_note} — re-gridded @ {bpm:.1} BPM"),
+                        3.0,
+                    ),
+                    None => app.toast.show(
+                        &format!("Engine: {label}{fallback_note} (no track loaded)"),
+                        2.0,
+                    ),
+                }
+            },
+            when: Some(no_modal_capture),
         },
     ]
 }
