@@ -670,18 +670,7 @@ impl App {
                 KeyCode::Char('d') => {
                     self.view_mode = ViewMode::Browse;
                 }
-                KeyCode::Esc => {
-                    if self.waveform_zoom.is_some() {
-                        self.waveform_zoom = None;
-                    } else if self.dash_focus == DashFocus::Browse && self.screen_stack.len() > 1 {
-                        // pop_screen restores selected / scroll / dash_browse_sel
-                        // so the cursor lands back on the row the user
-                        // drilled in from.
-                        self.pop_screen();
-                    } else {
-                        self.view_mode = ViewMode::Browse;
-                    }
-                }
+                // Dashboard Esc migrated to dash.escape.
                 // `w` (cycle waveform — dashboard) migrated to
                 // view.cycle_waveform — handled by try_dispatch above.
                 // Dashboard `v` (cycle layout) migrated to

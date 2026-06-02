@@ -1070,6 +1070,27 @@ fn builtin_commands() -> Vec<Command> {
             },
             when: Some(no_modal_capture),
         },
+        // Dashboard `Esc`: context-dependent.
+        //   waveform_zoom set    → clear it
+        //   browse focus + drill → pop_screen (restore selection)
+        //   otherwise            → switch to Browse view
+        Command {
+            id: "dash.escape",
+            title: "Dashboard Esc: zoom out / pop browse / Browse",
+            group: "VIEWS",
+            keys: &["esc"],
+            run: |app| {
+                use super::app::{DashFocus, ViewMode};
+                if app.waveform_zoom.is_some() {
+                    app.waveform_zoom = None;
+                } else if app.dash_focus == DashFocus::Browse && app.screen_stack.len() > 1 {
+                    app.pop_screen();
+                } else {
+                    app.view_mode = ViewMode::Browse;
+                }
+            },
+            when: Some(dashboard_normal),
+        },
         // Dashboard `L`: play-next the mini-browse-highlighted track
         // (focus-aware). Routes through engine.play_next which
         // chooses StartedFresh / LoadedAsIncoming / ReplacedIncoming /
