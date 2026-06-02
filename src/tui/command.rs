@@ -98,6 +98,19 @@ pub fn run(id: &str, app: &mut App) -> bool {
     }
 }
 
+/// Walk the registry and yield `(key, title, group)` rows for every
+/// command with a non-empty default `keys`. Stable order: the order
+/// commands were registered in `builtin_commands`. Used by the help
+/// overlay to auto-generate rows for migrated chords (#59).
+pub fn help_rows() -> Vec<(&'static str, &'static str, &'static str)> {
+    registry()
+        .all()
+        .iter()
+        .filter(|c| !c.keys.is_empty())
+        .map(|c| (*c.keys.first().unwrap(), c.title, c.group))
+        .collect()
+}
+
 /// Look up `key` in `app.keymap`, resolve the resulting id in the
 /// registry, check the command's `when` guard, and run it. Returns
 /// `true` when dispatched — the caller (typically `App::handle_key`)

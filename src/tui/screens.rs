@@ -437,8 +437,63 @@ pub fn render_now_playing(
     frame.render_widget(Paragraph::new(track_text).style(style), area);
 }
 
-/// Help lines data.
+/// Help lines data — a flat list of `(chord, description)` rows
+/// (and section headers, where `description` is empty).
+///
+/// **Migration in flight (#59):** rows for chords that have been
+/// migrated to `crate::tui::command::registry` come from there
+/// (auto-generated, can't drift). Rows for unmigrated chords stay
+/// in the hand-maintained `legacy_help_lines()` below. As more
+/// chords migrate, the hand-list shrinks. See
+/// `docs/COMMAND_MIGRATION.md`.
 pub fn help_lines() -> Vec<(&'static str, &'static str)> {
+    use crate::tui::command::help_rows;
+
+    let registry_rows = help_rows();
+    // Chords already covered by the registry — used to skip
+    // duplicate rows in the hand-maintained legacy section.
+    let migrated_keys: std::collections::HashSet<&'static str> =
+        registry_rows.iter().map(|(k, _, _)| *k).collect();
+
+    let mut out: Vec<(&'static str, &'static str)> = Vec::new();
+
+    // ── Registry-driven section ────────────────────────────────
+    // Walk commands group-by-group, emitting a section header on
+    // each group change. Order is `builtin_commands` order.
+    let mut last_group: &str = "";
+    for (key, title, group) in &registry_rows {
+        if *group != last_group {
+            if !last_group.is_empty() {
+                out.push(("", ""));
+            }
+            out.push((*group, ""));
+            last_group = group;
+        }
+        out.push((*key, *title));
+    }
+    if !registry_rows.is_empty() {
+        out.push(("", ""));
+    }
+
+    // ── Legacy hand-maintained section ─────────────────────────
+    for (key, desc) in legacy_help_lines() {
+        let is_section = desc.is_empty() && !key.is_empty();
+        let is_blank = key.is_empty();
+        // Section / blank rows pass through (layout); only data
+        // rows are de-duped against the registry.
+        if !is_section && !is_blank && migrated_keys.contains(key) {
+            continue;
+        }
+        out.push((key, desc));
+    }
+
+    out
+}
+
+/// The pre-#59 hand-maintained help table. Still the source of
+/// truth for unmigrated chords. New bindings should add a `Command`
+/// to `tui::command::builtin_commands` instead of editing this list.
+fn legacy_help_lines() -> Vec<(&'static str, &'static str)> {
     vec![
         ("BROWSING", ""),
         ("↑ / ↓", "Navigate"),
