@@ -1165,63 +1165,8 @@ impl App {
         // End nav. Now those chords live in `nav.*` commands which
         // recompute item_count inline.
         match key.code {
-            KeyCode::Esc => {
-                match self.view_mode {
-                    ViewMode::Browse => {
-                        if self.pop_screen() {
-                            // Skip empty placeholder screens (from
-                            // canonical nav paths). Each pop restores
-                            // its own cursor state.
-                            while self.screen_stack.len() > 1
-                                && self.current_screen().item_count() == 0
-                            {
-                                self.pop_screen();
-                            }
-                        }
-                    }
-                    _ => {
-                        self.view_mode = ViewMode::Browse;
-                        self.selected = 0;
-                        self.scroll_offset = 0;
-                    }
-                }
-            }
-
-            KeyCode::Enter => {
-                if matches!(self.view_mode, ViewMode::Browse) {
-                    self.handle_browse_enter();
-                }
-            }
-
-            KeyCode::Right => {
-                if matches!(self.view_mode, ViewMode::Browse) {
-                    if matches!(self.current_screen(), BrowseScreen::TrackList { .. }) {
-                        // Cycle columns: -2 (whole row) → -1 (title) → 0 (artist) → 2 (label) → 3 (genre) → 4 (date)
-                        let max_col = 4;
-                        if self.selected_column < max_col {
-                            self.selected_column += 1;
-                            // Skip remixer in compact view
-                            if self.config.compact_view && self.selected_column == 1 {
-                                self.selected_column = 2;
-                            }
-                        }
-                    } else {
-                        self.handle_browse_enter();
-                    }
-                }
-            }
-
-            // Left never navigates back — use Esc for that.
-            KeyCode::Left
-                if matches!(self.view_mode, ViewMode::Browse)
-                    && matches!(self.current_screen(), BrowseScreen::TrackList { .. })
-                    && self.selected_column > -2 =>
-            {
-                self.selected_column -= 1;
-                if self.config.compact_view && self.selected_column == 1 {
-                    self.selected_column = 0;
-                }
-            }
+            // Esc / Enter / Right / Left (global Browse navigation)
+            // migrated to nav.escape / browse.{enter,right,left}.
 
             // Space (preview track) → engine.preview_track,
             // `a` (queue all on screen) → engine.queue_all.

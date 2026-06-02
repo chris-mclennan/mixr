@@ -955,6 +955,98 @@ fn builtin_commands() -> Vec<Command> {
             },
             when: Some(no_modal_capture),
         },
+        // Global Esc: in Browse, pop back through the screen stack
+        // (skipping empty placeholders). Elsewhere, switch to Browse.
+        Command {
+            id: "nav.escape",
+            title: "Esc: pop browse / switch to Browse",
+            group: "BROWSING",
+            keys: &["esc"],
+            run: |app| {
+                use super::app::ViewMode;
+                match app.view_mode {
+                    ViewMode::Browse => {
+                        if app.pop_screen() {
+                            while app.screen_stack.len() > 1
+                                && app.current_screen().item_count() == 0
+                            {
+                                app.pop_screen();
+                            }
+                        }
+                    }
+                    _ => {
+                        app.view_mode = ViewMode::Browse;
+                        app.selected = 0;
+                        app.scroll_offset = 0;
+                    }
+                }
+            },
+            when: Some(global_nav_view),
+        },
+        // Enter (Browse-only): drill into the highlighted item.
+        Command {
+            id: "browse.enter",
+            title: "Enter: drill into / queue track",
+            group: "BROWSING",
+            keys: &["enter"],
+            run: |app| {
+                use super::app::ViewMode;
+                if matches!(app.view_mode, ViewMode::Browse) {
+                    app.handle_browse_enter();
+                }
+            },
+            when: Some(global_nav_view),
+        },
+        // Right (Browse-only): cycle column on TrackList screens
+        // (-2 whole row → -1 title → 0 artist → 2 label → 3 genre →
+        // 4 date); skip remixer in compact view. On non-TrackList
+        // Browse screens, Right drills in like Enter.
+        Command {
+            id: "browse.right",
+            title: "Browse →: cycle column / drill",
+            group: "BROWSING",
+            keys: &["right"],
+            run: |app| {
+                use super::app::ViewMode;
+                use crate::beatport::catalog::BrowseScreen;
+                if matches!(app.view_mode, ViewMode::Browse) {
+                    if matches!(app.current_screen(), BrowseScreen::TrackList { .. }) {
+                        let max_col = 4;
+                        if app.selected_column < max_col {
+                            app.selected_column += 1;
+                            if app.config.compact_view && app.selected_column == 1 {
+                                app.selected_column = 2;
+                            }
+                        }
+                    } else {
+                        app.handle_browse_enter();
+                    }
+                }
+            },
+            when: Some(global_nav_view),
+        },
+        // Left (Browse + TrackList): cycle column back. Never
+        // navigates the screen stack — use Esc for that.
+        Command {
+            id: "browse.left",
+            title: "Browse ←: cycle column back (TrackList)",
+            group: "BROWSING",
+            keys: &["left"],
+            run: |app| {
+                use super::app::ViewMode;
+                use crate::beatport::catalog::BrowseScreen;
+                if matches!(app.view_mode, ViewMode::Browse)
+                    && matches!(app.current_screen(), BrowseScreen::TrackList { .. })
+                    && app.selected_column > -2
+                {
+                    app.selected_column -= 1;
+                    if app.config.compact_view && app.selected_column == 1 {
+                        app.selected_column = 0;
+                    }
+                }
+            },
+            when: Some(global_nav_view),
+        },
         // Global list navigation — Up / Down / Home / End / PageUp /
         // PageDown for Browse / Queue / History / Search lists. Each
         // takes the current view's item count via a small helper to
