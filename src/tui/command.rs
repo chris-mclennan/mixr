@@ -176,6 +176,23 @@ fn dashboard_normal(app: &App) -> bool {
     matches!(app.view_mode, ViewMode::Dashboard) && no_modal_capture(app)
 }
 
+/// True when we're in one of the views that uses the legacy "global"
+/// `match key.code` block (Browse / Queue / History / Search / etc.) —
+/// i.e. NOT one of the modal-returning views (Dashboard / Settings /
+/// Mixer / TransitionRules / MidiLearn), and no modal is capturing.
+/// Guards for the migrated Up/Down/Home/End/PageUp/PageDown nav.
+fn global_nav_view(app: &App) -> bool {
+    use super::app::ViewMode;
+    !matches!(
+        app.view_mode,
+        ViewMode::Dashboard
+            | ViewMode::Settings
+            | ViewMode::Mixer
+            | ViewMode::TransitionRules
+            | ViewMode::MidiLearn
+    ) && no_modal_capture(app)
+}
+
 /// Initial command set — these are the *labels* the keymap binds against.
 /// Handlers are intentionally no-op stubs for now; the actual dispatch
 /// happens through `handle_key`'s existing match. As bindings are migrated
@@ -937,6 +954,95 @@ fn builtin_commands() -> Vec<Command> {
                 app.toast.show("Loop 16 beats", 1.0);
             },
             when: Some(no_modal_capture),
+        },
+        // Global list navigation — Up / Down / Home / End / PageUp /
+        // PageDown for Browse / Queue / History / Search lists. Each
+        // takes the current view's item count via a small helper to
+        // stay agnostic about which list is on screen.
+        Command {
+            id: "nav.up",
+            title: "Navigate ↑",
+            group: "BROWSING",
+            keys: &["up"],
+            run: |app| {
+                if app.selected > 0 {
+                    app.selected -= 1;
+                }
+            },
+            when: Some(global_nav_view),
+        },
+        Command {
+            id: "nav.down",
+            title: "Navigate ↓",
+            group: "BROWSING",
+            keys: &["down"],
+            run: |app| {
+                use super::app::ViewMode;
+                let item_count = match app.view_mode {
+                    ViewMode::Browse => app.current_screen().item_count(),
+                    ViewMode::Queue => app.cached_info.queue.len(),
+                    ViewMode::History => app.cached_info.history.len(),
+                    _ => 0,
+                };
+                if app.selected + 1 < item_count {
+                    app.selected += 1;
+                }
+            },
+            when: Some(global_nav_view),
+        },
+        Command {
+            id: "nav.home",
+            title: "Jump to first item",
+            group: "BROWSING",
+            keys: &["home"],
+            run: |app| {
+                app.selected = 0;
+            },
+            when: Some(global_nav_view),
+        },
+        Command {
+            id: "nav.end",
+            title: "Jump to last item",
+            group: "BROWSING",
+            keys: &["end"],
+            run: |app| {
+                use super::app::ViewMode;
+                let item_count = match app.view_mode {
+                    ViewMode::Browse => app.current_screen().item_count(),
+                    ViewMode::Queue => app.cached_info.queue.len(),
+                    ViewMode::History => app.cached_info.history.len(),
+                    _ => 0,
+                };
+                app.selected = item_count.saturating_sub(1);
+            },
+            when: Some(global_nav_view),
+        },
+        Command {
+            id: "nav.page_up",
+            title: "Page up (10 rows)",
+            group: "BROWSING",
+            keys: &["pageup"],
+            run: |app| {
+                app.selected = app.selected.saturating_sub(10);
+            },
+            when: Some(global_nav_view),
+        },
+        Command {
+            id: "nav.page_down",
+            title: "Page down (10 rows)",
+            group: "BROWSING",
+            keys: &["pagedown"],
+            run: |app| {
+                use super::app::ViewMode;
+                let item_count = match app.view_mode {
+                    ViewMode::Browse => app.current_screen().item_count(),
+                    ViewMode::Queue => app.cached_info.queue.len(),
+                    ViewMode::History => app.cached_info.history.len(),
+                    _ => 0,
+                };
+                app.selected = (app.selected + 10).min(item_count.saturating_sub(1));
+            },
+            when: Some(global_nav_view),
         },
         // Nudge incoming deck — `[` left, `]` right (hold to keep
         // nudging). Returns the cumulative shift if a beat is captured.

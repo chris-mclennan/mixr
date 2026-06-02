@@ -1161,33 +1161,10 @@ impl App {
             return;
         }
 
-        let item_count = match self.view_mode {
-            ViewMode::Browse => self.current_screen().item_count(),
-            ViewMode::Queue => self.cached_info.queue.len(),
-            ViewMode::History => self.cached_info.history.len(),
-            _ => 0,
-        };
-
+        // item_count was computed here for the legacy Up/Down/Home/
+        // End nav. Now those chords live in `nav.*` commands which
+        // recompute item_count inline.
         match key.code {
-            KeyCode::Up if self.selected > 0 => {
-                self.selected -= 1;
-            }
-            KeyCode::Down if self.selected + 1 < item_count => {
-                self.selected += 1;
-            }
-            KeyCode::Home => {
-                self.selected = 0;
-            }
-            KeyCode::End => {
-                self.selected = item_count.saturating_sub(1);
-            }
-            KeyCode::PageUp => {
-                self.selected = self.selected.saturating_sub(10);
-            }
-            KeyCode::PageDown => {
-                self.selected = (self.selected + 10).min(item_count.saturating_sub(1));
-            }
-
             KeyCode::Esc => {
                 match self.view_mode {
                     ViewMode::Browse => {
