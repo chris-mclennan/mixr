@@ -64,22 +64,39 @@ semantics of `?` / `d` / `b` mid-session). All 6 stub commands have
   input, no filtering, no DJ-ask buffer. The legacy
   `KeyCode::Char('?')` arm in `keys.rs` is gone.
 
-### Phase 2c — ongoing
-Migrate remaining chords. Order of attack (lowest blast-radius first):
-1. Top-level chords that only fire in Dashboard with the same modal
-   guards: `,` (settings), `B` (bail crossfade), `m` (mix now),
-   `n`/`p`/`G`/`A`/`S`/`M`.
-2. Browse-view chords whose behavior is unambiguous: `q` (queue
-   view), `x`/`X` (shuffle / clear).
-3. Mixer-overlay chords (`z`/`Z` to enter, mixer rows inside) —
-   needs a `view_mode == Mixer` guard variant.
-4. Rules editor — its own `when` predicate.
-5. Browse-state navigation (arrows, Enter, `/`) last — most
-   context-dependent.
+### Phase 2c — in progress (18 chords migrated so far)
 
-Each migration is a self-contained diff: one `Command` entry's
-`keys`/`run`/`when` filled in + the matching arm deleted from
-`keys.rs`. Run `cargo test tui::` after each batch.
+**Done:** `?`, `B`, `m`, `G`, `S`, `M`, `p`, `n`, `t`, `T`, `d`, `b`,
+`h`, `,`, `q`, `e`, `x`, `K`. All use `no_modal_capture` (global) or
+`dashboard_normal` (dashboard-nested) guards.
+
+**Still in `keys.rs`** (rough categories):
+- Dashboard-nested with focus-sensitivity: `Up`/`Down`/`Enter`/`Left`/
+  `Right`, `L` (load next), `&` (add to cart), `f`/`*` (favorite),
+  `+`/`-` (rate mix), `A` (AI analyze, async), `1`–`4` (hot cues),
+  `Shift+1..4` (set cue), `Tab` (cycle focus), `z`/`Z` (mixer overlay),
+  `v` (dashboard layout cycle), `/` (DJ ask / search).
+- Top-level multi-context (same chord, different `when` per state):
+  `+`/`=`/`-`/`_` (rate mix vs playlist picker vs ratings),
+  `?` (also `view_mode = Help` outside dashboard — second variant
+  not yet added), `v` (compact view toggle when not Dashboard),
+  `w`/`W` (follow/unfollow artist, async).
+- Browse-state navigation: arrows, Enter, `/`, `Esc`, `Backspace`
+  (during filter), search-result navigation.
+- Hot cue jumps + sets (Shift+1..4 = !@#$).
+- Mixer overlay rows.
+- Rules editor.
+- Compact `v`, history `y` (copy to clipboard), `+` (add to playlist).
+
+### Phase 3 — help auto-gen
+Once enough top-level chords are migrated, replace
+`screens::help_lines()` with a function that walks `registry().all()`
++ reverses `self.keymap`. Mirrors mnml's `app::help::build_help`.
+
+For partial migration, the auto-gen function could prepend the
+registry rows + append a "(hand-maintained legacy)" section with the
+existing `help_lines()` body for un-migrated chords. Drift-free for
+the migrated half; still hand-edited for the rest.
 
 Migration order (lowest-risk first):
 1. **Globally unambiguous chords**: `ctrl+c` (quit) — these have one
