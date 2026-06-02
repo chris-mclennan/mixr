@@ -993,6 +993,54 @@ fn builtin_commands() -> Vec<Command> {
             },
             when: Some(no_modal_capture),
         },
+        // Dashboard `&`: add the mini-browse-highlighted track to the
+        // Beatport cart (only when browse-focused). Mirrors the global
+        // `&` in spirit but acts on dash_browse_sel.
+        Command {
+            id: "dash.add_to_cart",
+            title: "Dashboard: add track to Beatport cart",
+            group: "BROWSING",
+            keys: &["&"],
+            run: |app| {
+                use super::app::DashFocus;
+                if app.dash_focus == DashFocus::Browse
+                    && let Some(track) = app.current_screen().track_at(app.dash_browse_sel)
+                {
+                    app.add_track_to_cart(track.clone());
+                }
+            },
+            when: Some(dashboard_normal),
+        },
+        // Dashboard `f`/`*`: focus-aware favorite. On mini-browse,
+        // favorite the highlighted track; otherwise favorite the
+        // playing deck (with a picker if both decks are loaded).
+        Command {
+            id: "dash.favorite",
+            title: "Dashboard: favorite (track / deck / picker)",
+            group: "BROWSING",
+            keys: &["f", "*"],
+            run: |app| {
+                use super::app::DashFocus;
+                if app.dash_focus == DashFocus::Browse {
+                    if let Some(track) = app.current_screen().track_at(app.dash_browse_sel) {
+                        let track = track.clone();
+                        app.toggle_favorite_track(track);
+                    }
+                } else {
+                    let a_loaded = app.cached_info.deck_a_track.is_some();
+                    let b_loaded = app.cached_info.deck_b_track.is_some();
+                    match (a_loaded, b_loaded) {
+                        (true, true) => {
+                            app.dash_fav_picker = true;
+                        }
+                        (true, false) => app.toggle_favorite_deck(true),
+                        (false, true) => app.toggle_favorite_deck(false),
+                        (false, false) => app.toast.show("Nothing to favorite", 1.0),
+                    }
+                }
+            },
+            when: Some(dashboard_normal),
+        },
         // Toggle favorite on the highlighted track (Browse view).
         // Dashboard `f`/`*` has different focus-aware behavior — that
         // arm is not yet migrated; it lives in keys.rs:739.

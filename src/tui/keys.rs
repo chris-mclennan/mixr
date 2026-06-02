@@ -729,31 +729,8 @@ impl App {
                 // Add to Beatport cart. Same focus model as favorite —
                 // mini-browse panel acts on the highlighted track.
                 // Shift+7 (&) avoids the $ collision with hot cue 4 set.
-                KeyCode::Char('&') => {
-                    if self.dash_focus == DashFocus::Browse
-                        && let Some(track) = self.current_screen().track_at(self.dash_browse_sel)
-                    {
-                        self.add_track_to_cart(track.clone());
-                    }
-                }
-                KeyCode::Char('f') | KeyCode::Char('*') => {
-                    if self.dash_focus == DashFocus::Browse {
-                        if let Some(track) = self.current_screen().track_at(self.dash_browse_sel) {
-                            self.toggle_favorite_track(track.clone());
-                        }
-                    } else {
-                        let a_loaded = self.cached_info.deck_a_track.is_some();
-                        let b_loaded = self.cached_info.deck_b_track.is_some();
-                        match (a_loaded, b_loaded) {
-                            (true, true) => {
-                                self.dash_fav_picker = true;
-                            }
-                            (true, false) => self.toggle_favorite_deck(true),
-                            (false, true) => self.toggle_favorite_deck(false),
-                            (false, false) => self.toast.show("Nothing to favorite", 1.0),
-                        }
-                    }
-                }
+                // Dashboard `&` and `f`/`*` migrated to dash.add_to_cart
+                // and dash.favorite — handled by try_dispatch above.
                 // Rate the most-recent mix for training memory. Only
                 // active on the dashboard — elsewhere `+` opens the
                 // playlist picker. `=` is accepted as an unshifted
