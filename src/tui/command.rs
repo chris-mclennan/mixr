@@ -260,6 +260,32 @@ fn builtin_commands() -> Vec<Command> {
             },
             when: Some(dashboard_normal),
         },
+        // Cycle dashboard focus (Controller → Queue → History → Browse).
+        Command {
+            id: "dash.cycle_focus",
+            title: "Cycle dashboard focus",
+            group: "VIEWS",
+            keys: &["tab"],
+            run: |app| {
+                app.dash_focus = app.dash_focus.next();
+            },
+            when: Some(dashboard_normal),
+        },
+        // Cycle the waveform display mode (phrase/audio/off) when on
+        // the dashboard. Top-level `w` (follow/unfollow artist in
+        // Browse) is unaffected — it falls through.
+        Command {
+            id: "view.cycle_waveform",
+            title: "Cycle waveform mode (phrase/audio/off)",
+            group: "VIEWS",
+            keys: &["w"],
+            run: |app| {
+                app.waveform_mode = app.waveform_mode.next();
+                app.toast
+                    .show(&format!("Waveform: {}", app.waveform_mode.label()), 1.0);
+            },
+            when: Some(dashboard_normal),
+        },
         // Rate the most-recent mix good (only on dashboard — elsewhere
         // `+` / `-` mean other things, e.g. add to playlist, history
         // rating). `=` / `_` accepted as unshifted alternatives.

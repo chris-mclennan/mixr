@@ -665,9 +665,8 @@ impl App {
             }
 
             match key.code {
-                KeyCode::Tab => {
-                    self.dash_focus = self.dash_focus.next();
-                }
+                // Tab (cycle dash_focus) migrated to dash.cycle_focus
+                // — handled by try_dispatch above.
                 KeyCode::Char('d') => {
                     self.view_mode = ViewMode::Browse;
                 }
@@ -683,11 +682,8 @@ impl App {
                         self.view_mode = ViewMode::Browse;
                     }
                 }
-                KeyCode::Char('w') => {
-                    self.waveform_mode = self.waveform_mode.next();
-                    self.toast
-                        .show(&format!("Waveform: {}", self.waveform_mode.label()), 1.0);
-                }
+                // `w` (cycle waveform — dashboard) migrated to
+                // view.cycle_waveform — handled by try_dispatch above.
                 // Cycle dashboard layout: Full → Panel(Queue) →
                 // Panel(History) → Panel(Browse) → Panel(Log) → Full.
                 // Panel keeps the controller pinned and shows just one
