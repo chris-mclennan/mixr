@@ -290,6 +290,71 @@ fn builtin_commands() -> Vec<Command> {
             },
             when: Some(no_modal_capture),
         },
+        // Play / pause the engine.
+        Command {
+            id: "engine.pause",
+            title: "Play / pause",
+            group: "PLAYBACK",
+            keys: &["p"],
+            run: |app| {
+                app.engine.pause();
+                app.toast.show("Play/Pause", 1.0);
+            },
+            when: Some(no_modal_capture),
+        },
+        // Skip the playing track.
+        Command {
+            id: "engine.skip",
+            title: "Skip / next track",
+            group: "PLAYBACK",
+            keys: &["n"],
+            run: |app| {
+                app.engine.skip();
+                app.toast.show("Skipped", 1.0);
+            },
+            when: Some(no_modal_capture),
+        },
+        // Teleport playhead to the next mix point.
+        Command {
+            id: "engine.teleport",
+            title: "Teleport to mix point",
+            group: "PLAYBACK",
+            keys: &["t"],
+            run: |app| {
+                let cfg = app.config.clone();
+                app.engine.teleport(&cfg);
+                app.toast.show("Teleport to mix point", 1.0);
+            },
+            when: Some(no_modal_capture),
+        },
+        // Rewind the last mix (replay / experiment).
+        Command {
+            id: "engine.rewind_last",
+            title: "Rewind last mix (replay/experiment)",
+            group: "PLAYBACK",
+            keys: &["T"],
+            run: |app| {
+                use crate::audio::engine::RewindOutcome;
+                match app.engine.request_rewind() {
+                    Some(RewindOutcome::InPlace) => {
+                        app.toast.show("Rewinding last mix", 2.0);
+                    }
+                    Some(RewindOutcome::NeedLoad(track)) => {
+                        let name = format!("{} - {}", track.artist_name(), track.full_title());
+                        app.download_and_play(std::sync::Arc::new(track), true);
+                        app.toast.show(&format!("Rewinding: {name}"), 2.0);
+                    }
+                    Some(RewindOutcome::Blocked) => {
+                        app.toast
+                            .show("Wait for the current mix to finish before rewinding", 2.5);
+                    }
+                    None => {
+                        app.toast.show("No mix to rewind", 1.5);
+                    }
+                }
+            },
+            when: Some(no_modal_capture),
+        },
         // Cycle the analyzer engine (built-in ⇄ stratum) and
         // re-analyze the playing deck in-place. Used to A/B detectors
         // on a bad mix.

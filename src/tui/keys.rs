@@ -1603,45 +1603,14 @@ impl App {
                 // captured by the prompt (see top of handle_key).
                 self.command_prompt = Some(String::new());
             }
-            KeyCode::Char('p') => {
-                self.engine.pause();
-                self.toast.show("Play/Pause", 1.0);
-            }
-            KeyCode::Char('n') => {
-                self.engine.skip();
-                self.toast.show("Skipped", 1.0);
-            }
+            // `p`, `n`, `t`, `T` migrated to engine.{pause,skip,
+            // teleport,rewind_last} — handled by `try_dispatch` above.
             KeyCode::Char('r') => {
                 // Favorites are metadata-only on main — there's no
                 // local audio to sync. Tracks are re-fetched (in
                 // memory) from Beatport when played.
                 self.toast
                     .show("Favorites are metadata-only on main — no sync needed", 2.5);
-            }
-
-            KeyCode::Char('t') => {
-                self.engine.teleport(&self.config);
-                self.toast.show("Teleport to mix point", 1.0);
-            }
-            KeyCode::Char('T') => {
-                use crate::audio::engine::RewindOutcome;
-                match self.engine.request_rewind() {
-                    Some(RewindOutcome::InPlace) => {
-                        self.toast.show("Rewinding last mix", 2.0);
-                    }
-                    Some(RewindOutcome::NeedLoad(track)) => {
-                        let name = format!("{} - {}", track.artist_name(), track.full_title());
-                        self.download_and_play(std::sync::Arc::new(track), true);
-                        self.toast.show(&format!("Rewinding: {name}"), 2.0);
-                    }
-                    Some(RewindOutcome::Blocked) => {
-                        self.toast
-                            .show("Wait for the current mix to finish before rewinding", 2.5);
-                    }
-                    None => {
-                        self.toast.show("No mix to rewind", 1.5);
-                    }
-                }
             }
             // `G` (cycle analyzer engine + re-grid) migrated to
             // `engine.cycle_analyzer` — handled by `try_dispatch` above.
