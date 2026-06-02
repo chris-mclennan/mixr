@@ -684,38 +684,8 @@ impl App {
                 }
                 // `w` (cycle waveform — dashboard) migrated to
                 // view.cycle_waveform — handled by try_dispatch above.
-                // Cycle dashboard layout: Full → Panel(Queue) →
-                // Panel(History) → Panel(Browse) → Panel(Log) → Full.
-                // Panel keeps the controller pinned and shows just one
-                // secondary section below — short enough to coexist
-                // with another app on the same screen.
-                KeyCode::Char('v') => {
-                    use super::dashboard::{DashLayout, PanelSection};
-                    let (next_layout, next_section, label) =
-                        match (self.dash_layout, self.dash_panel_section) {
-                            (DashLayout::Full, _) => {
-                                (DashLayout::Panel, PanelSection::Queue, "Panel: queue")
-                            }
-                            (DashLayout::Panel, PanelSection::Queue) => {
-                                (DashLayout::Panel, PanelSection::History, "Panel: history")
-                            }
-                            (DashLayout::Panel, PanelSection::History) => {
-                                (DashLayout::Panel, PanelSection::Browse, "Panel: browse")
-                            }
-                            (DashLayout::Panel, PanelSection::Browse) => {
-                                (DashLayout::Panel, PanelSection::Log, "Panel: log")
-                            }
-                            (DashLayout::Panel, PanelSection::Log) => {
-                                (DashLayout::Full, PanelSection::Queue, "Full view")
-                            }
-                        };
-                    self.dash_layout = next_layout;
-                    self.dash_panel_section = next_section;
-                    self.config.dash_layout = next_layout;
-                    self.config.dash_panel_section = next_section;
-                    self.config.save();
-                    self.toast.show(label, 1.0);
-                }
+                // Dashboard `v` (cycle layout) migrated to
+                // view.cycle_dash_layout — handled by try_dispatch.
                 // `?` → `view.help`, `B` → `engine.bail_crossfade`,
                 // `m` → `engine.mix_now`. All migrated to the command
                 // registry in `src/tui/command.rs` and handled by the
@@ -1814,21 +1784,10 @@ impl App {
             // shortcuts and confuse users browsing.
             // `,` → view.settings, `b` → view.browse, `K` → view.midi_learn
             // — handled by `try_dispatch` above.
-            // Dashboard's `v` is dashboard-layout cycle (handled in the
-            // dashboard arm above); skip the compact-view toggle here so
-            // the two don't double-fire.
-            KeyCode::Char('v') if !matches!(self.view_mode, ViewMode::Dashboard) => {
-                self.config.compact_view = !self.config.compact_view;
-                self.config.save();
-                self.toast.show(
-                    if self.config.compact_view {
-                        "Compact view"
-                    } else {
-                        "Full view"
-                    },
-                    1.0,
-                );
-            }
+            // Non-dashboard `v` (toggle compact view) migrated to
+            // view.toggle_compact — handled by try_dispatch above. Two
+            // commands share the `v` chord with mutually-exclusive
+            // `when` predicates (one fires on Dashboard, one off).
             KeyCode::Char('L') => {
                 // Load more (pagination) — works on track, chart, release lists
                 if matches!(self.view_mode, ViewMode::Browse)

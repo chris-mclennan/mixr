@@ -123,25 +123,32 @@ pub fn help_rows() -> Vec<(String, &'static str, &'static str)> {
 /// struct. We resolve to an owned `String` to drop the keymap borrow
 /// before calling the handler.
 pub fn try_dispatch(key: &KeyEvent, app: &mut App) -> bool {
-    let id = match app.keymap.resolve(key) {
-        Some(id) => id.to_string(),
-        None => return false,
-    };
-    // `registry()` is `'static` so resolving the command doesn't borrow
-    // anything from `app`. `when` is `Copy` (it's a fn pointer), so we
-    // can lift it out before borrowing `app` again to invoke it.
-    let Some(cmd) = registry().get(&id) else {
-        return false;
-    };
-    let when = cmd.when;
-    let run = cmd.run;
-    if let Some(w) = when
-        && !w(app)
-    {
+    // Snapshot the resolved ids — the borrow on `app.keymap` has to
+    // be dropped before we hand `app` to a handler. `resolve_all`
+    // returns `&[String]` so a cheap clone is enough.
+    let ids: Vec<String> = app.keymap.resolve_all(key).to_vec();
+    if ids.is_empty() {
         return false;
     }
-    run(app);
-    true
+    // Try each binding in order; run the first whose `when` passes.
+    // `registry()` is `'static` so command lookups don't borrow `app`.
+    // `when` / `run` are `Copy` (fn pointers), liftable before the
+    // mutable borrow.
+    for id in &ids {
+        let Some(cmd) = registry().get(id) else {
+            continue;
+        };
+        let when = cmd.when;
+        let run = cmd.run;
+        if let Some(w) = when
+            && !w(app)
+        {
+            continue;
+        }
+        run(app);
+        return true;
+    }
+    false
 }
 
 // ── Shared `when` predicates ──────────────────────────────────────
@@ -259,6 +266,68 @@ fn builtin_commands() -> Vec<Command> {
                 app.dash_help = !app.dash_help;
             },
             when: Some(dashboard_normal),
+        },
+        // Cycle the dashboard layout: Full → Panel(Queue → History →
+        // Browse → Log) → Full. Saves to config so next launch
+        // restores the user's choice.
+        Command {
+            id: "view.cycle_dash_layout",
+            title: "Cycle dashboard layout",
+            group: "VIEWS",
+            keys: &["v"],
+            run: |app| {
+                use super::dashboard::{DashLayout, PanelSection};
+                let (next_layout, next_section, label) =
+                    match (app.dash_layout, app.dash_panel_section) {
+                        (DashLayout::Full, _) => {
+                            (DashLayout::Panel, PanelSection::Queue, "Panel: queue")
+                        }
+                        (DashLayout::Panel, PanelSection::Queue) => {
+                            (DashLayout::Panel, PanelSection::History, "Panel: history")
+                        }
+                        (DashLayout::Panel, PanelSection::History) => {
+                            (DashLayout::Panel, PanelSection::Browse, "Panel: browse")
+                        }
+                        (DashLayout::Panel, PanelSection::Browse) => {
+                            (DashLayout::Panel, PanelSection::Log, "Panel: log")
+                        }
+                        (DashLayout::Panel, PanelSection::Log) => {
+                            (DashLayout::Full, PanelSection::Queue, "Full view")
+                        }
+                    };
+                app.dash_layout = next_layout;
+                app.dash_panel_section = next_section;
+                app.config.dash_layout = next_layout;
+                app.config.dash_panel_section = next_section;
+                app.config.save();
+                app.toast.show(label, 1.0);
+            },
+            when: Some(dashboard_normal),
+        },
+        // Toggle compact / full track-list rendering. Fires from any
+        // view *except* Dashboard (where `v` cycles the layout). Same
+        // chord, mutually-exclusive `when` predicates.
+        Command {
+            id: "view.toggle_compact",
+            title: "Compact / Full track-list view",
+            group: "VIEWS",
+            keys: &["v"],
+            run: |app| {
+                app.config.compact_view = !app.config.compact_view;
+                app.config.save();
+                app.toast.show(
+                    if app.config.compact_view {
+                        "Compact view"
+                    } else {
+                        "Full view"
+                    },
+                    1.0,
+                );
+            },
+            when: Some(|app| {
+                use super::app::ViewMode;
+                !matches!(app.view_mode, ViewMode::Dashboard) && no_modal_capture(app)
+            }),
         },
         // Cycle dashboard focus (Controller → Queue → History → Browse).
         Command {

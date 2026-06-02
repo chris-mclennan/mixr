@@ -83,18 +83,26 @@ impl Chord {
 
 #[derive(Debug, Clone, Default)]
 pub struct Keymap {
-    map: HashMap<Chord, String>,
+    /// Multi-valued: one chord can resolve to N command ids. The
+    /// dispatcher iterates them in order and runs the first one whose
+    /// `when` guard passes. Lets the same chord (`v`, `?`) mean
+    /// different things in different states.
+    map: HashMap<Chord, Vec<String>>,
 }
 
 impl Keymap {
     /// Defaults from [`crate::tui::command::registry`], then `[keys.global]`
-    /// from `~/.mixr/config.json` (`""` / `"none"` / `"unbound"` removes).
+    /// from `~/.mixr/config.json` (`""` / `"none"` / `"unbound"` removes
+    /// every binding for that chord).
     pub fn build(cfg: &AppConfig) -> Keymap {
         let mut km = Keymap::default();
         for cmd in crate::tui::command::registry().all() {
             for spec in cmd.keys {
                 if let Some(ev) = parse_key_spec(spec) {
-                    km.map.insert(Chord::of(&ev), cmd.id.to_string());
+                    km.map
+                        .entry(Chord::of(&ev))
+                        .or_default()
+                        .push(cmd.id.to_string());
                 }
             }
         }
@@ -109,28 +117,46 @@ impl Keymap {
                 if id.is_empty() || id == "none" || id == "unbound" {
                     km.map.remove(&chord);
                 } else {
-                    km.map.insert(chord, id.to_string());
+                    // Config override replaces the chord's bindings.
+                    km.map.insert(chord, vec![id.to_string()]);
                 }
             }
         }
         km
     }
 
+    /// All command ids bound to `ev`. Empty when nothing matches.
+    /// Ordered by registry insertion (default chords first, config
+    /// overrides replace the list entirely).
+    pub fn resolve_all(&self, ev: &KeyEvent) -> &[String] {
+        self.map
+            .get(&Chord::of(ev))
+            .map(Vec::as_slice)
+            .unwrap_or(&[])
+    }
+
+    /// First command id bound to `ev` (or `None`). Kept for callers
+    /// that don't care about multi-binding (the help screen).
     pub fn resolve(&self, ev: &KeyEvent) -> Option<&str> {
-        self.map.get(&Chord::of(ev)).map(String::as_str)
+        self.resolve_all(ev).first().map(String::as_str)
     }
 
     pub fn binding_count(&self) -> usize {
-        self.map.len()
+        self.map.values().map(Vec::len).sum()
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (&Chord, &str)> {
-        self.map.iter().map(|(c, s)| (c, s.as_str()))
+        self.map
+            .iter()
+            .flat_map(|(c, v)| v.iter().map(move |s| (c, s.as_str())))
     }
 
     pub fn bind(&mut self, spec: &str, id: &str) {
         if let Some(ev) = parse_key_spec(spec) {
-            self.map.insert(Chord::of(&ev), id.to_string());
+            self.map
+                .entry(Chord::of(&ev))
+                .or_default()
+                .push(id.to_string());
         }
     }
 }
