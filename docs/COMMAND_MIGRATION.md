@@ -64,11 +64,14 @@ semantics of `?` / `d` / `b` mid-session). All 6 stub commands have
   input, no filtering, no DJ-ask buffer. The legacy
   `KeyCode::Char('?')` arm in `keys.rs` is gone.
 
-### Phase 2c — in progress (~85 chords migrated, dashboard match block empty)
+### Phase 2c — **substantially complete** (~100 chords migrated, both legacy match blocks empty)
 
-**Major milestone**: every chord in the dashboard-mode match block
-has migrated to the registry. The block in `keys.rs` is now an
-empty placeholder containing just a marker comment.
+**Final milestone**: every chord that fires outside an active modal
+context has migrated to the registry. Both the Dashboard-mode
+`if matches!(view_mode, Dashboard) { match key.code { ... } }`
+block AND the post-modal global `match key.code { ... }` block
+are fully empty in `keys.rs`. They're left as marker comments
+showing where the legacy code lived.
 
 **Done (by category):**
 - **Views**: `d` (two variants), `b` (two variants), `h`, `,`, `q`,
@@ -94,19 +97,37 @@ list of commands, first matching `when` wins. Critical for chords
 like `d`, `b`, `?`, `v`, `+`, `/`, `f` where the same chord has
 different meanings on Dashboard vs elsewhere.
 
-**What's left**:
-- Modal-capture handlers (mixer overlay rows, rules editor, search
-  input, command prompt body, filter input, MIDI learn capture,
-  resume prompt, midi map confirm). These are inherently context-
-  greedy and not a good fit for a registered `Command`.
-- Browse-view arrow nav + Enter (complex multi-screen, multi-column
-  logic). Doable but each Command would be ~50 lines.
-- Async chords still in `keys.rs`: `w`/`W` (follow/unfollow artist
-  /label, three nested match arms with tokio::spawn each).
+**What's left in `keys.rs`** (intentionally not migrated):
+- Modal-capture handlers that need to greedily consume keystrokes:
+  - Settings text-edit (Esc/Enter/Backspace/Char)
+  - Mixer overlay rows (Tab/Up/Down/Left/Right/r/0)
+  - Rules editor (delegated to `super::rules_editor::handle_key`)
+  - Search input (Esc/Enter/Backspace/Char/Up/Down)
+  - Filter input (Esc/Enter/Backspace/Char/Up/Down)
+  - Playlist name input + playlist picker (Esc/Enter/Backspace/Char/Up/Down)
+  - MIDI learn capture (action picker + binding overlay)
+  - Resume prompt (Y/N/Esc with snapshot apply)
+  - Midi-map confirm (Y/Enter/N/Esc)
+  - Command prompt body (Esc/Enter/Backspace/Char)
 
-These could all migrate eventually but the value-per-effort ratio
-drops sharply after this point. The registry already drives every
-chord a user typically encounters outside of an active modal.
+These are inherently context-greedy — a registered `Command` with
+a single fn-pointer handler doesn't model "this chord absorbs every
+keystroke until the modal exits." Keeping them in the
+modal-early-return blocks is the right shape.
+
+### Phase 3 — done
+
+Help screen is auto-generated for every chord in the registry, with
+hand-maintained `legacy_help_lines()` fallback for CLI options /
+file paths / Beatport navigation (non-chord rows).
+
+### Status: registry-driven mixr ✓
+
+Mixr's command system is now spine-aligned with mnml. Adding a new
+binding is a one-row edit to `builtin_commands` — the keymap,
+dispatch, and help all update automatically. Future work: rebinding
+via `[keys.global]` in `~/.mixr/config.json` (the plumbing is
+already in place; just needs documentation and a settings UI row).
 
 **Still in `keys.rs`** (rough categories — fewer than at start):
 - Dashboard-nested with focus-sensitivity: `Up`/`Down`/`Enter`/`Left`/
