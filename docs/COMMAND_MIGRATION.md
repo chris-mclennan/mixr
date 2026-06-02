@@ -51,13 +51,35 @@ yet called from `handle_key`** (one wrong move there would change the
 semantics of `?` / `d` / `b` mid-session). All 6 stub commands have
 `when: None` for now since their handlers are still no-ops.
 
-### Phase 2b — next session
-Wire `if try_dispatch(&self.keymap, &key, self) { return; }` into
-`handle_key` immediately *after* the modal early-returns
-(`pending_midi_map`, `pending_confirm`, `command_prompt`, prompts) and
-*before* the per-view match. Then migrate bindings one context group
-at a time, replacing the legacy match arm with a real `Command` handler
-+ a `when` guard that captures the context the legacy match was inside.
+### Phase 2b — done
+- `App.keymap: Keymap` field added + built from config in `App::new`.
+- `try_dispatch(&KeyEvent, &mut App)` signature refactored to take
+  `&mut App` (the borrow-split problem — `Keymap` lives inside `App`).
+- `handle_key` calls `try_dispatch` immediately after the modal
+  early-returns (`pending_midi_map`, `pending_confirm`,
+  `command_prompt`, `pending_resume_prompt`) and before the per-view
+  match.
+- **First chord migrated**: `?` → `view.help`. Handler toggles
+  `app.dash_help`. `when` guard: Dashboard view, no modal capturing
+  input, no filtering, no DJ-ask buffer. The legacy
+  `KeyCode::Char('?')` arm in `keys.rs` is gone.
+
+### Phase 2c — ongoing
+Migrate remaining chords. Order of attack (lowest blast-radius first):
+1. Top-level chords that only fire in Dashboard with the same modal
+   guards: `,` (settings), `B` (bail crossfade), `m` (mix now),
+   `n`/`p`/`G`/`A`/`S`/`M`.
+2. Browse-view chords whose behavior is unambiguous: `q` (queue
+   view), `x`/`X` (shuffle / clear).
+3. Mixer-overlay chords (`z`/`Z` to enter, mixer rows inside) —
+   needs a `view_mode == Mixer` guard variant.
+4. Rules editor — its own `when` predicate.
+5. Browse-state navigation (arrows, Enter, `/`) last — most
+   context-dependent.
+
+Each migration is a self-contained diff: one `Command` entry's
+`keys`/`run`/`when` filled in + the matching arm deleted from
+`keys.rs`. Run `cargo test tui::` after each batch.
 
 Migration order (lowest-risk first):
 1. **Globally unambiguous chords**: `ctrl+c` (quit) — these have one

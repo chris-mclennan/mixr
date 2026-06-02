@@ -278,6 +278,11 @@ pub struct App {
     pub waveform_mode: WaveformMode,
     pub(crate) status_writer: crate::ipc::StatusWriter,
 
+    /// Resolved key bindings — chord → command id. Built from the
+    /// [`crate::tui::command`] registry at startup and overlaid with
+    /// `config.keys["global"]`. See `docs/COMMAND_MIGRATION.md`.
+    pub(crate) keymap: super::keymap::Keymap,
+
     // Browse navigation — stack of screens
     pub(crate) screen_stack: Vec<BrowseScreen>,
     /// Saved cursor positions for parent screens. Pushed when drilling
@@ -638,11 +643,13 @@ impl App {
         // into the struct — restores the user's last `v`-cycle choice.
         let initial_dash_layout = config.dash_layout;
         let initial_dash_panel_section = config.dash_panel_section;
+        let keymap = super::keymap::Keymap::build(&config);
         let mut app = Self {
             config,
             engine,
             toast: Toast::new(),
             status_writer: crate::ipc::StatusWriter::new(),
+            keymap,
             waveform_mode: WaveformMode::Phrase,
             screen_stack: vec![catalog::root_screen_v3(
                 local_lib_present,

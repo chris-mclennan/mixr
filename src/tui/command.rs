@@ -25,7 +25,6 @@ use std::collections::HashMap;
 use std::sync::OnceLock;
 
 use super::app::App;
-use super::keymap::Keymap;
 
 pub type CommandFn = fn(&mut App);
 /// Context predicate. Returns true when the command is eligible to fire
@@ -99,26 +98,34 @@ pub fn run(id: &str, app: &mut App) -> bool {
     }
 }
 
-/// Look up `key` in `keymap`, resolve the resulting id in the registry,
-/// check the command's `when` guard, and run it. Returns `true` when
-/// dispatched — the caller (typically `App::handle_key`) should then
-/// `return` so the legacy match doesn't double-fire.
+/// Look up `key` in `app.keymap`, resolve the resulting id in the
+/// registry, check the command's `when` guard, and run it. Returns
+/// `true` when dispatched — the caller (typically `App::handle_key`)
+/// should then `return` so the legacy match doesn't double-fire.
 ///
-/// Not yet called from `handle_key`; staged for the next migration
-/// phase. See `docs/COMMAND_MIGRATION.md`.
-pub fn try_dispatch(keymap: &Keymap, key: &KeyEvent, app: &mut App) -> bool {
-    let Some(id) = keymap.resolve(key) else {
+/// Takes `&mut App` (not a separate `&Keymap`) because `Keymap` lives
+/// inside `App` and Rust can't split-borrow it from the rest of the
+/// struct. We resolve to an owned `String` to drop the keymap borrow
+/// before calling the handler.
+pub fn try_dispatch(key: &KeyEvent, app: &mut App) -> bool {
+    let id = match app.keymap.resolve(key) {
+        Some(id) => id.to_string(),
+        None => return false,
+    };
+    // `registry()` is `'static` so resolving the command doesn't borrow
+    // anything from `app`. `when` is `Copy` (it's a fn pointer), so we
+    // can lift it out before borrowing `app` again to invoke it.
+    let Some(cmd) = registry().get(&id) else {
         return false;
     };
-    let Some(cmd) = registry().get(id) else {
-        return false;
-    };
-    if let Some(when) = cmd.when
-        && !when(app)
+    let when = cmd.when;
+    let run = cmd.run;
+    if let Some(w) = when
+        && !w(app)
     {
         return false;
     }
-    (cmd.run)(app);
+    run(app);
     true
 }
 
@@ -131,11 +138,15 @@ pub fn try_dispatch(keymap: &Keymap, key: &KeyEvent, app: &mut App) -> bool {
 /// See `docs/COMMAND_MIGRATION.md` for the porting checklist.
 fn builtin_commands() -> Vec<Command> {
     vec![
+        // Stubs without default keys — present in the registry so the
+        // command palette / help list knows about them, but not yet
+        // bound (and not yet implemented). Default `keys` get filled
+        // in as each chord migrates from `keys.rs`.
         Command {
             id: "view.dashboard",
             title: "Dashboard (live mix view)",
             group: "VIEWS",
-            keys: &["d"],
+            keys: &[],
             run: |_app| { /* TODO: migrate from keys.rs */ },
             when: None,
         },
@@ -143,7 +154,7 @@ fn builtin_commands() -> Vec<Command> {
             id: "view.browse",
             title: "Browse library",
             group: "VIEWS",
-            keys: &["b"],
+            keys: &[],
             run: |_app| { /* TODO: migrate from keys.rs */ },
             when: None,
         },
@@ -151,7 +162,7 @@ fn builtin_commands() -> Vec<Command> {
             id: "view.history",
             title: "Play history",
             group: "VIEWS",
-            keys: &["h"],
+            keys: &[],
             run: |_app| { /* TODO: migrate from keys.rs */ },
             when: None,
         },
@@ -159,15 +170,7 @@ fn builtin_commands() -> Vec<Command> {
             id: "view.settings",
             title: "Settings",
             group: "VIEWS",
-            keys: &[","],
-            run: |_app| { /* TODO: migrate from keys.rs */ },
-            when: None,
-        },
-        Command {
-            id: "view.help",
-            title: "This help",
-            group: "VIEWS",
-            keys: &["?"],
+            keys: &[],
             run: |_app| { /* TODO: migrate from keys.rs */ },
             when: None,
         },
@@ -175,9 +178,34 @@ fn builtin_commands() -> Vec<Command> {
             id: "app.quit",
             title: "Quit mixr",
             group: "APP",
-            keys: &["ctrl+c"],
+            // ctrl+c is caught by the event loop in main.rs (before
+            // handle_key); this row is here for the help listing only.
+            keys: &[],
             run: |_app| { /* TODO: migrate from keys.rs */ },
             when: None,
+        },
+        // First fully-migrated command. Toggles the dashboard's inline
+        // help legend. Active only when on Dashboard and no modal is
+        // capturing input — the legacy `KeyCode::Char('?')` arm at
+        // `keys.rs` would have been gated on the same conditions.
+        Command {
+            id: "view.help",
+            title: "Toggle dashboard help legend",
+            group: "VIEWS",
+            keys: &["?"],
+            run: |app| {
+                app.dash_help = !app.dash_help;
+            },
+            when: Some(|app| {
+                use super::app::ViewMode;
+                matches!(app.view_mode, ViewMode::Dashboard)
+                    && !app.dash_fav_picker
+                    && !app.dj_asking
+                    && !app.filtering
+                    && app.command_prompt.is_none()
+                    && app.pending_midi_map.is_none()
+                    && app.pending_confirm.is_none()
+            }),
         },
     ]
 }

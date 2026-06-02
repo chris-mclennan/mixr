@@ -602,6 +602,14 @@ impl App {
             }
         }
 
+        // Command dispatch — chord → registry. Bindings migrate out of
+        // the per-view-mode matches below one at a time; see
+        // `docs/COMMAND_MIGRATION.md`. When a chord matches a migrated
+        // `Command` whose `when` guard passes, we run it and return.
+        if super::command::try_dispatch(&key, self) {
+            return;
+        }
+
         // Dashboard mode
         if matches!(self.view_mode, ViewMode::Dashboard) {
             // Favorite-deck picker: triggered when user presses `f` on
@@ -712,9 +720,8 @@ impl App {
                     self.config.save();
                     self.toast.show(label, 1.0);
                 }
-                KeyCode::Char('?') => {
-                    self.dash_help = !self.dash_help;
-                }
+                // `?` (toggle dash_help) migrated to `view.help` in
+                // src/tui/command.rs — handled by `try_dispatch` above.
                 // Manual panic / train-wreck bail. Forces the in-progress
                 // crossfade onto EchoOut to salvage a bad mix. No-op
                 // when not currently crossfading.

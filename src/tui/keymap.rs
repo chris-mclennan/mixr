@@ -231,12 +231,17 @@ mod tests {
     }
 
     #[test]
-    fn default_keymap_has_builtin_chords() {
+    fn default_keymap_resolves_migrated_chords() {
+        // Only commands with non-empty `keys` end up in the keymap.
+        // As bindings migrate out of `keys.rs` (see
+        // `docs/COMMAND_MIGRATION.md`), more chords will land here.
         let km = Keymap::build(&AppConfig::default());
         let ev = |s: &str| parse_key_spec(s).unwrap();
-        assert_eq!(km.resolve(&ev("ctrl+c")), Some("app.quit"));
+        // `view.help` is the first migrated chord.
         assert_eq!(km.resolve(&ev("?")), Some("view.help"));
-        assert_eq!(km.resolve(&ev(",")), Some("view.settings"));
-        assert_eq!(km.resolve(&ev("d")), Some("view.dashboard"));
+        // Unmigrated chords still live in `keys.rs` — keymap doesn't
+        // know about them yet.
+        assert_eq!(km.resolve(&ev("d")), None);
+        assert_eq!(km.resolve(&ev(",")), None);
     }
 }
