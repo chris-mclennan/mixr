@@ -705,45 +705,8 @@ impl App {
                 // above with a `dashboard_normal` guard so the
                 // history-view + browse-view `+`/`-` arms below still
                 // fire in those modes.
-                KeyCode::Up => {
-                    if self.dash_focus == DashFocus::Controller {
-                        self.dash_section = self.dash_section.prev();
-                    } else if self.dash_focus == DashFocus::Browse && self.dash_browse_sel > 0 {
-                        self.dash_browse_sel -= 1;
-                    } else if self.dash_focus == DashFocus::Log {
-                        // Scroll back through log history. Capped at
-                        // 1000 to avoid runaway when the log is huge.
-                        self.log_scroll_offset = (self.log_scroll_offset + 1).min(1000);
-                    }
-                }
-                KeyCode::Down => {
-                    if self.dash_focus == DashFocus::Controller {
-                        self.dash_section = self.dash_section.next();
-                    } else if self.dash_focus == DashFocus::Browse {
-                        let count = self.current_screen().item_count();
-                        if self.dash_browse_sel + 1 < count.min(8) {
-                            self.dash_browse_sel += 1;
-                        }
-                    } else if self.dash_focus == DashFocus::Log && self.log_scroll_offset > 0 {
-                        self.log_scroll_offset -= 1;
-                    }
-                }
-                KeyCode::Enter | KeyCode::Right => {
-                    if self.dash_focus == DashFocus::Controller {
-                        self.handle_deck_control(1);
-                    } else if self.dash_focus == DashFocus::Browse {
-                        self.selected = self.dash_browse_sel;
-                        self.handle_browse_enter();
-                        self.dash_browse_sel = 0;
-                    }
-                }
-                KeyCode::Left => {
-                    if self.dash_focus == DashFocus::Controller {
-                        self.handle_deck_control(-1);
-                    } else if self.dash_focus == DashFocus::Browse && self.screen_stack.len() > 1 {
-                        self.pop_screen();
-                    }
-                }
+                // Dashboard arrows (Up/Down/Enter/Right/Left) migrated
+                // to dash.{up,down,right,left} — handled by try_dispatch.
                 // Dashboard `/` migrated to dash.slash — handled by
                 // try_dispatch above.
                 // Dashboard `A` (AI analyze) → engine.ai_analyze,
@@ -1671,7 +1634,7 @@ impl App {
         }
     }
 
-    fn handle_deck_control(&mut self, direction: i32) {
+    pub(crate) fn handle_deck_control(&mut self, direction: i32) {
         let jb = self.config.jump_bars as i32;
         match self.dash_section {
             CtrlSection::CueA | CtrlSection::JumpA => {

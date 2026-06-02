@@ -1070,6 +1070,77 @@ fn builtin_commands() -> Vec<Command> {
             },
             when: Some(no_modal_capture),
         },
+        // Dashboard arrows — focus-aware (Controller cycles sections,
+        // Browse moves cursor, Log scrolls history).
+        Command {
+            id: "dash.up",
+            title: "Dashboard ↑",
+            group: "VIEWS",
+            keys: &["up"],
+            run: |app| {
+                use super::app::DashFocus;
+                if app.dash_focus == DashFocus::Controller {
+                    app.dash_section = app.dash_section.prev();
+                } else if app.dash_focus == DashFocus::Browse && app.dash_browse_sel > 0 {
+                    app.dash_browse_sel -= 1;
+                } else if app.dash_focus == DashFocus::Log {
+                    app.log_scroll_offset = (app.log_scroll_offset + 1).min(1000);
+                }
+            },
+            when: Some(dashboard_normal),
+        },
+        Command {
+            id: "dash.down",
+            title: "Dashboard ↓",
+            group: "VIEWS",
+            keys: &["down"],
+            run: |app| {
+                use super::app::DashFocus;
+                if app.dash_focus == DashFocus::Controller {
+                    app.dash_section = app.dash_section.next();
+                } else if app.dash_focus == DashFocus::Browse {
+                    let count = app.current_screen().item_count();
+                    if app.dash_browse_sel + 1 < count.min(8) {
+                        app.dash_browse_sel += 1;
+                    }
+                } else if app.dash_focus == DashFocus::Log && app.log_scroll_offset > 0 {
+                    app.log_scroll_offset -= 1;
+                }
+            },
+            when: Some(dashboard_normal),
+        },
+        Command {
+            id: "dash.right",
+            title: "Dashboard Enter / →",
+            group: "VIEWS",
+            keys: &["enter", "right"],
+            run: |app| {
+                use super::app::DashFocus;
+                if app.dash_focus == DashFocus::Controller {
+                    app.handle_deck_control(1);
+                } else if app.dash_focus == DashFocus::Browse {
+                    app.selected = app.dash_browse_sel;
+                    app.handle_browse_enter();
+                    app.dash_browse_sel = 0;
+                }
+            },
+            when: Some(dashboard_normal),
+        },
+        Command {
+            id: "dash.left",
+            title: "Dashboard ←",
+            group: "VIEWS",
+            keys: &["left"],
+            run: |app| {
+                use super::app::DashFocus;
+                if app.dash_focus == DashFocus::Controller {
+                    app.handle_deck_control(-1);
+                } else if app.dash_focus == DashFocus::Browse && app.screen_stack.len() > 1 {
+                    app.pop_screen();
+                }
+            },
+            when: Some(dashboard_normal),
+        },
         // Dashboard `Esc`: context-dependent.
         //   waveform_zoom set    → clear it
         //   browse focus + drill → pop_screen (restore selection)
