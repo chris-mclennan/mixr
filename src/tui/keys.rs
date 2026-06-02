@@ -1510,64 +1510,12 @@ impl App {
             // Loop hotkeys. `i` toggles a 4-beat loop on the playing
             // deck (most common length). Shift+number gives different
             // beat lengths: I/O double/halve, J/K/L for 1/4/8 beats.
-            KeyCode::Char('i') => {
-                self.engine.loop_toggle_playing(4.0);
-                self.toast.show("Loop 4 beats", 1.0);
-            }
-            KeyCode::Char('I') => {
-                self.engine.loop_toggle_playing(8.0);
-                self.toast.show("Loop 8 beats", 1.0);
-            }
-            KeyCode::Char('u') => {
-                self.engine.loop_toggle_playing(1.0);
-                self.toast.show("Loop 1 beat", 1.0);
-            }
-            KeyCode::Char('U') => {
-                self.engine.loop_toggle_playing(2.0);
-                self.toast.show("Loop 2 beats", 1.0);
-            }
-            KeyCode::Char('O') => {
-                self.engine.loop_toggle_playing(16.0);
-                self.toast.show("Loop 16 beats", 1.0);
-            }
-
-            KeyCode::Char(';') => {
-                self.engine.shift_grid_active(-2.0);
-                self.toast.show("Grid ◀ -2ms", 0.5);
-            }
-            KeyCode::Char('\'') => {
-                self.engine.shift_grid_active(2.0);
-                self.toast.show("Grid ▶ +2ms", 0.5);
-            }
-            // Whole-beat grid shifts on `(` and `)` — use when the 1s
-            // don't land together (grid origin wrong by a beat) and
-            // the 2ms fine-shift can't cover the gap. Moved off `:`
-            // and `"` to free `:` for the command-mode prompt
-            // (vim-style entry).
-            KeyCode::Char('(') => {
-                self.engine.shift_grid_active_beats(-1);
-                self.toast.show("Grid ◀ -1 beat", 0.8);
-            }
-            KeyCode::Char(')') => {
-                self.engine.shift_grid_active_beats(1);
-                self.toast.show("Grid ▶ +1 beat", 0.8);
-            }
-
-            KeyCode::Char('<') => {
-                let bars = self.config.jump_bars as i32;
-                self.engine.jump(-bars);
-                self.toast.show(&format!("Jump -{bars} bars"), 1.0);
-            }
-            KeyCode::Char('>') => {
-                let bars = self.config.jump_bars as i32;
-                self.engine.jump(bars);
-                self.toast.show(&format!("Jump +{bars} bars"), 1.0);
-            }
-            KeyCode::Char(':') => {
-                // Open the command-prompt overlay. Subsequent keys are
-                // captured by the prompt (see top of handle_key).
-                self.command_prompt = Some(String::new());
-            }
+            // i / I / u / U / O (loop toggles 4/8/1/2/16 beats),
+            // ; / ' (grid shift ±2ms), ( / ) (grid shift ±1 beat),
+            // < / > (jump bars), : (command prompt). All migrated to
+            // the registry — see engine.loop_*, engine.grid_shift_*,
+            // engine.jump_*_bars, prompt.command. Handled by
+            // try_dispatch above.
             // `p`, `n`, `t`, `T` migrated to engine.{pause,skip,
             // teleport,rewind_last} — handled by `try_dispatch` above.
             KeyCode::Char('r') => {
@@ -1843,9 +1791,7 @@ impl App {
                 self.view_mode = ViewMode::ClaudeDj;
                 self.scroll_offset = 0;
             }
-            KeyCode::Char('C') => {
-                self.toggle_claude_dj();
-            }
+            // `C` (toggle Claude DJ) migrated to claude.toggle.
             _ => {}
         }
 

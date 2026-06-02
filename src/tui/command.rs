@@ -572,6 +572,157 @@ fn builtin_commands() -> Vec<Command> {
             },
             when: Some(no_modal_capture),
         },
+        // Quantized loop toggles — i/u/U/I/O = 4/1/2/8/16 beats.
+        Command {
+            id: "engine.loop_4",
+            title: "Loop 4 beats (quantized, toggle)",
+            group: "PLAYBACK",
+            keys: &["i"],
+            run: |app| {
+                app.engine.loop_toggle_playing(4.0);
+                app.toast.show("Loop 4 beats", 1.0);
+            },
+            when: Some(no_modal_capture),
+        },
+        Command {
+            id: "engine.loop_8",
+            title: "Loop 8 beats (quantized, toggle)",
+            group: "PLAYBACK",
+            keys: &["I"],
+            run: |app| {
+                app.engine.loop_toggle_playing(8.0);
+                app.toast.show("Loop 8 beats", 1.0);
+            },
+            when: Some(no_modal_capture),
+        },
+        Command {
+            id: "engine.loop_1",
+            title: "Loop 1 beat (quantized, toggle)",
+            group: "PLAYBACK",
+            keys: &["u"],
+            run: |app| {
+                app.engine.loop_toggle_playing(1.0);
+                app.toast.show("Loop 1 beat", 1.0);
+            },
+            when: Some(no_modal_capture),
+        },
+        Command {
+            id: "engine.loop_2",
+            title: "Loop 2 beats (quantized, toggle)",
+            group: "PLAYBACK",
+            keys: &["U"],
+            run: |app| {
+                app.engine.loop_toggle_playing(2.0);
+                app.toast.show("Loop 2 beats", 1.0);
+            },
+            when: Some(no_modal_capture),
+        },
+        Command {
+            id: "engine.loop_16",
+            title: "Loop 16 beats (quantized, toggle)",
+            group: "PLAYBACK",
+            keys: &["O"],
+            run: |app| {
+                app.engine.loop_toggle_playing(16.0);
+                app.toast.show("Loop 16 beats", 1.0);
+            },
+            when: Some(no_modal_capture),
+        },
+        // Beat-grid fine shifts (±2ms) on `;` / `'`. Use when the 1s
+        // don't quite land together.
+        Command {
+            id: "engine.grid_shift_back_2ms",
+            title: "Shift beat grid -2ms (phase fix)",
+            group: "PLAYBACK",
+            keys: &[";"],
+            run: |app| {
+                app.engine.shift_grid_active(-2.0);
+                app.toast.show("Grid ◀ -2ms", 0.5);
+            },
+            when: Some(no_modal_capture),
+        },
+        Command {
+            id: "engine.grid_shift_fwd_2ms",
+            title: "Shift beat grid +2ms (phase fix)",
+            group: "PLAYBACK",
+            keys: &["'"],
+            run: |app| {
+                app.engine.shift_grid_active(2.0);
+                app.toast.show("Grid ▶ +2ms", 0.5);
+            },
+            when: Some(no_modal_capture),
+        },
+        // Whole-beat shifts (±1 beat) on `(` / `)`. Use when grid
+        // origin is off by a beat (downbeat fix).
+        Command {
+            id: "engine.grid_shift_back_beat",
+            title: "Shift beat grid -1 beat (downbeat fix)",
+            group: "PLAYBACK",
+            keys: &["("],
+            run: |app| {
+                app.engine.shift_grid_active_beats(-1);
+                app.toast.show("Grid ◀ -1 beat", 0.8);
+            },
+            when: Some(no_modal_capture),
+        },
+        Command {
+            id: "engine.grid_shift_fwd_beat",
+            title: "Shift beat grid +1 beat (downbeat fix)",
+            group: "PLAYBACK",
+            keys: &[")"],
+            run: |app| {
+                app.engine.shift_grid_active_beats(1);
+                app.toast.show("Grid ▶ +1 beat", 0.8);
+            },
+            when: Some(no_modal_capture),
+        },
+        // Jump N bars back / forward (N from config).
+        Command {
+            id: "engine.jump_back_bars",
+            title: "Jump back N bars",
+            group: "PLAYBACK",
+            keys: &["<"],
+            run: |app| {
+                let bars = app.config.jump_bars as i32;
+                app.engine.jump(-bars);
+                app.toast.show(&format!("Jump -{bars} bars"), 1.0);
+            },
+            when: Some(no_modal_capture),
+        },
+        Command {
+            id: "engine.jump_fwd_bars",
+            title: "Jump forward N bars",
+            group: "PLAYBACK",
+            keys: &[">"],
+            run: |app| {
+                let bars = app.config.jump_bars as i32;
+                app.engine.jump(bars);
+                app.toast.show(&format!("Jump +{bars} bars"), 1.0);
+            },
+            when: Some(no_modal_capture),
+        },
+        // Open the `:` command prompt overlay.
+        Command {
+            id: "prompt.command",
+            title: "Open command prompt (vim-style :)",
+            group: "APP",
+            keys: &[":"],
+            run: |app| {
+                app.command_prompt = Some(String::new());
+            },
+            when: Some(no_modal_capture),
+        },
+        // Toggle Claude DJ.
+        Command {
+            id: "claude.toggle",
+            title: "Toggle Claude DJ on/off",
+            group: "APP",
+            keys: &["C"],
+            run: |app| {
+                app.toggle_claude_dj();
+            },
+            when: Some(no_modal_capture),
+        },
         // Cycle the analyzer engine (built-in ⇄ stratum) and
         // re-analyze the playing deck in-place. Used to A/B detectors
         // on a bad mix.
