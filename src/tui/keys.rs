@@ -1786,18 +1786,8 @@ impl App {
                     self.toast.show("Moved", 0.5);
                 }
             }
-            KeyCode::Char('q') => {
-                self.view_mode = ViewMode::Queue;
-                self.selected = 0;
-                self.queue_grab_index = None;
-            }
-            KeyCode::Char('h') => {
-                self.view_mode = ViewMode::History;
-                self.selected = 0;
-            }
-            KeyCode::Char('d') => {
-                self.view_mode = ViewMode::Dashboard;
-            }
+            // `q`/`h`/`d` (view switchers) migrated to view.{queue,
+            // history,dashboard} — handled by `try_dispatch` above.
             KeyCode::Char('/') | KeyCode::Char('s') => {
                 self.view_mode = ViewMode::Search;
                 self.search_query.clear();
@@ -1838,18 +1828,12 @@ impl App {
             // handler above (`if matches!(ViewMode::Dashboard)`) for the
             // real z/Z binding; out here it'd collide with per-mode
             // shortcuts and confuse users browsing.
-            KeyCode::Char(',') => {
-                self.view_mode = ViewMode::Settings;
-                self.selected = 0;
-            }
+            // `,` → view.settings, `b` → view.browse — handled by
+            // `try_dispatch` above.
             KeyCode::Char('K') => {
                 self.view_mode = ViewMode::MidiLearn;
                 self.midi_learn_action_sel = 0;
                 self.midi_learn_captured = None;
-            }
-            KeyCode::Char('b') => {
-                self.view_mode = ViewMode::Browse;
-                self.selected = 0;
             }
             // Dashboard's `v` is dashboard-layout cycle (handled in the
             // dashboard arm above); skip the compact-view toggle here so

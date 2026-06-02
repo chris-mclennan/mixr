@@ -171,33 +171,56 @@ fn builtin_commands() -> Vec<Command> {
             id: "view.dashboard",
             title: "Dashboard (live mix view)",
             group: "VIEWS",
-            keys: &[],
-            run: |_app| { /* TODO: migrate from keys.rs */ },
-            when: None,
+            keys: &["d"],
+            run: |app| {
+                app.view_mode = super::app::ViewMode::Dashboard;
+            },
+            when: Some(no_modal_capture),
         },
         Command {
             id: "view.browse",
             title: "Browse library",
             group: "VIEWS",
-            keys: &[],
-            run: |_app| { /* TODO: migrate from keys.rs */ },
-            when: None,
+            keys: &["b"],
+            run: |app| {
+                app.view_mode = super::app::ViewMode::Browse;
+                app.selected = 0;
+            },
+            when: Some(no_modal_capture),
         },
         Command {
             id: "view.history",
             title: "Play history",
             group: "VIEWS",
-            keys: &[],
-            run: |_app| { /* TODO: migrate from keys.rs */ },
-            when: None,
+            keys: &["h"],
+            run: |app| {
+                app.view_mode = super::app::ViewMode::History;
+                app.selected = 0;
+            },
+            when: Some(no_modal_capture),
         },
         Command {
             id: "view.settings",
             title: "Settings",
             group: "VIEWS",
-            keys: &[],
-            run: |_app| { /* TODO: migrate from keys.rs */ },
-            when: None,
+            keys: &[","],
+            run: |app| {
+                app.view_mode = super::app::ViewMode::Settings;
+                app.selected = 0;
+            },
+            when: Some(no_modal_capture),
+        },
+        Command {
+            id: "view.queue",
+            title: "Queue view",
+            group: "VIEWS",
+            keys: &["q"],
+            run: |app| {
+                app.view_mode = super::app::ViewMode::Queue;
+                app.selected = 0;
+                app.queue_grab_index = None;
+            },
+            when: Some(no_modal_capture),
         },
         Command {
             id: "app.quit",

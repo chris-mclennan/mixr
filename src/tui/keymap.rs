@@ -234,14 +234,16 @@ mod tests {
     fn default_keymap_resolves_migrated_chords() {
         // Only commands with non-empty `keys` end up in the keymap.
         // As bindings migrate out of `keys.rs` (see
-        // `docs/COMMAND_MIGRATION.md`), more chords will land here.
+        // `docs/COMMAND_MIGRATION.md`), more chords land here.
         let km = Keymap::build(&AppConfig::default());
         let ev = |s: &str| parse_key_spec(s).unwrap();
-        // `view.help` is the first migrated chord.
         assert_eq!(km.resolve(&ev("?")), Some("view.help"));
-        // Unmigrated chords still live in `keys.rs` — keymap doesn't
-        // know about them yet.
-        assert_eq!(km.resolve(&ev("d")), None);
-        assert_eq!(km.resolve(&ev(",")), None);
+        assert_eq!(km.resolve(&ev("d")), Some("view.dashboard"));
+        assert_eq!(km.resolve(&ev("b")), Some("view.browse"));
+        assert_eq!(km.resolve(&ev("h")), Some("view.history"));
+        assert_eq!(km.resolve(&ev(",")), Some("view.settings"));
+        assert_eq!(km.resolve(&ev("q")), Some("view.queue"));
+        assert_eq!(km.resolve(&ev("p")), Some("engine.pause"));
+        assert_eq!(km.resolve(&ev("m")), Some("engine.mix_now"));
     }
 }
