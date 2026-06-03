@@ -275,6 +275,10 @@ pub struct App {
     pub config: AppConfig,
     pub engine: MixEngine,
     pub toast: Toast,
+    /// Background "is there a newer release?" probe. Set on launch
+    /// by `main.rs`; `tick` polls it and surfaces a one-shot toast
+    /// when a newer GitHub tag exists. See `src/update_check.rs`.
+    pub update_check: Option<std::sync::Arc<crate::update_check::UpdateCheck>>,
     pub waveform_mode: WaveformMode,
     pub(crate) status_writer: crate::ipc::StatusWriter,
 
@@ -648,6 +652,7 @@ impl App {
             config,
             engine,
             toast: Toast::new(),
+            update_check: None,
             status_writer: crate::ipc::StatusWriter::new(),
             keymap,
             waveform_mode: WaveformMode::Phrase,
@@ -2183,6 +2188,27 @@ impl App {
     /// recent segment's screen has been pushed (either synchronously or
     /// via an async `AppAction::PushScreen`) before firing the next
     /// segment. Times out after ~3s so a failed load doesn't hang state.
+    /// Surface a one-shot toast when the background update-check has
+    /// resolved with a newer version than `CARGO_PKG_VERSION`. No-op
+    /// once the toast has fired this session.
+    fn maybe_announce_update(&mut self) {
+        let Some(uc) = self.update_check.as_ref() else {
+            return;
+        };
+        let Some(latest) = uc.take_pending_announcement() else {
+            return;
+        };
+        // 12s toast — the message carries a URL, give the user time
+        // to read + open it.
+        self.toast.show(
+            &format!(
+                "mixr v{latest} available — {}",
+                crate::update_check::UpdateCheck::release_url(&latest),
+            ),
+            12.0,
+        );
+    }
+
     pub(crate) fn browse_path_tick(&mut self) {
         let Some(mut state) = self.browse_path_state.take() else {
             return;
@@ -2952,6 +2978,10 @@ impl App {
     }
 
     pub async fn tick(&mut self) {
+        // Background update check — one-shot toast first time a newer
+        // GitHub tag resolves.
+        self.maybe_announce_update();
+
         // Advance any in-flight browse-path state machine first. This
         // runs before engine/IPC work so a still-loading drill-in has a
         // chance to see freshly-arrived screens and fire the next segment

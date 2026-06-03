@@ -12,6 +12,7 @@ mod midi;
 mod platform;
 mod session;
 mod tui;
+mod update_check;
 mod usb_libraries;
 
 use anyhow::Result;
@@ -416,6 +417,11 @@ async fn run_app(
     let (action_tx, mut action_rx) = mpsc::unbounded_channel::<AppAction>();
     let mut app = App::new(config, action_tx.clone(), auth).await?;
     app.midi = Some(midi_state);
+
+    // Background "is there a newer release?" probe — fires a
+    // one-shot toast on the first tick after the GET resolves with
+    // a newer GitHub tag than CARGO_PKG_VERSION.
+    app.update_check = Some(crate::update_check::UpdateCheck::spawn());
 
     // Apply CLI startup actions
     app.apply_cli_args(&cli).await;
