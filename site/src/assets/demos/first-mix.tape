@@ -35,6 +35,7 @@
 Output site/src/assets/demos/first-mix.gif
 
 Set Shell       "bash"
+Set FontFamily  "JetBrainsMono Nerd Font mnml"
 Set FontSize    14
 Set Width       1280
 Set Height      720
