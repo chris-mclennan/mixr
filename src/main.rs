@@ -2,6 +2,7 @@ mod audio;
 mod beatport;
 mod claude;
 mod config;
+mod family_offer;
 mod favorites;
 mod hid;
 mod ipc;
@@ -422,6 +423,16 @@ async fn run_app(
     // one-shot toast on the first tick after the GET resolves with
     // a newer GitHub tag than CARGO_PKG_VERSION.
     app.update_check = Some(crate::update_check::UpdateCheck::spawn());
+
+    // First-launch family offer — one-shot toast(s) for any missing
+    // mnml / tmnl. Marker at ~/.config/mixr/.family-offer-shown
+    // suppresses re-fires.
+    if let Some(offer) = crate::family_offer::FamilyOffer::maybe_new() {
+        for line in offer.hint_lines() {
+            app.toast.show(&line, 12.0);
+        }
+        offer.mark_shown();
+    }
 
     // Apply CLI startup actions
     app.apply_cli_args(&cli).await;

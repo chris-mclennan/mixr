@@ -16,12 +16,12 @@ use std::path::Path;
 // Windows: AF_UNIX support landed in Win10 17063, but std doesn't
 // expose `UnixStream`. `uds_windows` is a thin wrapper around the
 // winapi calls with the same std-shaped API.
-#[cfg(windows)]
-use uds_windows::UnixStream;
 use std::sync::Mutex;
 use std::sync::mpsc::{TryRecvError, channel};
 use std::thread;
 use std::time::Duration;
+#[cfg(windows)]
+use uds_windows::UnixStream;
 
 use anyhow::Result;
 use ratatui::Terminal;

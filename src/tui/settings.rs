@@ -1021,7 +1021,11 @@ pub fn apply_setting(config: &mut AppConfig, key: &str, option_idx: usize) -> Op
 /// shape for choice rows. Returns the engine-resync key string when
 /// the field has runtime effects (currently no library-dir fields do —
 /// they trigger a re-scan only on next browse).
-pub fn apply_text_setting(config: &mut AppConfig, key: &str, value: String) -> Option<&'static str> {
+pub fn apply_text_setting(
+    config: &mut AppConfig,
+    key: &str,
+    value: String,
+) -> Option<&'static str> {
     match key {
         "local_library_dir" => {
             config.local_library_dir = value;
@@ -1252,12 +1256,11 @@ pub fn render_settings(
                 if let (true, Some(editing)) = (is_selected, editing_text) {
                     spans.push(Span::styled(
                         editing.to_string(),
-                        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                        Style::default()
+                            .fg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD),
                     ));
-                    spans.push(Span::styled(
-                        "█",
-                        Style::default().fg(Color::Yellow),
-                    ));
+                    spans.push(Span::styled("█", Style::default().fg(Color::Yellow)));
                 } else if row.value.is_empty() {
                     spans.push(Span::styled(
                         row.placeholder.to_string(),
@@ -1268,7 +1271,9 @@ pub fn render_settings(
                 } else {
                     spans.push(Span::styled(
                         row.value.clone(),
-                        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD),
                     ));
                     if row.modified() {
                         spans.push(Span::styled(
@@ -1313,9 +1318,9 @@ mod tests {
             .position(|i| matches!(i, SettingItem::Section("Library")));
         assert!(lib_idx.is_some(), "Library section missing");
         let after_lib = &items[lib_idx.unwrap()..];
-        let has_text_row = after_lib.iter().any(|i| {
-            matches!(i, SettingItem::TextRow(r) if r.key == "local_library_dir")
-        });
+        let has_text_row = after_lib
+            .iter()
+            .any(|i| matches!(i, SettingItem::TextRow(r) if r.key == "local_library_dir"));
         assert!(has_text_row, "local_library_dir TextRow missing");
     }
 
@@ -1323,11 +1328,7 @@ mod tests {
     fn apply_text_setting_updates_local_library_dir() {
         let mut cfg = AppConfig::default();
         assert_eq!(cfg.local_library_dir, "");
-        let result = apply_text_setting(
-            &mut cfg,
-            "local_library_dir",
-            "/Users/test/Music".into(),
-        );
+        let result = apply_text_setting(&mut cfg, "local_library_dir", "/Users/test/Music".into());
         assert!(result.is_none(), "no engine-resync key expected");
         assert_eq!(cfg.local_library_dir, "/Users/test/Music");
     }
