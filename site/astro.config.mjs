@@ -79,6 +79,7 @@ export default defineConfig({
           label: 'Releases',
           items: [
             { label: 'Changelog', slug: 'changelog' },
+            { label: 'Troubleshooting', slug: 'troubleshooting' },
           ],
         },
         // Family — top-level page (the cross-product story), not nested

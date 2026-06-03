@@ -47,6 +47,37 @@ Already subscribed? [Manage your subscription](https://buttondown.com/chrismclen
 
 Versions auto-tagged at [github.com/chris-mclennan/mixr/releases](https://github.com/chris-mclennan/mixr/releases) — this page summarizes the user-facing changes. For commit-level history, see the GitHub release notes.
 
+### Unreleased
+
+- **macOS app-bundle polish.** `LSMinimumSystemVersion` bumped to 11.0 so macOS Tahoe stops showing the
+  "Support Ending for Intel-based Apps" dialog on launch
+  ([`1d4ff6f`](https://github.com/chris-mclennan/mixr/commit/1d4ff6f)). The stable
+  icon was simplified at the same time: full-bleed art, no `> ` prompt prefix, slightly larger wordmark
+  in mixr's teal accent — matches the new mnml + tmnl family icon set.
+- **Nightly bundle.** `./scripts/build-app.sh --nightly` builds `target/mixr-nightly.app` with an
+  inverted-palette icon (teal background + charcoal wordmark). Coexists with stable in `/Applications`,
+  pins to the dock separately, and always execs your latest local `cargo build --release` — no
+  rebundling between builds ([`1f2b537`](https://github.com/chris-mclennan/mixr/commit/1f2b537)).
+  Details on the [troubleshooting page](/troubleshooting).
+- **Update-check toast.** On launch a background thread checks
+  `api.github.com/repos/chris-mclennan/mixr/releases/latest` and fires a 12-second toast carrying the
+  release URL if a newer tag exists ([`ebb165c`](https://github.com/chris-mclennan/mixr/commit/ebb165c)).
+  Session-once, no semver parsing, skipped in blit mode.
+- **Command-registry migration (#59) substantially complete.** ~50 commits over the cycle moved every
+  chord off the legacy dashboard / global `match` blocks into the keymap registry. Help is now
+  auto-generated from registered `Command`s, and a drift test asserts every migrated command shows up
+  in the help screen. Remaining `keys.rs` handlers are all modal greedy consumers (text inputs, MIDI
+  capture, Y/N prompts) which intentionally stay on the legacy path.
+- **Settings — Library section.** v2 of the family settings UI: text/path rows (in addition to the v1
+  discrete-choice rows) so `local_library_dir`, `rekordbox_xml`, `engine_dj_db`, and `serato_db` can be
+  set inside mixr instead of editing `~/.mixr/config.toml`. (Shipped in 0.1.3; called out here for
+  visibility.)
+- **VHS tape fixes.** The `first-mix` demo tape now sets
+  `FontFamily "JetBrainsMono Nerd Font mnml"` (the patched font from mnml/scripts/patch_nerd_font.py)
+  so the recording renders mixr's chip glyphs instead of `□`
+  ([`e19c196`](https://github.com/chris-mclennan/mixr/commit/e19c196)). The tape itself uses the
+  temp-workspace pattern so it can be re-rendered offline without touching `~/.mixr`.
+
 ### 0.1.3 — 2026-05-31
 
 - **Settings — Library section.** New text/path rows for `local_library_dir`, `rekordbox_xml`, `engine_dj_db`, `serato_db`. Enter on a row → edit mode → type the path → Enter saves. No more editing `~/.mixr/config.toml` by hand.
