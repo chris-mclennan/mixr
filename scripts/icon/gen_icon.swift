@@ -16,6 +16,12 @@ let iconsetDir = URL(fileURLWithPath: CommandLine.arguments.count > 1
     ? CommandLine.arguments[1]
     : "scripts/icon/AppIcon.iconset")
 
+// Second arg "nightly" inverts the palette — accent becomes the
+// background, charcoal becomes the wordmark. Same shape so the
+// nightly + stable icons read as inverted variants of one design
+// at a glance in Cmd+Tab / dock.
+let isNightly = CommandLine.arguments.count > 2 && CommandLine.arguments[2] == "nightly"
+
 try? FileManager.default.createDirectory(at: iconsetDir, withIntermediateDirectories: true)
 
 let sizes: [(String, Int)] = [
@@ -44,17 +50,26 @@ func render(_ side: Int) -> Data? {
         bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
     ) else { return nil }
 
-    ctx.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: 0))
-    ctx.fill(CGRect(x: 0, y: 0, width: s, height: s))
-
-    let inset = s * 0.06
-    let body = CGRect(x: inset, y: inset, width: s - 2*inset, height: s - 2*inset)
+    // macOS 26 (Tahoe) auto-wraps every app icon in its glass
+    // template. Painting full-bleed (no transparent margin) keeps
+    // the template wrapping our art directly instead of leaving a
+    // weird grey bezel around an inset square.
+    let body = CGRect(x: 0, y: 0, width: s, height: s)
     let radius = body.width * 0.22
     let path = CGMutablePath()
     path.addRoundedRect(in: body, cornerWidth: radius, cornerHeight: radius)
     ctx.addPath(path)
-    let topColor = CGColor(red: 0.18, green: 0.20, blue: 0.24, alpha: 1.0)
-    let botColor = CGColor(red: 0.10, green: 0.12, blue: 0.14, alpha: 1.0)
+    // Stable: charcoal gradient bezel. Nightly: mixr teal gradient,
+    // so the two read as inverted variants of one design.
+    let topColor: CGColor
+    let botColor: CGColor
+    if isNightly {
+        topColor = CGColor(red: 0.32, green: 0.88, blue: 0.82, alpha: 1.0)
+        botColor = CGColor(red: 0.14, green: 0.68, blue: 0.62, alpha: 1.0)
+    } else {
+        topColor = CGColor(red: 0.18, green: 0.20, blue: 0.24, alpha: 1.0)
+        botColor = CGColor(red: 0.10, green: 0.12, blue: 0.14, alpha: 1.0)
+    }
     let gradient = CGGradient(
         colorsSpace: cs,
         colors: [topColor, botColor] as CFArray,
@@ -70,33 +85,29 @@ func render(_ side: Int) -> Data? {
     )
     ctx.restoreGState()
 
-    // Shell-prompt wordmark — bold monospace `>mixr`. The `>` is the
-    // app's accent color (teal for mixr — DJ-flavored), the name in
-    // near-white.
+    // Wordmark — bold monospace `mixr` in the app's accent color
+    // (teal — DJ-flavored), centered on the charcoal bezel. Kept
+    // deliberately simple so the three family icons read as accent-
+    // color variants of the same shape.
     let nsCtx = NSGraphicsContext(cgContext: ctx, flipped: false)
     NSGraphicsContext.saveGraphicsState()
     NSGraphicsContext.current = nsCtx
 
-    let accent = NSColor(red: 0.20, green: 0.78, blue: 0.72, alpha: 1.0) // mixr: teal
-    let textColor = NSColor(red: 0.95, green: 0.96, blue: 0.97, alpha: 1.0)
-    let fontSize = s * 0.32
+    // Stable: teal accent on charcoal. Nightly: charcoal on teal.
+    let accent = isNightly
+        ? NSColor(red: 0.10, green: 0.12, blue: 0.16, alpha: 1.0)
+        : NSColor(red: 0.20, green: 0.78, blue: 0.72, alpha: 1.0) // mixr: teal
+    let fontSize = s * 0.34
     let font = NSFont.monospacedSystemFont(ofSize: fontSize, weight: .bold)
     let para = NSMutableParagraphStyle()
     para.alignment = .center
 
-    let attributed = NSMutableAttributedString()
-    attributed.append(NSAttributedString(string: "> ", attributes: [
+    let attributed = NSAttributedString(string: "mixr", attributes: [
         .font: font,
         .foregroundColor: accent,
         .paragraphStyle: para,
-        .kern: -fontSize * 0.04,
-    ]))
-    attributed.append(NSAttributedString(string: "mixr", attributes: [
-        .font: font,
-        .foregroundColor: textColor,
-        .paragraphStyle: para,
-        .kern: -fontSize * 0.04,
-    ]))
+        .kern: -fontSize * 0.02,
+    ])
 
     let textSize = attributed.size()
     let textRect = CGRect(
