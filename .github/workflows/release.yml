@@ -158,8 +158,12 @@ jobs:
         if: runner.os == 'Linux'
         shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
+          # cross-rs containers run as root without sudo; bare ubuntu
+          # runners need sudo. Detect either.
+          SUDO=
+          if command -v sudo >/dev/null 2>&1; then SUDO=sudo; fi
+          $SUDO apt-get update
+          $SUDO apt-get install -y \
             libasound2-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev \
             libudev-dev libssl-dev pkg-config
       - uses: swatinem/rust-cache@v2
