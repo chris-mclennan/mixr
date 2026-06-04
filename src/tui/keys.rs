@@ -546,6 +546,85 @@ impl App {
             return;
         }
 
+        // Command palette overlay (Ctrl+Shift+P / F1) — greedy modal.
+        // Type to filter, ↑↓ move, Enter dispatch via `command::run`,
+        // Esc closes.
+        if self.command_palette.is_some() {
+            use crossterm::event::{KeyCode, KeyModifiers};
+            let m = key.modifiers;
+            match key.code {
+                KeyCode::Esc => {
+                    self.command_palette = None;
+                }
+                KeyCode::Enter => {
+                    if let Some(palette) = self.command_palette.as_ref() {
+                        let visible = palette.visible_indices();
+                        if let Some(&idx) = visible.get(palette.selected) {
+                            let id = super::command::registry().all()[idx].id;
+                            self.command_palette = None;
+                            super::command::run(id, self);
+                        }
+                    }
+                }
+                KeyCode::Up => {
+                    if let Some(p) = self.command_palette.as_mut() {
+                        p.selected = p.selected.saturating_sub(1);
+                    }
+                }
+                KeyCode::Down => {
+                    if let Some(p) = self.command_palette.as_mut() {
+                        let max = p.visible_indices().len().saturating_sub(1);
+                        p.selected = (p.selected + 1).min(max);
+                    }
+                }
+                KeyCode::Backspace => {
+                    if let Some(p) = self.command_palette.as_mut() {
+                        if p.cursor > 0 {
+                            let start = p
+                                .filter
+                                .char_indices()
+                                .nth(p.cursor - 1)
+                                .map(|(b, _)| b)
+                                .unwrap_or(0);
+                            let end = p
+                                .filter
+                                .char_indices()
+                                .nth(p.cursor)
+                                .map(|(b, _)| b)
+                                .unwrap_or_else(|| p.filter.len());
+                            p.filter.replace_range(start..end, "");
+                            p.cursor -= 1;
+                            // Clamp selection to the (newly larger)
+                            // visible set.
+                            let vlen = p.visible_indices().len();
+                            if vlen == 0 {
+                                p.selected = 0;
+                            } else if p.selected >= vlen {
+                                p.selected = vlen - 1;
+                            }
+                        }
+                    }
+                }
+                KeyCode::Char(c) if !m.contains(KeyModifiers::CONTROL) => {
+                    if let Some(p) = self.command_palette.as_mut() {
+                        let byte = p
+                            .filter
+                            .char_indices()
+                            .nth(p.cursor)
+                            .map(|(b, _)| b)
+                            .unwrap_or_else(|| p.filter.len());
+                        p.filter.insert(byte, c);
+                        p.cursor += 1;
+                        // Reset highlight to top — the filtered set
+                        // just changed.
+                        p.selected = 0;
+                    }
+                }
+                _ => {}
+            }
+            return;
+        }
+
         // Command-prompt overlay takes priority when open. Capture all
         // keystrokes so the user can type a full command line without
         // any other key binding stealing characters.

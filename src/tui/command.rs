@@ -442,6 +442,21 @@ fn builtin_commands() -> Vec<Command> {
             when: None,
         },
         // Toggle the dashboard's inline help legend. Active only on
+        // Ctrl+Shift+P / F1 — VS Code-style command palette. Fuzzy
+        // picker over every registered command. Family-wide chord:
+        // mnml + tmnl + mixr all surface the same dialog. `F1` is the
+        // terminal-proof fallback (Ctrl+Shift+P only arrives distinct
+        // under the kitty keyboard protocol).
+        Command {
+            id: "view.palette",
+            title: "Command palette",
+            group: "VIEWS",
+            keys: &["ctrl+shift+p", "f1"],
+            run: |app| {
+                app.command_palette = Some(super::app::CommandPaletteState::default());
+            },
+            when: None,
+        },
         // Dashboard with no modal capturing input — matches the
         // conditions the legacy `KeyCode::Char('?')` arm was gated on.
         Command {

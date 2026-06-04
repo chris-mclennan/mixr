@@ -155,6 +155,40 @@ pub struct HistoryMix {
     pub rated_at: Option<i64>,
 }
 
+/// Modal state for the Ctrl+Shift+P command palette. Lists every
+/// entry in `command::registry()`, filtered by a typed substring
+/// match against the title.
+#[derive(Debug, Clone, Default)]
+pub struct CommandPaletteState {
+    /// Substring filter, case-insensitive.
+    pub filter: String,
+    /// Cursor position in the filter buffer (chars).
+    pub cursor: usize,
+    /// Selected row index — clamped to the visible (post-filter)
+    /// list. Defaults to the first visible row.
+    pub selected: usize,
+}
+
+impl CommandPaletteState {
+    /// Indices into `command::registry().all()` matching the current
+    /// filter (case-insensitive substring against title). Empty
+    /// filter ⇒ every command.
+    pub fn visible_indices(&self) -> Vec<usize> {
+        let all = crate::tui::command::registry().all();
+        if self.filter.is_empty() {
+            return (0..all.len()).collect();
+        }
+        let needle = self.filter.to_ascii_lowercase();
+        all.iter()
+            .enumerate()
+            .filter_map(|(i, c)| {
+                let hay = format!("{} {}", c.title, c.id).to_ascii_lowercase();
+                hay.contains(&needle).then_some(i)
+            })
+            .collect()
+    }
+}
+
 use super::dashboard::CtrlSection;
 impl DashFocus {
     pub(crate) fn next(self) -> Self {
@@ -328,6 +362,12 @@ pub struct App {
     // (e.g. `queue 12345`, `tx echoout`, `bpm 128`, or any raw JSON)
     // and Enter submits — see `submit_command_prompt` for the parser.
     pub(crate) command_prompt: Option<String>,
+
+    /// Ctrl+Shift+P / F1 command palette. VS Code-style fuzzy picker
+    /// over the entries in `command::registry()`. Greedy modal —
+    /// printable text refines `filter`, ↑↓ move highlight, Enter
+    /// dispatches via `command::run`, Esc closes. `None` when closed.
+    pub(crate) command_palette: Option<CommandPaletteState>,
 
     /// Pending Y/N confirmation. `Some` when a destructive action is
     /// awaiting confirmation; the next Y/y commits it, N/n/Esc
@@ -676,6 +716,7 @@ impl App {
             dash_panel_section: initial_dash_panel_section,
             search_query: String::new(),
             command_prompt: None,
+            command_palette: None,
             pending_confirm: None,
             pending_midi_map: None,
             midi: None, // wired by main.rs after construction
@@ -1409,6 +1450,106 @@ impl App {
                 Paragraph::new(display).style(Style::default().fg(Color::Black).bg(Color::Yellow));
             frame.render_widget(widget, area);
         }
+
+        // Ctrl+Shift+P command palette — centered overlay on top of
+        // everything else.
+        if self.command_palette.is_some() {
+            self.render_command_palette(frame, size);
+        }
+    }
+
+    /// VS Code-style centered command palette. Filter input row at
+    /// top, scrollable list of matching commands below, dim hint row
+    /// at the bottom. Opaque (Clear widget) so the dashboard doesn't
+    /// bleed through.
+    fn render_command_palette(&self, frame: &mut Frame, screen: Rect) {
+        use ratatui::widgets::{Block, Borders, Clear, Paragraph};
+        let Some(palette) = self.command_palette.as_ref() else {
+            return;
+        };
+        let w = 70u16.min(screen.width.saturating_sub(4));
+        let h = 20u16.min(screen.height.saturating_sub(4));
+        let x = (screen.width.saturating_sub(w)) / 2;
+        let y = (screen.height.saturating_sub(h)) / 2;
+        let area = Rect::new(x, y, w, h);
+
+        let visible = palette.visible_indices();
+        let all = super::command::registry().all();
+
+        // Build the body: filter line, blank, list rows, blank, hint.
+        let mut lines: Vec<ratatui::text::Line<'_>> = Vec::with_capacity(h as usize);
+        // Filter line: `/<filter>│` with cyan cursor block.
+        let chars: Vec<char> = palette.filter.chars().collect();
+        let cursor = palette.cursor.min(chars.len());
+        let head: String = chars[..cursor].iter().collect();
+        let tail: String = chars[cursor..].iter().collect();
+        lines.push(ratatui::text::Line::from(vec![
+            ratatui::text::Span::styled("  /", Style::default().fg(Color::Cyan)),
+            ratatui::text::Span::styled(head, Style::default().fg(Color::White)),
+            ratatui::text::Span::styled("│", Style::default().fg(Color::Cyan)),
+            ratatui::text::Span::styled(
+                tail,
+                Style::default()
+                    .fg(Color::Gray)
+                    .add_modifier(ratatui::style::Modifier::DIM),
+            ),
+        ]));
+        lines.push(ratatui::text::Line::from(""));
+
+        if visible.is_empty() {
+            lines.push(ratatui::text::Line::from(ratatui::text::Span::styled(
+                "  (no commands match)",
+                Style::default().fg(Color::DarkGray),
+            )));
+        } else {
+            let row_cap = h.saturating_sub(5) as usize;
+            let sel = palette.selected.min(visible.len() - 1);
+            let start = sel.saturating_sub(row_cap / 2);
+            let end = (start + row_cap).min(visible.len());
+            for (vi, &cmd_idx) in visible[start..end].iter().enumerate() {
+                let cmd = &all[cmd_idx];
+                let display_pos = start + vi;
+                let is_sel = display_pos == sel;
+                let style = if is_sel {
+                    Style::default()
+                        .fg(Color::Black)
+                        .bg(Color::Cyan)
+                        .add_modifier(ratatui::style::Modifier::BOLD)
+                } else {
+                    Style::default().fg(Color::White)
+                };
+                let prefix = if is_sel { "  ▸ " } else { "    " };
+                let key_hint = cmd.key_hint();
+                let label = if key_hint.is_empty() {
+                    format!("{prefix}{}", cmd.title)
+                } else {
+                    format!("{prefix}{}  {}", cmd.title, key_hint)
+                };
+                lines.push(ratatui::text::Line::from(ratatui::text::Span::styled(
+                    label, style,
+                )));
+            }
+        }
+        lines.push(ratatui::text::Line::from(""));
+        lines.push(ratatui::text::Line::from(ratatui::text::Span::styled(
+            "  type to filter · ↑↓ move · Enter run · Esc close",
+            Style::default()
+                .fg(Color::DarkGray)
+                .add_modifier(ratatui::style::Modifier::DIM),
+        )));
+
+        frame.render_widget(Clear, area);
+        let p = Paragraph::new(lines).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .style(Style::default().bg(Color::Black))
+                .title(format!(
+                    " command palette ({}/{}) ",
+                    visible.len(),
+                    all.len()
+                )),
+        );
+        frame.render_widget(p, area);
     }
 
     /// Build the bottom hints bar string for the current view mode.
