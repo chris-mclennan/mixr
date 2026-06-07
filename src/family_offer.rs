@@ -13,6 +13,13 @@ pub struct FamilyOffer {
 }
 
 impl FamilyOffer {
+    /// See `mnml/src/family_offer.rs` for the full rationale on why
+    /// `mark_shown` runs BEFORE the empty-check return — the
+    /// is_installed() probe stat's /Applications/<app>.app on macOS
+    /// which Sequoia (15.x) gates behind a privacy prompt, and macOS
+    /// only persists Allow/Deny per binary hash. The marker
+    /// short-circuits the whole function on subsequent runs so the
+    /// prompt only fires once per user, not once per cargo build.
     pub fn maybe_new() -> Option<Self> {
         if marker_path().exists() {
             return None;
@@ -22,6 +29,7 @@ impl FamilyOffer {
             .copied()
             .filter(|name| *name != SELF && !is_installed(name))
             .collect();
+        write_marker();
         if missing.is_empty() {
             return None;
         }
@@ -29,11 +37,7 @@ impl FamilyOffer {
     }
 
     pub fn mark_shown(&self) {
-        let path = marker_path();
-        if let Some(parent) = path.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-        let _ = std::fs::write(&path, b"shown\n");
+        write_marker();
     }
 
     pub fn hint_lines(&self) -> Vec<String> {
@@ -111,6 +115,14 @@ fn marker_path() -> PathBuf {
     home.join(".config")
         .join("mixr")
         .join(".family-offer-shown")
+}
+
+fn write_marker() {
+    let path = marker_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let _ = std::fs::write(&path, b"shown\n");
 }
 
 #[cfg(test)]
