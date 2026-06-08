@@ -1298,9 +1298,51 @@ pub fn render_settings(
     } else {
         0
     };
-    let window: Vec<Line> = lines.into_iter().skip(scroll).take(body_h).collect();
+    // Truncate each line to fit `area.width` so a long Local
+    // Library Directory path (or similar TextRow value) doesn't
+    // punch through the right edge of the panel. 2026-06-08 family-
+    // wide settings-overflow sweep (matches mnml's
+    // `truncate_line_to_width`).
+    let window: Vec<Line> = lines
+        .into_iter()
+        .skip(scroll)
+        .take(body_h)
+        .map(|l| truncate_line_to_width(l, area.width as usize))
+        .collect();
     let paragraph = Paragraph::new(window);
     frame.render_widget(paragraph, area);
+}
+
+/// Truncate a `Line` (span-by-span) so its total char count doesn't
+/// exceed `max_width`. Appends `…` when truncation happens so the
+/// row reads as "cut" rather than broken mid-word. Char-based width,
+/// not display-cell — fine for ASCII / Latin values, slightly
+/// pessimistic for CJK / emoji. Mirror of the helper in
+/// mnml's `src/ui/settings_overlay.rs`.
+fn truncate_line_to_width<'a>(line: Line<'a>, max_width: usize) -> Line<'a> {
+    let total: usize = line.spans.iter().map(|s| s.content.chars().count()).sum();
+    if total <= max_width {
+        return line;
+    }
+    let budget = max_width.saturating_sub(1); // 1 cell reserved for `…`
+    let mut used = 0usize;
+    let mut out: Vec<Span<'a>> = Vec::with_capacity(line.spans.len() + 1);
+    for span in line.spans.into_iter() {
+        let span_len = span.content.chars().count();
+        if used + span_len <= budget {
+            used += span_len;
+            out.push(span);
+        } else {
+            let take = budget.saturating_sub(used);
+            if take > 0 {
+                let s: String = span.content.chars().take(take).collect();
+                out.push(Span::styled(s, span.style));
+            }
+            break;
+        }
+    }
+    out.push(Span::styled("…", Style::default().fg(Color::DarkGray)));
+    Line::from(out)
 }
 
 #[cfg(test)]
