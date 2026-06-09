@@ -70,6 +70,49 @@ pub struct CliArgs {
     pub blit: Option<String>,
 }
 
+/// Every flag mixr recognises — `unknown_flag` checks args against
+/// this list and returns the first non-matching token. Keep in sync
+/// with `CliArgs::parse` and `print_help` below.
+const KNOWN_FLAGS: &[&str] = &[
+    "--play",
+    "--genre",
+    "--shuffle",
+    "--quality",
+    "--search",
+    "--browse",
+    "--dashboard",
+    "--claude-dj",
+    "--claude-key",
+    "--logout",
+    "--clear-webview-session",
+    "--webview-host",
+    "--webview-discover",
+    "--help",
+    "-h",
+    "--version",
+    "-V",
+    "--status",
+    "--command",
+    "--export",
+    "--favorites",
+    "--blit",
+];
+
+/// Walk `args[1..]` and return the first token that starts with `--`
+/// (or `-V` / `-h` style short flag) that isn't in `KNOWN_FLAGS`.
+/// `None` when every flag is recognised. Positional args (the URL
+/// after `--webview-host`, the search term, etc.) don't start with
+/// `-` so they don't trigger false positives.
+fn unknown_flag(args: &[String]) -> Option<String> {
+    args.iter()
+        .skip(1)
+        .find(|a| {
+            (a.starts_with("--") || (a.len() == 2 && a.starts_with('-')))
+                && !KNOWN_FLAGS.contains(&a.as_str())
+        })
+        .cloned()
+}
+
 impl CliArgs {
     fn parse(args: &[String]) -> Self {
         let flag = |name: &str| args.contains(&name.to_string());
@@ -119,6 +162,18 @@ impl CliArgs {
 #[tokio::main]
 async fn main() -> Result<()> {
     let raw_args: Vec<String> = std::env::args().collect();
+
+    // Reject unknown flags BEFORE we boot the TUI. Without this,
+    // a typo like `--cheeck` falls through to the audio engine
+    // which then `?`-bubbles a "no default device" anyhow trace
+    // through main — a 40-line backtrace for what was just a typo.
+    // (2026-06-08 hunt H3.)
+    if let Some(bad) = unknown_flag(&raw_args) {
+        eprintln!("mixr: unknown flag: {bad}");
+        eprintln!("Run `mixr --help` for usage.");
+        std::process::exit(2);
+    }
+
     let args = CliArgs::parse(&raw_args);
 
     if args.help {
@@ -546,4 +601,54 @@ Files:
   ~/.mixr/quick.txt         Quick status
   ~/.mixr/command            Remote control (JSON)"#
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn args(v: &[&str]) -> Vec<String> {
+        std::iter::once("mixr")
+            .chain(v.iter().copied())
+            .map(String::from)
+            .collect()
+    }
+
+    #[test]
+    fn unknown_flag_rejects_typo() {
+        assert_eq!(
+            unknown_flag(&args(&["--cheeck"])).as_deref(),
+            Some("--cheeck")
+        );
+        assert_eq!(
+            unknown_flag(&args(&["--check"])).as_deref(),
+            Some("--check")
+        );
+        assert_eq!(unknown_flag(&args(&["-x"])).as_deref(), Some("-x"));
+    }
+
+    #[test]
+    fn unknown_flag_accepts_known() {
+        assert_eq!(unknown_flag(&args(&["--version"])), None);
+        assert_eq!(unknown_flag(&args(&["-V"])), None);
+        assert_eq!(unknown_flag(&args(&["--help"])), None);
+        assert_eq!(unknown_flag(&args(&["-h"])), None);
+        assert_eq!(unknown_flag(&args(&["--status"])), None);
+        assert_eq!(
+            unknown_flag(&args(&["--genre", "house", "--shuffle"])),
+            None
+        );
+    }
+
+    #[test]
+    fn unknown_flag_ignores_positionals() {
+        // `--webview-host` takes a positional URL after it. The URL
+        // doesn't start with `-` so unknown_flag must not flag it.
+        assert_eq!(
+            unknown_flag(&args(&["--webview-host", "https://soundcloud.com"])),
+            None
+        );
+        // Bare positional (e.g. search term)
+        assert_eq!(unknown_flag(&args(&["techno"])), None);
+    }
 }
