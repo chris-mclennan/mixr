@@ -1060,10 +1060,32 @@ impl App {
                         // to default, re-syncs the engine + saves. The
                         // sync is critical: without it the audio engine
                         // keeps the pre-reset values until next launch.
+                        // 2026-06-08 hunt M5: `resync_all_engine_settings`
+                        // doesn't restart the audio output, so a Reset
+                        // All that changes the output / monitor device
+                        // would leave live audio on the OLD device.
+                        // Detect the device-change here and trigger the
+                        // same restart path the per-row setting flips
+                        // already use.
                         if row.key == super::settings::RESET_ALL_KEY {
+                            let prev_output = self.config.output_device.clone();
+                            let prev_monitor = self.config.monitor_device.clone();
                             self.config = crate::config::AppConfig::default();
                             self.resync_all_engine_settings();
-                            self.toast.show("Settings reset to defaults", 1.0);
+                            let device_changed = prev_output != self.config.output_device
+                                || prev_monitor != self.config.monitor_device;
+                            if device_changed {
+                                self.toast.show(
+                                    "Settings reset — restarting to apply audio device change…",
+                                    3.0,
+                                );
+                                let _ = std::fs::write(
+                                    dirs::home_dir().unwrap_or_default().join(".mixr/command"),
+                                    b"{\"restart\":1}",
+                                );
+                            } else {
+                                self.toast.show("Settings reset to defaults", 1.0);
+                            }
                             return;
                         }
                         if !row.options.is_empty() {
