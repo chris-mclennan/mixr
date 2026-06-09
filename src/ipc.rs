@@ -59,6 +59,7 @@ fn write_atomic(path: &std::path::Path, contents: &[u8]) {
 /// caller should pass it through unchanged — this helper is only
 /// for the shorthand path.
 pub fn shorthand_to_json(line: &str) -> String {
+    use serde_json::{Map, Value};
     let trimmed = line.trim();
     let mut parts = trimmed.splitn(2, char::is_whitespace);
     let key = parts.next().unwrap_or("").trim();
@@ -66,19 +67,24 @@ pub fn shorthand_to_json(line: &str) -> String {
     if key.is_empty() {
         return "{}".into();
     }
-    if val.is_empty() {
-        return format!("{{\"{key}\":1}}");
-    }
-    if let Ok(n) = val.parse::<i64>() {
-        return format!("{{\"{key}\":{n}}}");
-    }
-    if let Ok(f) = val.parse::<f64>() {
-        return format!("{{\"{key}\":{f}}}");
-    }
-    if val == "true" || val == "false" {
-        return format!("{{\"{key}\":{val}}}");
-    }
-    format!("{{\"{key}\":{}}}", serde_json::Value::String(val.into()))
+    // Build the JSON via `serde_json::Map` so a key containing `"` or
+    // `\` (or any other char that needs escaping) can't break out of
+    // its quotes and inject extra fields. The earlier `format!(...)`
+    // interpolated `key` raw. (2026-06-08 hunt M2.)
+    let value = if val.is_empty() {
+        Value::from(1u64)
+    } else if let Ok(n) = val.parse::<i64>() {
+        Value::from(n)
+    } else if let Ok(f) = val.parse::<f64>() {
+        Value::from(f)
+    } else if val == "true" || val == "false" {
+        Value::from(val == "true")
+    } else {
+        Value::String(val.into())
+    };
+    let mut map = Map::new();
+    map.insert(key.to_string(), value);
+    serde_json::to_string(&Value::Object(map)).unwrap_or_else(|_| "{}".into())
 }
 
 /// Append one structured event line to ~/.mixr/events.jsonl.
@@ -1198,6 +1204,25 @@ mod shorthand_tests {
         // helper itself shouldn't panic.
         assert_eq!(shorthand_to_json(""), "{}");
         assert_eq!(shorthand_to_json("   "), "{}");
+    }
+
+    #[test]
+    fn malicious_key_cannot_inject_extra_fields() {
+        // Hunt M2: pre-fix, `key` was raw-interpolated. A shorthand
+        // with embedded `"` in the key could break out of the JSON
+        // string and add fields. Post-fix: serde escapes the key, so
+        // the whole crafted string lands as one key (and the parser
+        // sees a single-field object).
+        let out = shorthand_to_json("a\":1,\"evil 1");
+        let v: Value = serde_json::from_str(&out).expect("must parse");
+        let obj = v.as_object().expect("must be an object");
+        assert_eq!(obj.len(), 1, "exactly one top-level key");
+        // The single key carries the entire crafted string.
+        assert!(
+            obj.contains_key("a\":1,\"evil"),
+            "crafted bytes land as a key, not a structural break"
+        );
+        assert_eq!(obj["a\":1,\"evil"], 1);
     }
 }
 
