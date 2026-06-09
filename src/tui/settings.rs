@@ -1311,6 +1311,29 @@ pub fn render_settings(
         .collect();
     let paragraph = Paragraph::new(window);
     frame.render_widget(paragraph, area);
+
+    // Version chip — top-right corner of the settings area. Shows
+    // what version of mixr the user's running so they can match it
+    // against the release tag / changelog. 2026-06-08 family-wide ask.
+    let version = concat!("v", env!("CARGO_PKG_VERSION"));
+    let version_len = version.chars().count() as u16;
+    if area.width > version_len + 2 {
+        let v_area = Rect {
+            x: area.x + area.width - version_len - 1,
+            y: area.y,
+            width: version_len,
+            height: 1,
+        };
+        frame.render_widget(
+            Paragraph::new(Span::styled(
+                version,
+                Style::default()
+                    .fg(Color::DarkGray)
+                    .add_modifier(Modifier::DIM),
+            )),
+            v_area,
+        );
+    }
 }
 
 /// Truncate a `Line` (span-by-span) so its total char count doesn't
