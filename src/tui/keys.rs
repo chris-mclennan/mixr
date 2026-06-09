@@ -1007,7 +1007,17 @@ impl App {
                             buf.pop();
                         }
                     }
-                    KeyCode::Char(c) => {
+                    // Plain typed char only — modifier-bearing chords
+                    // (Ctrl+R / Cmd+V / etc) used to push their literal
+                    // chars into the text field. Hunt 2026-06-08 SEV-MED.
+                    // Shift is allowed (it just gives the shifted glyph).
+                    KeyCode::Char(c)
+                        if !key
+                            .modifiers
+                            .contains(crossterm::event::KeyModifiers::CONTROL)
+                            && !key.modifiers.contains(crossterm::event::KeyModifiers::ALT)
+                            && !key.modifiers.contains(crossterm::event::KeyModifiers::META) =>
+                    {
                         if let Some(buf) = self.settings_editing_text.as_mut() {
                             buf.push(c);
                         }
@@ -1081,8 +1091,11 @@ impl App {
                         }
                     }
                 }
-                // `r` — reset focused row to its `AppConfig::default()` value.
-                KeyCode::Char('r') => {
+                // `r` — reset focused row to its `AppConfig::default()`
+                // value. Modifier-gated to NONE so `Ctrl+R` / `Alt+R` /
+                // `Cmd+R` don't fire (hunt 2026-06-08 SEV-HIGH: settings
+                // Char arms used to ignore modifiers).
+                KeyCode::Char('r') if key.modifiers == crossterm::event::KeyModifiers::NONE => {
                     if let Some(row) = super::settings::settings_row_at(&self.config, self.selected)
                         && row.key != super::settings::RESET_ALL_KEY
                         && row.current_idx != row.default_idx
@@ -1092,31 +1105,29 @@ impl App {
                         self.apply_and_sync_setting(key_str, def);
                     }
                 }
-                // `R` (shift+r) — reset every row to default (matches the
-                // explicit Reset sentinel at the bottom). Must re-sync
-                // the engine + save, else the audio engine keeps the
-                // old live values until next launch.
-                KeyCode::Char('R') => {
-                    self.config = crate::config::AppConfig::default();
-                    self.resync_all_engine_settings();
-                    self.toast.show("Settings reset to defaults", 1.0);
-                }
+                // `R` reset-all chord REMOVED 2026-06-08. Was a footgun:
+                // one keystroke nuked the user's entire config — output
+                // device, transitions, library paths, Claude DJ — with
+                // no confirmation. Bare `R` AND every modifier variant
+                // (`Ctrl+R` / `Cmd+R`) all triggered it because the
+                // match arm ignored modifiers. Reset-all is now reachable
+                // only via the sentinel row at the bottom of the list +
+                // Enter, which is the intentional path.
                 // Esc / `,` / `d` all close Settings and return to
-                // Dashboard. Going to full Browse on close was a bug
-                // — user usually opens Settings from Dashboard and
-                // expects to land back there. Matches the Mixer
-                // overlay's pattern (Esc → Dashboard).
-                KeyCode::Esc | KeyCode::Char(',') | KeyCode::Char('d') => {
+                // Dashboard. Modifier-gated to NONE.
+                KeyCode::Esc | KeyCode::Char(',') | KeyCode::Char('d')
+                    if key.modifiers == crossterm::event::KeyModifiers::NONE =>
+                {
                     self.view_mode = ViewMode::Dashboard;
                     self.selected = 0;
                 }
                 // Also honor the standard navigation hotkeys so users
-                // don't get trapped in Settings.
-                KeyCode::Char('b') => {
+                // don't get trapped in Settings. Modifier-gated.
+                KeyCode::Char('b') if key.modifiers == crossterm::event::KeyModifiers::NONE => {
                     self.view_mode = ViewMode::Browse;
                     self.selected = 0;
                 }
-                KeyCode::Char('q') => {
+                KeyCode::Char('q') if key.modifiers == crossterm::event::KeyModifiers::NONE => {
                     self.view_mode = ViewMode::Queue;
                     self.selected = 0;
                 }
