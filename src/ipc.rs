@@ -24,6 +24,24 @@ fn events_path() -> PathBuf {
     mixr_dir().join("events.jsonl")
 }
 
+/// Atomic file write — write to `<path>.tmp`, then rename over the
+/// target. POSIX `rename(2)` is atomic within a filesystem, so
+/// readers (mnml's now-playing chip, external scrapers) see either
+/// the old contents or the new — never a partial buffer mid-flush.
+///
+/// Fail-silent on the temp-write side; if rename fails, the tmp is
+/// best-effort cleaned up. Matches the spirit of the existing
+/// `read_command` rename-then-read trick.
+fn write_atomic(path: &std::path::Path, contents: &[u8]) {
+    let tmp = path.with_extension("tmp");
+    if std::fs::write(&tmp, contents).is_err() {
+        return;
+    }
+    if std::fs::rename(&tmp, path).is_err() {
+        std::fs::remove_file(&tmp).ok();
+    }
+}
+
 /// Convert a shorthand command line ("queue 12345", "vol 0.8",
 /// "tx echoout", or just "skip") into the JSON envelope mixr's IPC
 /// parser expects. Used by both the CLI (`mixr --command`) and the
@@ -105,14 +123,14 @@ pub fn write_screen_dump(_title: &str, breadcrumb: &str, items: &[String], selec
         lines.push(format!("│{marker} {item}"));
     }
     lines.push(format!("└{}┘", "─".repeat(78)));
-    std::fs::write(screen_path(), lines.join("\n")).ok();
+    write_atomic(&screen_path(), lines.join("\n").as_bytes());
 }
 
 /// Write arbitrary lines to screen dump (for dashboard, settings, etc.)
 pub fn write_screen_lines(title: &str, lines: &[String]) {
     let mut out = vec![title.to_string()];
     out.extend(lines.iter().cloned());
-    std::fs::write(screen_path(), out.join("\n")).ok();
+    write_atomic(&screen_path(), out.join("\n").as_bytes());
 }
 
 /// Write quick status text (compact, no formatting — for fast reads).
@@ -152,7 +170,7 @@ pub fn write_quick_status(info: &crate::audio::engine::NowPlayingInfo, view: &st
         info.queue.len(),
         info.history.len(),
     );
-    std::fs::write(mixr_dir().join("quick.txt"), lines).ok();
+    write_atomic(&mixr_dir().join("quick.txt"), lines.as_bytes());
 }
 
 /// Read and delete the command file. Returns parsed JSON if present.
@@ -281,7 +299,7 @@ fn write_status_inner(
     });
 
     if let Ok(json) = serde_json::to_string_pretty(&status) {
-        std::fs::write(status_path(), json).ok();
+        write_atomic(&status_path(), json.as_bytes());
     }
 }
 

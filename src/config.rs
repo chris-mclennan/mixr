@@ -450,7 +450,13 @@ impl AppConfig {
     pub fn save(&self) {
         let path = Self::config_path();
         if let Ok(json) = serde_json::to_string_pretty(self) {
-            std::fs::write(path, json).ok();
+            // Atomic write — tmp + rename — so a reader (mixr's own
+            // load() racing against save(), or external tooling) sees
+            // either the old or new JSON, never a half-flushed buffer.
+            let tmp = path.with_extension("tmp");
+            if std::fs::write(&tmp, json).is_ok() && std::fs::rename(&tmp, &path).is_err() {
+                std::fs::remove_file(&tmp).ok();
+            }
         }
     }
 }
