@@ -957,31 +957,20 @@ impl App {
         if matches!(self.view_mode, ViewMode::Dashboard) || !self.click_targets.is_empty() {
             self.click_targets.clear();
         }
-        // Native mode (mixr hosted inside tmnl) reserves padding so
-        // the dashboard border doesn't kiss the tmnl window edge,
-        // plus 1 row at the bottom for the (future) `:` cmdline.
-        // tmnl's own sub-cell letterbox at the very bottom acts as
-        // the gutter, so we don't need a separate reserved row for
-        // that.
-        //
-        // Horizontal padding is symmetric 1+1 (user-requested
-        // 2026-06-16). An earlier version ran asymmetric 1+2 to
-        // compensate for a wgpu sub-cell snap that made a single
-        // right-edge cell read as "barely there"; that issue has
-        // been resolved upstream in tmnl, so the symmetric layout
-        // now lands clean.
-        //
-        // Top stays flush; tmnl's `MACOS_TAB_STRIP_PX_SINGLE` (52px)
-        // already gives breathing room above for the macOS
-        // traffic-light buttons.
+        // Native mode (mixr hosted inside tmnl) reserves 1 row at
+        // the bottom for the (future) `:` cmdline. Horizontal
+        // padding is intentionally zero — tmnl owns the visual
+        // gutter via `inset_native` (a pixel value, default 0).
+        // Earlier revisions tried L=1/R=2 then L=1/R=1 inside mixr
+        // itself; both were tuned against a stale-binary view of
+        // the actual rendered result. Once auto-promote made the
+        // padding consistently visible, "1 char each side" turned
+        // out to be too much. Defer the decision to tmnl's pixel
+        // inset where users can scale it (or set it to zero) without
+        // a mixr rebuild.
         let size = if self.native_mode {
             let a = frame.area();
-            ratatui::layout::Rect::new(
-                a.x + 1,
-                a.y,
-                a.width.saturating_sub(2),
-                a.height.saturating_sub(1),
-            )
+            ratatui::layout::Rect::new(a.x, a.y, a.width, a.height.saturating_sub(1))
         } else {
             frame.area()
         };
