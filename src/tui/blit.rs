@@ -80,13 +80,17 @@ pub async fn run(
         .map_err(|e| anyhow::anyhow!("blit: clone stream: {e}"))?;
     let writer = Mutex::new(conn);
 
-    // Hello — same handshake mnml does.
+    // Hello — same handshake mnml does. `caps` was added in
+    // tmnl-protocol 0.0.6 to negotiate optional features (client
+    // commands etc.). mixr's blit mode is a basic frame renderer
+    // for now — no extras — so we advertise an empty caps bitmask.
     {
         let mut w = writer.lock().unwrap();
         write_message(
             &mut *w,
             &Message::Hello {
                 version: PROTOCOL_VERSION,
+                caps: tmnl_protocol::Caps::empty(),
             },
         )
         .map_err(|e| anyhow::anyhow!("blit: hello: {e}"))?;
@@ -228,6 +232,11 @@ pub async fn run(
                     let me = mouse_to_crossterm(&m);
                     app.handle_mouse(me);
                 }
+                // Rich-input variants added in tmnl-protocol 0.0.9.
+                // mixr doesn't react to focus / hover / IME yet — silently
+                // drop. Wire up later if we need to dim on focus loss
+                // or surface IME composition state.
+                Ok(InputEvent::Focus(_)) | Ok(InputEvent::Hover(_)) | Ok(InputEvent::Ime(_)) => {}
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => return Ok(()),
             }

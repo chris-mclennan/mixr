@@ -68,6 +68,13 @@ pub struct CliArgs {
     /// socket as a blit client (TestBackend + binary cell frames).
     /// When set, mixr skips the crossterm terminal setup entirely.
     pub blit: Option<String>,
+    /// Suppress the auto-promote-to-native-tmnl-tab path that fires
+    /// when mixr starts inside tmnl's pty (detected by the
+    /// `TMNL_TRANSFER_SOCKET` env var). Useful when you genuinely
+    /// want a pty mixr in the current shell rather than a fresh
+    /// native tab — split-pane workflows, quick `mixr --search foo`
+    /// from a shell pane, etc. Default off — auto-promote.
+    pub no_native_promote: bool,
 }
 
 /// Every flag mixr recognises — `unknown_flag` checks args against
@@ -96,6 +103,7 @@ const KNOWN_FLAGS: &[&str] = &[
     "--export",
     "--favorites",
     "--blit",
+    "--no-native-promote",
 ];
 
 /// Walk `args[1..]` and return the first token that starts with `--`
@@ -155,8 +163,87 @@ impl CliArgs {
             export: flag("--export"),
             favorites_list: flag("--favorites"),
             blit: value("--blit"),
+            no_native_promote: flag("--no-native-promote"),
         }
     }
+}
+
+/// Should mixr ask tmnl to relaunch it as a native tab? True only when
+/// ALL of:
+///   * not already a blit client (`--blit <socket>` not set)
+///   * stdin is a tty (interactive — not piped)
+///   * `--no-native-promote` not passed
+///   * `TMNL_TRANSFER_SOCKET` is set (we're inside tmnl's pty)
+///   * we're not running one of the headless internal modes spawned by
+///     mixr itself (webview-host etc.)
+#[cfg(unix)]
+fn should_promote_to_native(args: &CliArgs) -> bool {
+    use std::io::IsTerminal;
+    args.blit.is_none()
+        && !args.no_native_promote
+        && !args.webview_host
+        && !args.webview_discover
+        && !args.clear_webview_session
+        && std::io::stdin().is_terminal()
+        && std::env::var_os("TMNL_TRANSFER_SOCKET").is_some()
+}
+
+/// Arg vector handed to the newly-spawned native mixr. We strip
+/// `--blit` (the new instance gets its own from tmnl), any of the
+/// internal-only webview spawn flags (those never auto-promote
+/// anyway), and `--no-native-promote` is forwarded as belt-and-
+/// suspenders against any future re-promote logic.
+#[cfg(unix)]
+fn build_promote_args(raw: &[String]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut iter = raw.iter().skip(1);
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            // Drop these — they'd either confuse the new instance or
+            // are already handled by the promote path.
+            "--blit" | "--webview-host" | "--webview-discover" | "--clear-webview-session" => {
+                // Skip the value too where applicable (these are all
+                // value-taking except the latter two booleans).
+                if arg == "--blit" || arg == "--webview-host" {
+                    iter.next();
+                }
+            }
+            _ => out.push(arg.clone()),
+        }
+    }
+    out
+}
+
+/// Connect to `TMNL_TRANSFER_SOCKET` and send `Message::OpenPane`
+/// (no fd) so tmnl spawns mixr as a fresh native tab. Returns `true`
+/// when the message reached the kernel buffer; `false` on any
+/// failure so caller falls through to the regular pty path rather
+/// than bricking startup on a stale env var.
+#[cfg(unix)]
+fn try_promote_to_native_tab(raw_args: &[String]) -> bool {
+    let Some(socket) = std::env::var_os("TMNL_TRANSFER_SOCKET") else {
+        return false;
+    };
+    let stream = match std::os::unix::net::UnixStream::connect(&socket) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!(
+                "mixr: auto-native: TMNL_TRANSFER_SOCKET={:?} connect failed ({e}) — \
+                 continuing as a pty session. Pass --no-native-promote to silence.",
+                socket
+            );
+            return false;
+        }
+    };
+    let msg = tmnl_protocol::Message::OpenPane {
+        command: "mixr".to_string(),
+        args: build_promote_args(raw_args),
+    };
+    if let Err(e) = tmnl_protocol::send_message_with_fd(&stream, &msg, None) {
+        eprintln!("mixr: auto-native: send failed ({e}) — continuing as a pty session");
+        return false;
+    }
+    true
 }
 
 #[tokio::main]
@@ -182,7 +269,7 @@ async fn main() -> Result<()> {
     }
 
     if args.version {
-        println!("mixr-rs 0.1.0");
+        println!("mixr {}", env!("CARGO_PKG_VERSION"));
         return Ok(());
     }
 
@@ -359,6 +446,23 @@ async fn main() -> Result<()> {
         config.audio_quality,
         config.crossfade_bars
     );
+
+    // Auto-promote: when mixr is starting from a tmnl pty (env
+    // `TMNL_TRANSFER_SOCKET` is set, stdin is a tty, no `--blit`,
+    // no opt-out) ask tmnl to relaunch us as a native tab via the
+    // transfer socket and exit. Mirrors mnml's auto-promote path so
+    // the user gets the full tmnl-protocol integration (theme
+    // adoption, symmetric L=1 / R=1 padding, OpenPane bridging,
+    // future cross-app composition) regardless of how they launched
+    // mixr from inside tmnl — the in-tmnl bufferline launcher chip
+    // spawns plain `mixr` and would otherwise stay pty-only.
+    //
+    // Silently falls through on any failure so a stale env var
+    // never bricks startup.
+    #[cfg(unix)]
+    if should_promote_to_native(&args) && try_promote_to_native_tab(&raw_args) {
+        return Ok(());
+    }
 
     // Native/integrated mode under tmnl: render into a TestBackend and
     // ship binary cell frames over the `--blit` Unix socket instead of
@@ -548,6 +652,9 @@ Options:
   --claude-dj "prompt" Claude DJ runs the set (optional: style/BPM/direction)
   --claude-key KEY     Set Anthropic API key for Claude DJ
   --logout             Clear stored credentials
+  --no-native-promote  Suppress the auto-promote-to-native-tab when launched
+                       from inside tmnl. Keeps mixr as a pty session in the
+                       current shell instead.
   --help, -h           Show this help
   --version, -V        Show version
 
