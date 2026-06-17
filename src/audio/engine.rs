@@ -3427,22 +3427,27 @@ impl MixEngine {
                 }
 
                 // Train-wreck detection. Compute rolling RMS over the
-                // last ~1s of phase samples. Trigger only:
-                //  - after 15% progress (give the controller time to converge)
+                // last ~2s of phase samples. Trigger only:
+                //  - after 25% progress (give the controller time to converge)
                 //  - phase-sync transitions (the ones that can actually wreck)
                 //  - not already fired this mix
                 //  - not in manual mode (DJ owns the wheel)
                 //  - mode != Off
-                // Threshold (25 ms RMS sustained) is well above the
-                // 5 ms "imperceptible" floor and above the 15 ms
-                // mix-quality-score ceiling — at 25 ms+ the listener
-                // is hearing flam clearly.
-                const WRECK_RMS_THRESHOLD_MS: f64 = 25.0;
-                const WRECK_WINDOW_TICKS: usize = 60; // ~1s at 60Hz
+                //
+                // Tuning history:
+                //   2026-06-16: dialed down. Was 25 ms / 60-tick / 15%
+                //   progress and fired on borderline mixes that
+                //   sounded fine. The bar is now 50 ms (clearly
+                //   audible flam, not just "slightly soft") sustained
+                //   over 2s at >= 25% progress — i.e. "the mix is
+                //   demonstrably broken AND has been for a meaningful
+                //   stretch AND we're well past the initial settle."
+                const WRECK_RMS_THRESHOLD_MS: f64 = 50.0;
+                const WRECK_WINDOW_TICKS: usize = 120; // ~2s at 60Hz
                 if !s.mix_wreck_fired
                     && !s.manual_mix
                     && snap.transition_uses_phase_sync
-                    && s.crossfade_progress > 0.15
+                    && s.crossfade_progress > 0.25
                     && s.crossfade_progress < 0.95
                     && !matches!(s.train_wreck_mode, crate::config::TrainWreckMode::Off)
                     && s.mix_phase_samples.len() >= WRECK_WINDOW_TICKS
