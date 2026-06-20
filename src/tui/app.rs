@@ -957,23 +957,22 @@ impl App {
         if matches!(self.view_mode, ViewMode::Dashboard) || !self.click_targets.is_empty() {
             self.click_targets.clear();
         }
-        // Native mode (mixr hosted inside tmnl) reserves 1 row at
-        // the bottom for the (future) `:` cmdline. Horizontal
-        // padding is intentionally zero — tmnl owns the visual
-        // gutter via `inset_native` (a pixel value, default 0).
-        // Earlier revisions tried L=1/R=2 then L=1/R=1 inside mixr
-        // itself; both were tuned against a stale-binary view of
-        // the actual rendered result. Once auto-promote made the
-        // padding consistently visible, "1 char each side" turned
-        // out to be too much. Defer the decision to tmnl's pixel
-        // inset where users can scale it (or set it to zero) without
-        // a mixr rebuild.
-        let size = if self.native_mode {
-            let a = frame.area();
-            ratatui::layout::Rect::new(a.x, a.y, a.width, a.height.saturating_sub(1))
-        } else {
-            frame.area()
-        };
+        // 1-cell horizontal gutter on each side so the outlined boxes
+        // don't sit flush against the edge. Applies everywhere mixr
+        // renders through here: the standalone (nightly) app AND the
+        // blit panel hosted by mnml — neither gets tmnl's pixel
+        // `inset_native` (which defaults to 0 anyway), so the gutter
+        // has to come from mixr itself. Native mode (any `--blit` host)
+        // also reserves the bottom row for the `:` cmdline.
+        let a = frame.area();
+        let pad: u16 = if a.width >= 4 { 1 } else { 0 };
+        let bottom: u16 = if self.native_mode { 1 } else { 0 };
+        let size = ratatui::layout::Rect::new(
+            a.x + pad,
+            a.y,
+            a.width.saturating_sub(pad * 2),
+            a.height.saturating_sub(bottom),
+        );
         let info = &self.cached_info;
         let np_height = if info.state == crate::audio::engine::EngineState::Crossfading
             && info.incoming_track.is_some()
