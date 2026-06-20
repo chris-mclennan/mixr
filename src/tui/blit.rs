@@ -275,6 +275,12 @@ pub async fn run(
             other => other,
         };
 
+        // Follow mnml's theme: reload the family palette if mnml switched
+        // theme since last tick, then hoist it into a local so the per-cell
+        // remap below doesn't re-lock for every glyph.
+        crate::tui::theme::poll_refresh();
+        let fam = crate::tui::theme::palette();
+
         let buf = terminal.backend().buffer();
         let bw = buf.area.width;
         let bh = buf.area.height;
@@ -282,8 +288,8 @@ pub async fn run(
         for y in 0..bh {
             for x in 0..bw {
                 let c = &buf[(x, y)];
-                let fg = color_to_rgba(c.fg, false, host_palette);
-                let bg = color_to_rgba(c.bg, true, host_palette);
+                let fg = color_to_rgba(c.fg, false, host_palette, fam);
+                let bg = color_to_rgba(c.bg, true, host_palette, fam);
                 let ch = c.symbol().chars().next().unwrap_or(' ') as u32;
                 let attrs = modifier_to_bits(c.modifier);
                 cells.push(WireCell { ch, fg, bg, attrs });
@@ -348,14 +354,34 @@ fn modifier_to_bits(m: Modifier) -> u32 {
     a
 }
 
-fn color_to_rgba(c: Color, is_bg: bool, palette: Option<HostPalette>) -> u32 {
-    // When the host (mnml) has handed us its theme palette, remap
-    // mixr's role colors so the panel blends into its container:
-    // background fills → host bg, default text → host fg, the green
-    // accent → host accent. Semantic colors (red / yellow warnings,
-    // cyan focus borders, dim gray) pass through unchanged so they
-    // keep their meaning.
-    if let Some(p) = palette {
+fn color_to_rgba(
+    c: Color,
+    is_bg: bool,
+    palette: Option<HostPalette>,
+    fam: Option<crate::tui::theme::Palette>,
+) -> u32 {
+    // mnml's family theme file is the authoritative, richest source — it
+    // carries every role including the dim/secondary colour and the
+    // semantics. Map mixr's role colours onto it so the panel matches
+    // whatever theme mnml is on. `Color::Green` is mixr's accent role
+    // (kept as accent for parity with the wire-palette behaviour below).
+    if let Some(p) = fam {
+        match c {
+            Color::Reset => return if is_bg { p.bg } else { p.fg },
+            Color::Black => return p.bg,
+            Color::White | Color::Gray => return p.fg,
+            Color::DarkGray => return p.dim,
+            Color::Green => return p.accent,
+            Color::Red => return p.red,
+            Color::Yellow => return p.yellow,
+            Color::Blue => return p.blue,
+            Color::Cyan => return p.cyan,
+            Color::Magenta => return p.purple,
+            _ => {}
+        }
+    } else if let Some(p) = palette {
+        // No theme file (e.g. mnml never ran) — fall back to the 3-colour
+        // wire palette so a tmnl/mnml host still blends the container.
         match c {
             Color::Reset => return if is_bg { p.bg } else { p.fg },
             Color::Black => return p.bg,
@@ -550,19 +576,20 @@ mod tests {
 
     #[test]
     fn color_to_rgba_passthrough_without_palette() {
-        // No host palette → mixr keeps its own colors.
+        // No family + no host palette → mixr keeps its own colors.
         assert_eq!(
-            color_to_rgba(Color::Rgb(1, 2, 3), false, None),
+            color_to_rgba(Color::Rgb(1, 2, 3), false, None, None),
             pack_rgba_u8(1, 2, 3, 0xff),
         );
         assert_eq!(
-            color_to_rgba(Color::Reset, true, None),
+            color_to_rgba(Color::Reset, true, None, None),
             pack_rgba_u8(0x10, 0x11, 0x1c, 0xff),
         );
     }
 
     #[test]
     fn color_to_rgba_remaps_role_colors_to_host_palette() {
+        // The 3-colour wire palette is the fallback when no theme file exists.
         let p = HostPalette {
             bg: pack_rgba_u8(0x1e, 0x22, 0x2a, 0xff),
             fg: pack_rgba_u8(0xab, 0xb2, 0xbf, 0xff),
@@ -570,27 +597,60 @@ mod tests {
         };
         let pal = Some(p);
         // Background roles → host bg.
-        assert_eq!(color_to_rgba(Color::Reset, true, pal), p.bg);
-        assert_eq!(color_to_rgba(Color::Black, true, pal), p.bg);
+        assert_eq!(color_to_rgba(Color::Reset, true, pal, None), p.bg);
+        assert_eq!(color_to_rgba(Color::Black, true, pal, None), p.bg);
         // Foreground roles → host fg.
-        assert_eq!(color_to_rgba(Color::Reset, false, pal), p.fg);
-        assert_eq!(color_to_rgba(Color::White, false, pal), p.fg);
-        assert_eq!(color_to_rgba(Color::Gray, false, pal), p.fg);
+        assert_eq!(color_to_rgba(Color::Reset, false, pal, None), p.fg);
+        assert_eq!(color_to_rgba(Color::White, false, pal, None), p.fg);
+        assert_eq!(color_to_rgba(Color::Gray, false, pal, None), p.fg);
         // Green accent → host accent.
-        assert_eq!(color_to_rgba(Color::Green, false, pal), p.accent);
+        assert_eq!(color_to_rgba(Color::Green, false, pal, None), p.accent);
         // Semantic colors keep their meaning — pass through unchanged.
         assert_eq!(
-            color_to_rgba(Color::Red, false, pal),
+            color_to_rgba(Color::Red, false, pal, None),
             pack_rgba_u8(0xe0, 0x60, 0x60, 0xff),
         );
         assert_eq!(
-            color_to_rgba(Color::Cyan, false, pal),
+            color_to_rgba(Color::Cyan, false, pal, None),
             pack_rgba_u8(0x5f, 0xb3, 0xa1, 0xff),
         );
         // Explicit RGB passes straight through regardless of palette.
         assert_eq!(
-            color_to_rgba(Color::Rgb(9, 9, 9), false, pal),
+            color_to_rgba(Color::Rgb(9, 9, 9), false, pal, None),
             pack_rgba_u8(9, 9, 9, 0xff),
         );
+    }
+
+    #[test]
+    fn family_palette_maps_dim_and_wins_over_wire() {
+        // mnml's theme file (the family palette) is authoritative and carries
+        // the dim role + semantics the 3-colour wire palette can't.
+        let fam = crate::tui::theme::Palette {
+            bg: 10,
+            fg: 11,
+            dim: 12,
+            accent: 13,
+            red: 14,
+            green: 15,
+            yellow: 16,
+            blue: 17,
+            cyan: 18,
+            purple: 19,
+            orange: 20,
+        };
+        let f = Some(fam);
+        // The fix: dim text (DarkGray) now follows the family dim colour.
+        assert_eq!(color_to_rgba(Color::DarkGray, false, None, f), fam.dim);
+        assert_eq!(color_to_rgba(Color::Reset, true, None, f), fam.bg);
+        assert_eq!(color_to_rgba(Color::White, false, None, f), fam.fg);
+        assert_eq!(color_to_rgba(Color::Red, false, None, f), fam.red);
+        assert_eq!(color_to_rgba(Color::Green, false, None, f), fam.accent);
+        // Family palette wins even when a wire palette is also present.
+        let host = Some(HostPalette {
+            bg: 1,
+            fg: 2,
+            accent: 3,
+        });
+        assert_eq!(color_to_rgba(Color::Reset, true, host, f), fam.bg);
     }
 }

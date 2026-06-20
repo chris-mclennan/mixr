@@ -12,4 +12,5 @@ pub mod midi_learn;
 pub mod rules_editor;
 pub mod screens;
 pub mod settings;
+pub mod theme;
 pub mod toast;
