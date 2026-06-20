@@ -1302,6 +1302,15 @@ pub fn render_dashboard(
 
     let content_w = bw.saturating_sub(2); // inside │ … │
 
+    // The EQ band's visual centre (the `─` between the two channels) sits at the
+    // midpoint of the two volume faders: `(va_x + vb_x) / 2 = area.x +
+    // (area.width-1)/2` (see the CONTROLLER click-target layout — va_x/vb_x).
+    // Anchor the crossfader + phase meters on that SAME column so they line up
+    // with the EQ centre at every window width, instead of on `content_w/2`
+    // (a separate rounding that only coincided at some widths). Content column 0
+    // maps to absolute `area.x + 2` (the "│ " border), so subtract 2.
+    let eq_center_col = ((area.width as usize).saturating_sub(1) / 2).saturating_sub(2);
+
     // Crossfader and phase meter — both just the meter line (no A/B labels in center)
     // A/B labels go into left/right control strings so the meter itself is centered
     let mut xf_meter = String::new();
@@ -1412,7 +1421,7 @@ pub fn render_dashboard(
         let beats = remaining % 4;
         let label = format!("{} {bars}.{beats}", info.transition_type_name);
         out.push(lit_boxed_row(
-            &build_ctrl_row("", &label, "", content_w),
+            &build_ctrl_row_at("", &label, "", content_w, eq_center_col),
             bw,
             ctrl_bs,
         ));
@@ -1429,7 +1438,7 @@ pub fn render_dashboard(
                 "MIX NOW".into()
             };
             out.push(lit_boxed_row(
-                &build_ctrl_row("", &label, "", content_w),
+                &build_ctrl_row_at("", &label, "", content_w, eq_center_col),
                 bw,
                 ctrl_bs,
             ));
@@ -1442,9 +1451,9 @@ pub fn render_dashboard(
     // span maps linearly to crossfader [-1, +1].
     {
         let xf_row = out.len() as u16;
-        let xf_center_len = (mw + 4) as u16;
-        let content_left_pad = (content_w as u16).saturating_sub(xf_center_len) / 2;
-        let meter_start_in_content = content_left_pad + 2; // skip "A "
+        // Meter is `mw` wide and centred on `eq_center_col` (matches the render
+        // below), so it starts mw/2 to the left of that centre.
+        let meter_start_in_content = (eq_center_col as u16).saturating_sub(mw as u16 / 2);
         let x_min = area.x + 2 + meter_start_in_content; // 2 = "│ "
         let x_max = x_min + mw as u16;
         click_targets.push(
@@ -1459,8 +1468,8 @@ pub fn render_dashboard(
             .bindable(crate::midi::Action::Crossfader),
         );
     }
-    let row1 = build_ctrl_row(&ctrl_l1, &xf_center, &ctrl_r1, content_w);
-    let row2 = build_ctrl_row(&ctrl_l2, &ph_center, &ctrl_r2, content_w);
+    let row1 = build_ctrl_row_at(&ctrl_l1, &xf_center, &ctrl_r1, content_w, eq_center_col);
+    let row2 = build_ctrl_row_at(&ctrl_l2, &ph_center, &ctrl_r2, content_w, eq_center_col);
 
     // Push click targets for the dashboard control labels in row1/row2.
     // Each target maps to a synthetic key press that reuses the
@@ -1829,9 +1838,10 @@ pub fn render_dashboard(
             .labeled("loop_off_b"),
         );
     }
-    // Phase value on its own line, '.' at exact center column
+    // Phase value on its own line, '.' at the EQ centre column (matches the
+    // crossfader/phase meters above, not the independent content_w/2).
     let dot_pos = pv.find('.').unwrap_or(pv.len() / 2);
-    let center_col = content_w / 2;
+    let center_col = eq_center_col;
     let phase_pad = center_col.saturating_sub(dot_pos);
     out.push(lit_boxed_row(
         &format!("{}{pv}", " ".repeat(phase_pad)),
@@ -2408,11 +2418,18 @@ fn bdot(
 /// Build a control row with center anchored at the midpoint of `total_w`.
 /// Left gap flexes to push center to the middle. Right gap fills the rest.
 fn build_ctrl_row(left: &str, center: &str, right: &str, total_w: usize) -> String {
+    build_ctrl_row_at(left, center, right, total_w, total_w / 2)
+}
+
+/// Like [`build_ctrl_row`] but anchors `center`'s midpoint at an explicit
+/// column `mid` (content-relative) instead of `total_w / 2`. Used by the
+/// crossfader / phase rows so their meter centers land on the SAME column as
+/// the EQ band's center (`(va_x+vb_x)/2`), keeping them aligned at any width
+/// instead of only when the two independent `*/2` roundings happen to match.
+fn build_ctrl_row_at(left: &str, center: &str, right: &str, total_w: usize, mid: usize) -> String {
     let ll = left.chars().count();
     let cl = center.chars().count();
     let rl = right.chars().count();
-    // Anchor center's midpoint at total_w / 2
-    let mid = total_w / 2;
     let center_start = mid.saturating_sub(cl / 2);
     let gap_l = center_start.saturating_sub(ll);
     let gap_r = total_w.saturating_sub(ll + gap_l + cl + rl).max(1);
