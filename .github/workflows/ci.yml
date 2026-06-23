@@ -16,16 +16,10 @@ jobs:
     # libraries here (no GPL features, platform-native audio/MIDI/WebView).
     runs-on: macos-latest
     steps:
-      # mixr depends on tmnl-protocol by path — check it out alongside.
       - name: Checkout mixr
         uses: actions/checkout@v4
         with:
           path: mixr-rs
-      - name: Checkout tmnl-protocol
-        uses: actions/checkout@v4
-        with:
-          repository: chris-mclennan/tmnl-protocol
-          path: tmnl-protocol
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable

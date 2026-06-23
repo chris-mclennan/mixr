@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # mixr wrapper — restart-on-75 loop + family-common dev subcommands.
 # Family convention: `build`/`release`/`test`/`check`/`watch`/`help` are
-# shared across mnml + tmnl + mixr.
+# shared across mnml + mixr.
 #
 # Usage:
 #   ./run.sh                      Run mixr (release profile, restart loop).
@@ -19,9 +19,6 @@
 #   ./run.sh help                 show this
 #
 # mixr-specific modes:
-#   ./run.sh blit SOCKET          Run mixr as a tmnl/mnml native client
-#                                 (`mixr --blit <socket>`). Renders into the
-#                                 parent host's grid, not the terminal.
 #   ./run.sh logout               Pass --logout to clear OAuth tokens + the
 #                                 WebView's persistent cookie store.
 #
@@ -61,16 +58,6 @@ case "${1:-default}" in
     exec cargo watch -x "build $FEATURES"
     ;;
   # ── mixr-specific modes ─────────────────────────────────────────
-  blit)
-    shift
-    socket="${1:-}"
-    if [ -z "$socket" ]; then
-      echo "[run.sh] blit needs a socket path: ./run.sh blit <socket>" >&2
-      exit 2
-    fi
-    cargo build --release $FEATURES --quiet
-    exec ./target/release/mixr --blit "$socket"
-    ;;
   logout)
     cargo build --release $FEATURES --quiet
     exec ./target/release/mixr --logout

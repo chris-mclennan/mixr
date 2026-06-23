@@ -52,9 +52,6 @@ stratum-dsp = { version = "1.0", optional = true }  # Optional alt analyzer — 
 # TUI
 ratatui = "0.30"
 crossterm = { version = "0.29", features = ["event-stream"] }
-# Wire protocol for mixr's native/integrated mode under tmnl (`--blit`).
-# Same crate that mnml uses; sourced from the sibling repo.
-tmnl-protocol = { path = "../tmnl-protocol", version = "0.0.9" }
 
 # Async
 tokio = { version = "1", features = ["full"] }
@@ -62,8 +59,8 @@ futures = "0.3"
 
 # HTTP. Pure-Rust TLS backend (rustls) — no system OpenSSL dependency,
 # reproducible builds across platforms, lower CVE surface. Same backend
-# the sibling repos (mnml, tmnl, fim-engine) all use; harmonizes the
-# family and means downstream users don't need `libssl-dev` installed.
+# the sibling repos (mnml, fim-engine) use; harmonizes the family
+# and means downstream users don't need `libssl-dev` installed.
 reqwest = { version = "0.12", default-features = false, features = ["json", "cookies", "rustls-tls", "blocking"] }
 
 # Serialization
@@ -94,9 +91,8 @@ quick-xml = "0.36"  # rekordbox.xml library import
 rusqlite = { version = "0.32", features = ["bundled"] }  # Engine DJ + Serato library DBs
 
 # Windows AF_UNIX support (Win10 build 17063+) — std doesn't expose
-# `UnixStream` on Windows even though the OS supports it. Matches the
-# same dep in mnml + tmnl-protocol so file-path UDS sockets work end-
-# to-end on Windows.
+# `UnixStream` on Windows even though the OS supports it. Used by
+# the IPC channel.
 [target.'cfg(windows)'.dependencies]
 uds_windows = "1.1"
 

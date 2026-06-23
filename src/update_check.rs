@@ -1,6 +1,6 @@
 //! Background "is there a newer release?" check. Mirrors mnml's
-//! and tmnl's `update_check` — small enough to keep in sync by
-//! hand. See mnml/src/update_check.rs for full design notes.
+//! `update_check` — small enough to keep in sync by hand. See
+//! mnml/src/update_check.rs for full design notes.
 //!
 //! On launch, spawn a std thread that does a single blocking GET
 //! against `api.github.com/repos/chris-mclennan/mixr/releases/latest`.
@@ -8,9 +8,6 @@
 //! on a shared `Arc<UpdateCheck>` that `App::tick` polls. The first
 //! tick after data arrives fires a single 12-second toast with the
 //! release URL.
-//!
-//! Skipped in blit mode (separate spawn site; the toast wouldn't
-//! have a useful surface until the host catches up).
 //!
 //! Deliberately simple — string-equality on the tag, no semver
 //! parsing. False-positive trips only on an unreleased local dev

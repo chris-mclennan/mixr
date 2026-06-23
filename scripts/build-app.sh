@@ -18,8 +18,8 @@
 #     Resources/AppIcon.icns
 #     Resources/bin/mixr        (the actual TUI binary)
 #
-# Launcher dispatch: if `tmnl` is on PATH the launcher opens mixr as
-# a native tmnl tab; otherwise it falls back to Terminal.app.
+# Launcher dispatch: prefers Ghostty when available, falls back to
+# Terminal.app.
 #
 # `--bin-path` is for CI — cargo-dist has already built the binary
 # at a known path; we just package it.

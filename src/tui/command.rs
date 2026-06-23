@@ -444,7 +444,7 @@ fn builtin_commands() -> Vec<Command> {
         // Toggle the dashboard's inline help legend. Active only on
         // Ctrl+Shift+P / F1 — VS Code-style command palette. Fuzzy
         // picker over every registered command. Family-wide chord:
-        // mnml + tmnl + mixr all surface the same dialog. `F1` is the
+        // mnml + mixr all surface the same dialog. `F1` is the
         // terminal-proof fallback (Ctrl+Shift+P only arrives distinct
         // under the kitty keyboard protocol).
         Command {
