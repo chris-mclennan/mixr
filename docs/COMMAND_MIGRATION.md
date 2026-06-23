@@ -172,10 +172,6 @@ Once all bindings are in the registry, replace `screens::help_lines()`
 with a function that walks `registry().all()` + reverses `self.keymap`,
 mirroring mnml's `app::help::build_help`.
 
-### Phase 4 — tmnl
-Same playbook in tmnl (#58). tmnl uses `winit::KeyEvent` not crossterm,
-so chord-parsing needs a parallel module; everything else matches.
-
 ## Open question
 
 Should `Command` handlers take `&mut App` (current) or a wider context

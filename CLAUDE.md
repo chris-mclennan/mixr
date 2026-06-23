@@ -279,23 +279,14 @@ called from both reset-all paths. Each path now also shows a
 couldn't tell whether the reset fired). 279 / 279 tests pass, clippy
 clean under `-D warnings`.
 
-**tmnl-protocol bumped to 0.0.2 (2026-05-24):** Picks up the
-`SCM_RIGHTS` fd-passing API that lands in the protocol crate. No mixr
-behavior change yet — mixr's `--blit` integration uses the standard
-frame transport — but keeps the family aligned for when the hard
-variant of pty-transfer-between-tabs (transferring a running pty
-session from mnml's pane into a new tmnl tab) lands.
-
-**run.sh — family-wide subcommands + blit/logout modes (2026-05-23):**
+**run.sh — family-wide subcommands + logout mode (2026-05-23):**
 Adopts the shared family dev-subcommand convention. `./run.sh
 build|release|test|check|watch|help` now matches the same shape as
-`mnml` and `tmnl`. The original 23-line restart-on-75 loop +
-auto-detected `--features rubberband` is preserved as the default arm.
-New mixr-specific modes — `./run.sh blit <socket>` (run as a
-tmnl/mnml native client) and `./run.sh logout` (clear OAuth tokens +
-the WebView's persistent cookie store). `./run.sh check` runs the
-exact `cargo clippy --all-targets -- -D warnings` invocation CI uses
-— locally-clean → CI-clean.
+`mnml`. The original 23-line restart-on-75 loop + auto-detected
+`--features rubberband` is preserved as the default arm. `./run.sh
+logout` clears OAuth tokens + the WebView's persistent cookie
+store. `./run.sh check` runs the exact `cargo clippy --all-targets
+-- -D warnings` invocation CI uses — locally-clean → CI-clean.
 
 **Settings overlay retrofitted to the family UI convention
 (2026-05-23):** `src/tui/settings.rs` rebuilt around `SettingItem` =
@@ -316,7 +307,7 @@ immediately to the audio engine, so there's no save/cancel split —
 clippy clean under `-D warnings`.
 
 **ratatui 0.29 → 0.30, crossterm 0.28 → 0.29 (2026-05-23):** Aligns
-mixr-rs with mnml + tmnl (both already on those majors). The bump
+mixr-rs with mnml (already on those majors). The bump
 itself was effectively no-source-change at the call sites — ratatui's
 breaking changes are mostly in extension traits / cell constructors
 that mixr doesn't touch. Verified clean under default + `--features

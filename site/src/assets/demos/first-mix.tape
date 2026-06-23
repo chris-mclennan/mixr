@@ -12,8 +12,8 @@
 #
 # Notes:
 #   * The tape sets HOME to an isolated config dir so it doesn't fight
-#     the long-running mixr instance (e.g. one launched by tmnl) for
-#     ~/.mixr/command and ~/.mixr/status.json. Bootstrap that dir once
+#     a long-running mixr instance for ~/.mixr/command and
+#     ~/.mixr/status.json. Bootstrap that dir once
 #     before recording (the auth.json is required — VHS can't drive the
 #     embedded OAuth WebView):
 #
