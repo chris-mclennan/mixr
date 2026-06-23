@@ -83,7 +83,7 @@ export default defineConfig({
           ],
         },
         // Family — top-level page (the cross-product story), not nested
-        // under Manual. The /family page links out to tmnl.sh + mnml.sh.
+        // under Manual. The /family page links out to mnml.sh.
         { label: 'Family', slug: 'family' },
       ],
     }),

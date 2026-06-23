@@ -1,17 +1,14 @@
 ---
 title: The family
-description: mixr, mnml, and tmnl — three small Rust tools that share design, theme, and native-tab integration.
+description: mixr and mnml — two small Rust tools that share design + theme.
 ---
 
 import { Card, CardGrid, LinkButton } from '@astrojs/starlight/components';
 import mixrIcon from '../../assets/family/mixr.png';
 import mnmlIcon from '../../assets/family/mnml.png';
-import tmnlIcon from '../../assets/family/tmnl.png';
 
-Three small Rust tools that look, feel, and integrate like one set.
-Each one stands alone — install whichever ones you want. Together they
-share a visual language and a cell-streaming protocol that lets them
-host each other as native tabs.
+Two small Rust tools that look and feel like one set. Each one
+stands alone — install whichever ones you want.
 
 <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:1.25rem; margin:2rem 0;">
 
@@ -34,63 +31,27 @@ host each other as native tabs.
   <LinkButton href="https://mnml.sh" icon="external">mnml.sh</LinkButton>
 </div>
 
-<div style="border:1px solid var(--sl-color-gray-5); border-radius:8px; padding:1.5rem; background:var(--sl-color-gray-6);">
-  <img src={tmnlIcon.src} alt="tmnl icon" width="96" height="96" style="display:block; margin-bottom:1rem;" />
-  <h3 style="margin-top:0;">tmnl</h3>
-  <p><strong>A GPU-rendered terminal.</strong> Hosts mnml and mixr as
-  <em>native tabs</em>, not nested terminal sessions — so they render
-  with full graphics and proper input dispatch. Works fine as a plain
-  terminal too.</p>
-  <LinkButton href="https://tmnl.sh" icon="external">tmnl.sh</LinkButton>
-</div>
-
 </div>
 
 ## Why a family
 
-These tools were built together, on purpose. They share three things:
+These tools were built together, on purpose. They share two things:
 
 **A look.** The same charcoal-bezel, shell-prompt wordmark identity
-across all three icons — teal `>` for mixr, blue `>` for mnml, orange
-`>` for tmnl. Same monospace headers, same accent-on-prompt theme
-language in the running apps.
+across both icons — teal `>` for mixr, blue `>` for mnml. Same
+monospace headers, same accent-on-prompt theme language in the
+running apps.
 
-**An interaction idiom.** All three use the same sectioned settings
+**An interaction idiom.** Both use the same sectioned settings
 overlay (`▸ label: [active] / other  *`), the same keyboard model
 (`r` resets a row, `R` resets all, `Enter` saves, `Esc` reverts), and
 the same family-bundle launcher chip on macOS.
 
-**A way to talk to each other.** `tmnl-protocol` is a tiny
-cell-streaming protocol over a Unix socket. tmnl runs as the host;
-mnml and mixr can run as native clients (`--blit <socket>`) inside a
-tmnl tab. The result: mixr running as a real native tab next to mnml
-running as a real native tab next to a plain shell — all in one tmnl
-window, all rendered by tmnl's GPU pipeline.
-
-If you only use one tool, the family thing is invisible. If you use
-two or three, they cooperate without fighting.
-
-## What works where
-
-- **mixr alone** — runs in any terminal (iTerm2, Alacritty, Ghostty,
-  Terminal.app, kitty, WezTerm…). All features work.
-- **mnml alone** — same; runs anywhere.
-- **mixr inside tmnl** — gets a native tab, with mixr drawing into
-  tmnl's GPU surface via `tmnl-protocol`. Full graphics, no nested
-  terminal weirdness. Triggered by `mixr.show` from mnml, or
-  `:host.launch mixr` from tmnl directly.
-- **mnml inside tmnl** — same shape. Native tab, GPU-rendered.
-- **mixr panel inside mnml** — the `♪` chip in mnml's statusline opens
-  a docked mixr panel inside mnml (file-tree edge across, capped at
-  200 cells wide). mnml hosts the panel; mixr runs as the blit
-  client. Standalone mnml still works — the panel is just empty until
-  you launch it.
+If you only use one, the family thing is invisible. If you use
+both, they cooperate without fighting — same theme file
+(`~/.config/mnml/current-theme.toml`), same idiom for settings.
 
 ## Install order
 
-If you're starting fresh: install whichever tool solves the problem
-you have today. The others are additive, not prerequisites.
-
-If you want the full family experience on macOS, install
-tmnl first — then mnml and mixr will register themselves as tmnl
-launch targets automatically.
+Install whichever tool solves the problem you have today. The
+other is additive, not a prerequisite.

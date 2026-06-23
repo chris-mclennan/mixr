@@ -35,5 +35,4 @@ legacy Intel app.
 Fixed in [`1d4ff6f`](https://github.com/chris-mclennan/mixr/commit/1d4ff6f).
 Redownload the latest `.dmg` from
 [GitHub releases](https://github.com/chris-mclennan/mixr/releases/latest)
-and the warning will be gone. Same fix landed in mnml and tmnl on the
-same day.
+and the warning will be gone.

@@ -103,21 +103,14 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
   </Card>
   <Card title="Lives in the terminal" icon="seti:powershell">
     One binary. No window, no system tray, no daemon. Quit with
-    `Ctrl+C`. Runs in any terminal — and inside
-    [tmnl](https://tmnl.sh) specifically, mixr gets native-tab
-    integration via the `tmnl-protocol` cell-streaming layer (full
-    graphics, no nested-emulator weirdness).
+    `Ctrl+C`. Runs in any terminal.
   </Card>
 </CardGrid>
 
 ## The family
 
-mixr is one of three small Rust tools by Chris McLennan — see [the
+mixr is one of two small Rust tools by Chris McLennan — see [the
 family page](/family/) for the full picture.
 
 - **mixr** — this DJ app
-- **[tmnl](https://tmnl.sh)** — GPU-rendered terminal that hosts mixr (and friends) as native tabs
 - **[mnml](https://mnml.sh)** — NvChad-style terminal IDE
-
-mixr runs fine in any terminal. Inside tmnl, it gets a native-tab
-treatment — same cell-streaming protocol mnml uses.
