@@ -4,7 +4,7 @@ name: Auto-PR to winget-pkgs
 # against microsoft/winget-pkgs adding new manifests for the latest
 # version's .msi installers.
 #
-# Setup is shared across the family (mnml / mixr / tmnl) — same fork
+# Setup is shared across the family (mnml / mixr) — same fork
 # (chris-mclennan/winget-pkgs), same WINGET_TOKEN PAT, just need the
 # secret added to each repo's settings. CLA was signed during the
 # first manual submission (microsoft/winget-pkgs#382316) and Microsoft

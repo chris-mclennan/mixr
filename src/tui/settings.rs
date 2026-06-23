@@ -27,7 +27,7 @@ pub struct SettingRow {
 
 /// One item in the rendered settings list — section header, discrete-
 /// choice row, or text-input row (path / freeform string). Matches
-/// the family settings UI convention shared with mnml + tmnl (see
+/// the family settings UI convention shared with mnml (see
 /// `CLAUDE.md`). The `TextRow` is the v2 extension over the original
 /// discrete-only schema; enables editing paths like `local_library_dir`
 /// in-app instead of forcing config-file edits.
