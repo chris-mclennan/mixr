@@ -14,16 +14,15 @@ targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "aarch64-pc-wind
 # Which actions to run on pull requests
 pr-run-mode = "upload"
 # YAML snippet injected into every build job's `steps:` array,
-# *before* the build runs. Used to check out the sibling repos that
-# mixr's Cargo.toml references by path (just `../tmnl-protocol`), and
-# to install the audio + WebKit Linux deps. Lives at
-# `.github/build-setup.yml` (one dir above `.github/workflows/`) so
-# GitHub doesn't try to interpret it as a standalone workflow.
+# *before* the build runs. Installs the audio + WebKit Linux deps.
+# Lives at `.github/build-setup.yml` (one dir above
+# `.github/workflows/`) so GitHub doesn't try to interpret it as a
+# standalone workflow.
 github-build-setup = "../build-setup.yml"
 # Permit manual edits to the generated CI file — `dist plan` would
 # otherwise refuse to run when release.yml drifts. We hand-add the
-# sibling-clone step to the plan / build-global-artifacts / host
-# jobs (cargo-dist only auto-injects `github-build-setup` into
+# (formerly) sibling-clone step to the plan / build-global-artifacts /
+# host jobs (cargo-dist only auto-injects `github-build-setup` into
 # build-local-artifacts), so the file is intentionally out of sync.
 allow-dirty = ["ci"]
 # Path that installers should place binaries in

@@ -1,5 +1,4 @@
 pub mod app;
-pub mod blit;
 pub mod claude_screen;
 pub mod command;
 pub mod dashboard;
@@ -12,5 +11,4 @@ pub mod midi_learn;
 pub mod rules_editor;
 pub mod screens;
 pub mod settings;
-pub mod theme;
 pub mod toast;

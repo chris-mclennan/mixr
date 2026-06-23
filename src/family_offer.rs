@@ -1,11 +1,11 @@
 //! First-launch "did you know about the rest of the family?" check.
-//! Same shape as mnml + tmnl's `family_offer` — keep them close,
+//! Same shape as mnml's `family_offer` — keep them close,
 //! sync by hand when one changes. See mnml/src/family_offer.rs for
 //! the full design notes.
 
 use std::path::PathBuf;
 
-const FAMILY: &[&str] = &["mnml", "mixr", "tmnl"];
+const FAMILY: &[&str] = &["mnml", "mixr"];
 const SELF: &str = "mixr";
 
 pub struct FamilyOffer {

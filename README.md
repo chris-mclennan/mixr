@@ -96,7 +96,7 @@ cargo run -- --favorites                               # list favorited tracks
 ./run.ps1         # Windows (PowerShell)
 ```
 
-`run.sh` also ships the family-wide dev subcommands shared with `mnml` and `tmnl`:
+`run.sh` also ships the family-wide dev subcommands shared with `mnml`:
 
 ```bash
 ./run.sh build [args]    # cargo build
@@ -106,7 +106,6 @@ cargo run -- --favorites                               # list favorited tracks
 ./run.sh watch           # cargo-watch loop (needs `cargo install cargo-watch`)
 ./run.sh help            # show all modes
 
-./run.sh blit SOCKET     # `mixr --blit <socket>` — run as a tmnl/mnml native client
 ./run.sh logout          # clear OAuth tokens + the WebView's cookie store
 ```
 
@@ -293,20 +292,18 @@ See `CLAUDE.md` for the full IPC command reference.
 - wry + tao (embedded WebView for OAuth login)
 - Optional: librubberband (`--features rubberband`), timestretch (`--features timestretch`), stratum-dsp (`--features stratum`)
 
-## The tmnl family
+## Family
 
 mixr is one of a small family of terminal-native Rust tools:
 
 | Project | What it is | |
 |---------|-----------|--|
-| [**tmnl**](https://github.com/chris-mclennan/tmnl) | A GPU-accelerated terminal | hosts mixr as a native tab |
-| [**mnml**](https://github.com/chris-mclennan/mnml) | A terminal IDE | runs as a native tmnl tab |
+| [**mnml**](https://github.com/chris-mclennan/mnml) | A terminal IDE | runs in any terminal |
 | **mixr** | A terminal DJ app | ← you are here |
-| [**tmnl-protocol**](https://github.com/chris-mclennan/tmnl-protocol) | The binary wire protocol | mixr's `--blit` integration |
-| [**fim-engine**](https://github.com/chris-mclennan/fim-engine) | Embedded code completion | local FIM, used by tmnl & mnml |
+| [**fim-engine**](https://github.com/chris-mclennan/fim-engine) | Embedded code completion | local FIM, used by mnml |
 
-mixr runs standalone in any terminal, and integrates as a native pane when
-hosted inside `tmnl` (`mixr --blit`).
+mixr runs in any terminal — Apple Terminal, iTerm2, Ghostty, kitty,
+WezTerm, Alacritty, and others.
 
 ## Contributing
 

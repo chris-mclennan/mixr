@@ -1,22 +1,8 @@
 # Injected by `dist` into every build job's `steps:` array, before
-# the actual build runs. Handles two things cargo-dist's default
-# workflow doesn't:
-#
-#  (1) Clones mixr's sibling crate to the layout that mixr's
-#      `Cargo.toml` path-dep expects (`../tmnl-protocol`).
-#
-#  (2) Installs the Linux system libs that ALSA (cpal/rodio audio
-#      output) and the WebKit-based Beatport login WebView build-time
-#      depend on. macOS + Windows runners bundle these already.
-
-- name: Clone sibling repos
-  shell: bash
-  run: |
-    set -euo pipefail
-    cd ..
-    if [ ! -d tmnl-protocol ]; then
-      git clone --depth=1 https://github.com/chris-mclennan/tmnl-protocol.git
-    fi
+# the actual build runs. Installs the Linux system libs that ALSA
+# (cpal/rodio audio output) and the WebKit-based Beatport login
+# WebView build-time depend on. macOS + Windows runners bundle
+# these already.
 
 - name: Install Linux build deps
   if: runner.os == 'Linux'

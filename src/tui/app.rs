@@ -497,14 +497,6 @@ pub struct App {
     /// Waveform zoom state: None = no zoom, Some(true) = deck A zoomed,
     /// Some(false) = deck B zoomed. Click a waveform row to toggle.
     pub(crate) waveform_zoom: Option<bool>,
-    /// `true` when mixr is rendering into a tmnl native pane (set
-    /// by `blit::run` after construction). Drives a small layout
-    /// adjustment: 1-cell horizontal padding outside the dashboard
-    /// border (so it doesn't kiss the tmnl window edge) + 2 reserved
-    /// rows at the bottom (future `:` cmdline + gutter, mirroring
-    /// mnml). Top stays flush because tmnl already gives breathing
-    /// room via `MACOS_TAB_STRIP_PX_SINGLE`.
-    pub native_mode: bool,
 }
 
 /// Rectangular hit-test target with an action to fire on left-click.
@@ -743,7 +735,6 @@ impl App {
             log_scroll_offset: 0,
             click_targets: Vec::new(),
             waveform_zoom: None,
-            native_mode: false,
             current_page: 1,
             last_load_action: None,
             api,
@@ -958,21 +949,11 @@ impl App {
             self.click_targets.clear();
         }
         // 1-cell horizontal gutter on each side so the outlined boxes
-        // don't sit flush against the edge. Applies everywhere mixr
-        // renders through here: the standalone (nightly) app AND the
-        // blit panel hosted by mnml — neither gets tmnl's pixel
-        // `inset_native` (which defaults to 0 anyway), so the gutter
-        // has to come from mixr itself. Native mode (any `--blit` host)
-        // also reserves the bottom row for the `:` cmdline.
+        // don't sit flush against the terminal edge.
         let a = frame.area();
         let pad: u16 = if a.width >= 4 { 1 } else { 0 };
-        let bottom: u16 = if self.native_mode { 1 } else { 0 };
-        let size = ratatui::layout::Rect::new(
-            a.x + pad,
-            a.y,
-            a.width.saturating_sub(pad * 2),
-            a.height.saturating_sub(bottom),
-        );
+        let size =
+            ratatui::layout::Rect::new(a.x + pad, a.y, a.width.saturating_sub(pad * 2), a.height);
         let info = &self.cached_info;
         let np_height = if info.state == crate::audio::engine::EngineState::Crossfading
             && info.incoming_track.is_some()

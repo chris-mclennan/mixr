@@ -6,10 +6,8 @@
 # binary). The whole point of the nightly icon is "click and get
 # whatever I just compiled."
 #
-# Dispatch: same shape as the stable launcher — go through tmnl
-# when available, fall back to Terminal.app. Prepends the dev
-# binary's directory to PATH so `tmnl --mixr` resolves the nightly
-# mixr (not whatever's globally installed).
+# Opens mixr in Ghostty when available, else falls back to
+# Terminal.app.
 #
 # NOTE: do NOT use `set -eu`. Finder strips PATH; if we then
 # `source ~/.zshrc` to recover it, any unset-variable reference in
@@ -34,23 +32,19 @@ fi
 
 export PATH="$(dirname "$dev_bin"):/opt/homebrew/bin:/usr/local/bin:$HOME/.cargo/bin:/usr/bin:/bin:/usr/sbin:/sbin:${PATH:-}"
 
-# Resolve tmnl, in order: $PATH → /Applications/tmnl-nightly.app
-# (prefer nightly tmnl) → /Applications/tmnl.app (stable).
-tmnl_bin=""
-if [ -x "/Applications/tmnl-nightly.app/Contents/MacOS/tmnl" ]; then
-    tmnl_bin="/Applications/tmnl-nightly.app/Contents/MacOS/tmnl"
-elif command -v tmnl >/dev/null 2>&1; then
-    tmnl_bin="$(command -v tmnl)"
-elif [ -x "/Applications/tmnl.app/Contents/MacOS/tmnl" ]; then
-    tmnl_bin="/Applications/tmnl.app/Contents/MacOS/tmnl"
+# Prefer Ghostty, fall back to Terminal.app.
+ghostty_bin=""
+if command -v ghostty >/dev/null 2>&1; then
+    ghostty_bin="$(command -v ghostty)"
+elif [ -x "/Applications/Ghostty.app/Contents/MacOS/ghostty" ]; then
+    ghostty_bin="/Applications/Ghostty.app/Contents/MacOS/ghostty"
+fi
+if [ -n "$ghostty_bin" ]; then
+    echo "  found ghostty at $ghostty_bin — exec ghostty -e mixr" >> "$log_file"
+    exec "$ghostty_bin" -e "$dev_bin"
 fi
 
-if [ -n "$tmnl_bin" ]; then
-    echo "  found tmnl at $tmnl_bin — exec tmnl --mixr" >> "$log_file"
-    exec "$tmnl_bin" --mixr
-fi
-
-echo "  tmnl not found — falling back to Terminal.app" >> "$log_file"
+echo "  ghostty not found — falling back to Terminal.app" >> "$log_file"
 osascript <<EOF
 tell application "Terminal"
     activate

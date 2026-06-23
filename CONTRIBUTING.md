@@ -15,10 +15,6 @@ mixr builds on stable Rust — MSRV **1.85**, edition 2024. The default build
 pulls in no GPL code and needs no system audio library beyond what the platform
 ships. macOS is the primary target; Linux and Windows are supported.
 
-mixr depends on the sibling crate
-[`tmnl-protocol`](https://github.com/chris-mclennan/tmnl-protocol) by path —
-check it out alongside this repo.
-
 ### Optional features
 
 - `rubberband` — pitch-invariant stretching via librubberband FFI. **GPL** —

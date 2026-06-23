@@ -80,11 +80,6 @@ jobs:
       - name: Clone sibling repos
         shell: bash
         run: |
-          set -euo pipefail
-          cd ..
-          if [ ! -d tmnl-protocol ]; then
-            git clone --depth=1 https://github.com/chris-mclennan/tmnl-protocol.git
-          fi
       # sure would be cool if github gave us proper conditionals...
       # so here's a doubly-nested ternary-via-truthiness to try to provide the best possible
       # functionality based on whether this is a pull_request, and whether it's from a fork.
@@ -144,11 +139,6 @@ jobs:
           fi
       - name: "Clone sibling repos"
         run: |
-          set -euo pipefail
-          cd ..
-          if [ ! -d tmnl-protocol ]; then
-            git clone --depth=1 https://github.com/chris-mclennan/tmnl-protocol.git
-          fi
         shell: "bash"
       # MANUAL EDIT — mixr needs ALSA (audio) + WebKit/libsoup (Beatport
       # login WebView via wry/tao). Mirrors `.github/build-setup.yml`.
@@ -262,11 +252,6 @@ jobs:
       - name: Clone sibling repos
         shell: bash
         run: |
-          set -euo pipefail
-          cd ..
-          if [ ! -d tmnl-protocol ]; then
-            git clone --depth=1 https://github.com/chris-mclennan/tmnl-protocol.git
-          fi
       - name: Install cached dist
         uses: actions/download-artifact@v8
         with:
@@ -323,11 +308,6 @@ jobs:
       - name: Clone sibling repos
         shell: bash
         run: |
-          set -euo pipefail
-          cd ..
-          if [ ! -d tmnl-protocol ]; then
-            git clone --depth=1 https://github.com/chris-mclennan/tmnl-protocol.git
-          fi
       - name: Install cached dist
         uses: actions/download-artifact@v8
         with:
